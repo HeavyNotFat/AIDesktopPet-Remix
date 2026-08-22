@@ -1,0 +1,16 @@
+{
+  "fox": {
+    "idle": {
+      "frames": ["idle_"],
+      "op": null
+    },
+    "left": {
+      "frames": ["left_"],
+      "op": null
+    },
+    "right": {
+      "frames": ["right_"],
+      "op": null
+    }
+  }
+}

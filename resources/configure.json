@@ -1,0 +1,48 @@
+{
+   "models": {},
+   "memory": {
+      "shortterm": true,
+      "longterm": true
+   },
+   "rag": {
+      "enable": true,
+      "engine": "chroma",
+      "type": "test",
+      "embedding": "qwen3-embedding:4b",
+      "model": "glm4:latest",
+      "meta": true,
+      "cache": 128,
+      "bm25": 0.3,
+      "resort": 10,
+      "chunks": 255,
+      "overlap": 15
+   },
+   "mcp": {
+      "enable": false,
+      "mcp": [
+         {
+            "server": "filesystem",
+            "args": [
+               "-y",
+               "@modelcontextprotocol/server-filesystem",
+               "$PATH$"
+            ],
+            "command": "npx"
+         },
+         {
+            "server": "fetch",
+            "args": [
+               "-m",
+               "mcp_server_fetch"
+            ],
+            "command": "python"
+         }
+      ]
+   },
+   "name": "",
+   "model_live2d": "Mao",
+   "static_model": "",
+   "opacity": 1,
+   "size": 75,
+   "rotate": 0
+}

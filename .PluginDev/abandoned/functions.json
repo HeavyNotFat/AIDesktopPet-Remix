@@ -1,0 +1,204 @@
+[
+   {
+      "type": "function",
+      "function": {
+         "name": "picture_understand",
+         "description": "当你想要理解一张图片时非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "description": {
+                  "type": "string",
+                  "description": "对操作的描述，比如：这张图片怎么样"
+               },
+               "image_path": {
+                  "type": "string",
+                  "description": "图片的路径"
+               }
+            }
+         },
+         "required": [
+            "description",
+            "image_path"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "draw_picture_by_qwen",
+         "description": "当你想要画一副画时非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "prompts": {
+                  "type": "string",
+                  "description": "画画的提示词，比如：可爱的。"
+               }
+            }
+         },
+         "required": [
+            "prompts"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "get_current_time",
+         "description": "当你想获取时间时非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {}
+         },
+         "required": []
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "find_file",
+         "description": "当你想查找文件是非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "filename": {
+                  "type": "string",
+                  "description": "需要查找的文件名"
+               }
+            }
+         },
+         "required": [
+            "filename"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "load_file",
+         "description": "当你想读取文件时非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "filepath": {
+                  "type": "string",
+                  "description": "文件路径"
+               }
+            }
+         },
+         "required": [
+            "filepath"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "save_file",
+         "description": "当你想保存文件时非常有用。",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "filepath": {
+                  "type": "string",
+                  "description": "文件路径"
+               },
+               "content": {
+                  "type": "string",
+                  "description": "文件内容"
+               }
+            }
+         },
+         "required": [
+            "filepath",
+            "content"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "search_on_browser",
+         "description": "当你想在浏览器上搜索时非常有用！",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "content": {
+                  "type": "string",
+                  "description": "搜索的内容"
+               }
+            }
+         },
+         "required": [
+            "content"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "enter_content_by_text",
+         "description": "当你想在从标题进入一个链接时非常有用！",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "title_text": {
+                  "type": "string",
+                  "description": "完整的标题内容"
+               }
+            }
+         },
+         "required": [
+            "title_text"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "enter_content_by_link_filter",
+         "description": "当你想在通过链接进入一个网页时非常有用！",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "link": {
+                  "type": "string",
+                  "description": "网站的链接"
+               },
+               "filter_": {
+                  "type": "string",
+                  "description": "可能需要的过滤文本字段"
+               }
+            }
+         },
+         "required": [
+            "link"
+         ]
+      }
+   },
+   {
+      "type": "function",
+      "function": {
+         "name": "download_file_by_link",
+         "description": "当你想在通过链接下载东西时非常有用！",
+         "parameters": {
+            "type": "object",
+            "properties": {
+               "download_link": {
+                  "type": "string",
+                  "description": "下载的链接地址"
+               },
+               "file_name": {
+                  "type": "string",
+                  "description": "下载的文件名"
+               }
+            }
+         },
+         "required": [
+            "download_link",
+            "file_name"
+         ]
+      }
+   }
+]
