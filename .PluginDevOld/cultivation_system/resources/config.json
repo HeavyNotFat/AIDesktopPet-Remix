@@ -1,0 +1,19 @@
+{
+   "coin": 0,
+   "foods": [],
+   "level": {
+      "level": 1,
+      "current": 0,
+      "next": 100
+   },
+   "favorability": {
+      "favorability": 0,
+      "current": 0,
+      "next": 100
+   },
+   "hungry": {
+      "hungry": 100,
+      "current": 100,
+      "next": 150
+   }
+}
