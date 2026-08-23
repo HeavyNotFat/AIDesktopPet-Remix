@@ -1,13 +1,21 @@
 from typing import Any, Callable, Dict, Generator, List, Optional, Union
+from datetime import datetime
 import asyncio
 import threading
 import base64
 import json
+import os
 
-from . import rag
+import chromadb
+import ollama
+
 from .. import Config
 
 from mcp.types import TextContent
+from rank_bm25 import BM25Okapi
+
+with open("./resources/prompts.json", "r", encoding="utf-8") as f:
+    prompts = json.load(f)
 
 
 def encode_image(image_path):
@@ -48,18 +56,11 @@ class MCP:
 
             self._loop = asyncio.new_event_loop()
 
-            self._thread = threading.Thread(
-                target=self._start_loop,
-                name="MCP-Loop",
-                daemon=True,
-            )
+            self._thread = threading.Thread(target=self._start_loop, name="MCP-Loop", daemon=True, )
             self._thread.start()
 
             # 确保事件循环已经真正启动
-            asyncio.run_coroutine_threadsafe(
-                self._noop(),
-                self._loop
-            ).result()
+            asyncio.run_coroutine_threadsafe(self._noop(), self._loop).result()
 
             self._closed = False
 
@@ -80,36 +81,14 @@ class MCP:
             coro.close()
             raise RuntimeError("MCP 后台事件循环已经关闭")
 
-        future = asyncio.run_coroutine_threadsafe(
-            coro,
-            self._loop
-        )
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
 
         return future.result()
 
-    def connect_stdio(
-        self,
-        server_id: str,
-        command: str,
-        args: List[str] = None,
-        env: Dict = None,
-    ):
-        self._run_sync(
-            self._connect_stdio_async(
-                server_id,
-                command,
-                args or [],
-                env,
-            )
-        )
+    def connect_stdio(self, server_id: str, command: str, args: List[str] = None, env: Dict = None, ):
+        self._run_sync(self._connect_stdio_async(server_id, command, args or [], env, ))
 
-    async def _connect_stdio_async(
-        self,
-        server_id: str,
-        command: str,
-        args: List[str],
-        env: Dict,
-    ):
+    async def _connect_stdio_async(self, server_id: str, command: str, args: List[str], env: Dict, ):
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
 
@@ -117,11 +96,7 @@ class MCP:
             print(f"[MCP] Server {server_id} 已经连接")
             return
 
-        server_params = StdioServerParameters(
-            command=command,
-            args=args,
-            env=env,
-        )
+        server_params = StdioServerParameters(command=command, args=args, env=env, )
 
         ctx = stdio_client(server_params)
 
@@ -149,9 +124,7 @@ class MCP:
         if server_id not in self._sessions:
             return
 
-        self._run_sync(
-            self._disconnect_async(server_id)
-        )
+        self._run_sync(self._disconnect_async(server_id))
 
     async def _disconnect_async(self, server_id: str):
         session_ctx = self._write_streams.pop(server_id, None)
@@ -182,19 +155,14 @@ class MCP:
 
                 for sid in list(self._sessions.keys()):
                     try:
-                        asyncio.run_coroutine_threadsafe(
-                            self._disconnect_async(sid),
-                            self._loop,
-                        )
+                        asyncio.run_coroutine_threadsafe(self._disconnect_async(sid), self._loop, )
                     except Exception:
                         pass
 
                 import time
                 time.sleep(0.5)
 
-                self._loop.call_soon_threadsafe(
-                    self._loop.stop
-                )
+                self._loop.call_soon_threadsafe(self._loop.stop)
 
             if self._thread.is_alive():
                 self._thread.join(timeout=2.0)
@@ -218,9 +186,7 @@ class MCP:
 
         finally:
             if self._loop.is_running():
-                self._loop.call_soon_threadsafe(
-                    self._loop.stop
-                )
+                self._loop.call_soon_threadsafe(self._loop.stop)
 
             if self._thread.is_alive():
                 self._thread.join(timeout=5.0)
@@ -229,28 +195,16 @@ class MCP:
 
             print("[MCP] MCP 管理器已关闭")
 
-    def list_tools(
-        self,
-        server_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        return self._run_sync(
-            self._list_tools_async(server_id)
-        )
+    def list_tools(self, server_id: Optional[str] = None, ) -> List[Dict[str, Any]]:
+        return self._run_sync(self._list_tools_async(server_id))
 
-    async def _list_tools_async(
-        self,
-        server_id: Optional[str],
-    ) -> List[Dict[str, Any]]:
+    async def _list_tools_async(self, server_id: Optional[str], ) -> List[Dict[str, Any]]:
 
         if server_id is not None:
             if server_id not in self._sessions:
-                raise ValueError(
-                    f"Server {server_id} 未连接"
-                )
+                raise ValueError(f"Server {server_id} 未连接")
 
-            targets = {
-                server_id: self._sessions[server_id]
-            }
+            targets = {server_id: self._sessions[server_id]}
 
         else:
             targets = dict(self._sessions)
@@ -261,61 +215,28 @@ class MCP:
             result = await session.list_tools()
 
             for tool in result.tools:
-                parameters = getattr(
-                    tool,
-                    "input_schema",
-                    None,
-                )
+                parameters = getattr(tool, "input_schema", None, )
 
                 if parameters is None:
-                    parameters = getattr(
-                        tool,
-                        "inputSchema",
-                        {},
-                    )
+                    parameters = getattr(tool, "inputSchema", {}, )
 
-                all_tools.append({
-                    "server_id": sid,
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": parameters,
-                })
+                all_tools.append({"server_id": sid, "name": tool.name, "description": tool.description or "",
+                                  "parameters": parameters, })
 
         return all_tools
 
-    def call_tool(
-        self,
-        server_id: str,
-        tool_name: str,
-        arguments: dict,
-    ) -> str:
+    def call_tool(self, server_id: str, tool_name: str, arguments: dict, ) -> str:
 
-        return self._run_sync(
-            self._call_tool_async(
-                server_id,
-                tool_name,
-                arguments,
-            )
-        )
+        return self._run_sync(self._call_tool_async(server_id, tool_name, arguments, ))
 
-    async def _call_tool_async(
-        self,
-        server_id: str,
-        tool_name: str,
-        arguments: dict,
-    ) -> str:
+    async def _call_tool_async(self, server_id: str, tool_name: str, arguments: dict, ) -> str:
 
         if server_id not in self._sessions:
-            raise ValueError(
-                f"Server {server_id} 未连接"
-            )
+            raise ValueError(f"Server {server_id} 未连接")
 
         session = self._sessions[server_id]
 
-        result = await session.call_tool(
-            tool_name,
-            arguments,
-        )
+        result = await session.call_tool(tool_name, arguments, )
 
         texts = []
 
@@ -331,51 +252,30 @@ class MCP:
         mcp_tools = self.list_tools()
 
         print("[MCP] 工具列表")
-        print(
-            json.dumps(
-                mcp_tools,
-                indent=3,
-                ensure_ascii=False,
-            )
-        )
+        print(json.dumps(mcp_tools, indent=3, ensure_ascii=False, ))
 
         for tool in mcp_tools:
 
             def make_proxy(sid, tname):
                 def proxy_func(**kwargs):
-                    raw_result = self.call_tool(
-                        sid,
-                        tname,
-                        kwargs,
-                    )
+                    raw_result = self.call_tool(sid, tname, kwargs, )
 
                     try:
                         return json.loads(raw_result)
                     except json.JSONDecodeError:
-                        return {
-                            "text": raw_result
-                        }
+                        return {"text": raw_result}
 
                 return proxy_func
 
-            proxy = make_proxy(
-                tool["server_id"],
-                tool["name"],
-            )
+            proxy = make_proxy(tool["server_id"], tool["name"], )
 
             proxy.__name__ = tool["name"]
             proxy.__doc__ = tool["description"]
 
-            funcall_engine.register(
-                func=proxy,
-                description=tool["description"],
-                parameters=tool["parameters"],
-            )
+            funcall_engine.register(func=proxy, description=tool["description"], parameters=tool["parameters"], )
 
-        print(
-            f"[MCP] 已将 {len(mcp_tools)} 个外部工具注入 "
-            f"FunctionCall 引擎"
-        )
+        print(f"[MCP] 已将 {len(mcp_tools)} 个外部工具注入 "
+              f"FunctionCall 引擎")
 
     @classmethod
     def reset_instance(cls):
@@ -415,14 +315,10 @@ class FunctionCall:
     def register(self, func: Callable, description: str = "", parameters: Optional[Dict] = None):
         name = func.__name__
         self._registry[name] = func
-        self._tools_schema.append({
-            "type": "function",
-            "function": {
-                "name": name,
-                "description": description or func.__doc__ or "",
-                "parameters": parameters or {"type": "object", "properties": {}, "required": []}
-            }
-        })
+        self._tools_schema.append({"type": "function",
+                                   "function": {"name": name, "description": description or func.__doc__ or "",
+                                                "parameters": parameters or {"type": "object", "properties": {},
+                                                                             "required": []}}})
 
     def run(self, messages: List[Dict]) -> Generator[Union[str, Dict], None, None]:
         """
@@ -433,11 +329,7 @@ class FunctionCall:
             dict: 工具执行结果 {"type": "tool_result", "name": ..., "result": ...}
         """
         for _ in range(self.max_rounds):
-            kwargs: Dict[str, Any] = {
-                "model": self.model,
-                "messages": messages,
-                "stream": True
-            }
+            kwargs: Dict[str, Any] = {"model": self.model, "messages": messages, "stream": True}
 
             if Config.mcp['enable'] and self._tools_schema:
                 kwargs["tools"] = self._tools_schema
@@ -464,10 +356,7 @@ class FunctionCall:
                         fn = tc.get("function", {})
 
                         if idx not in tool_calls_map:
-                            tool_calls_map[idx] = {
-                                "name": fn.get("name", ""),
-                                "arguments": ""
-                            }
+                            tool_calls_map[idx] = {"name": fn.get("name", ""), "arguments": ""}
                         # 增量拼接 name 和 arguments
                         if fn.get("name"):
                             tool_calls_map[idx]["name"] = fn["name"]
@@ -493,23 +382,14 @@ class FunctionCall:
                     except json.JSONDecodeError:
                         args = {"_raw": tc_data["arguments"]}
 
-                    full_tc = {
-                        "function": {
-                            "name": tc_data["name"],
-                            "arguments": args
-                        }
-                    }
+                    full_tc = {"function": {"name": tc_data["name"], "arguments": args}}
                     full_tool_calls.append(full_tc)
 
                     # yield 工具调用事件，方便外部感知
                     yield {"type": "tool_call", "name": tc_data["name"], "args": args}
 
                 # 将完整的 assistant 消息加入上下文
-                messages.append({
-                    "role": "assistant",
-                    "content": "".join(content_parts),
-                    "tool_calls": full_tool_calls
-                })
+                messages.append({"role": "assistant", "content": "".join(content_parts), "tool_calls": full_tool_calls})
 
                 # 依次执行工具并追加结果
                 for tc in full_tool_calls:
@@ -521,10 +401,7 @@ class FunctionCall:
                         result = {"error": str(e)}
 
                     yield {"type": "tool_result", "name": fn_name, "result": result}
-                    messages.append({
-                        "role": "tool",
-                        "content": json.dumps(result, ensure_ascii=False)
-                    })
+                    messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False)})
 
                 continue
 
@@ -533,94 +410,274 @@ class FunctionCall:
         yield "达到最大工具调用轮次限制"
 
 
+class RAG:
+    RAG_ROOT = "./resources/rag"
+
+    def __init__(self, chat_model=None, embed_model=None, top_k=None, chunk_size=None, overlap=None):
+        self.chat_model = chat_model
+        self.embed_model = embed_model
+        self.collection_name = Config.rag["collection"]
+        self.knowledge_path = os.path.join(self.RAG_ROOT, self.collection_name)
+        self.chroma_path = os.path.join(self.RAG_ROOT, "chroma_db")
+
+        self.top_k = top_k
+        self.chunk_size = chunk_size
+        self.overlap = overlap
+        self.client = None
+        self.collection = None
+        self.bm25 = None
+        self.bm25_chunks = []
+
+    @staticmethod
+    def log(message, level="INFO"):
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] [{level}] {message}")
+
+    def init_chroma(self):
+        os.makedirs(self.chroma_path, exist_ok=True)
+        self.client = chromadb.PersistentClient(path=self.chroma_path)
+        self.collection = self.client.get_or_create_collection(name=self.collection_name)
+        self.log(f"Chroma 初始化完成：{self.chroma_path}")
+
+    def read_documents(self):
+        if not os.path.exists(self.knowledge_path):
+            self.log(f"知识库不存在：{self.knowledge_path}", "WARN")
+            return []
+
+        if os.path.isfile(self.knowledge_path):
+            if os.path.splitext(self.knowledge_path)[1].lower() not in [".txt", ".md"]:
+                self.log(f"不支持的知识库文件类型：{self.knowledge_path}", "WARN")
+                return []
+
+            paths = [self.knowledge_path]
+
+        else:
+            paths = []
+
+            for root, _, files in os.walk(self.knowledge_path):
+                for filename in files:
+                    ext = os.path.splitext(filename)[1].lower()
+
+                    if ext in [".txt", ".md"]:
+                        paths.append(os.path.join(root, filename))
+
+        documents = []
+        for path in paths:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                if text.strip():
+                    documents.append({"source": path, "text": text})
+            except Exception as e:
+                self.log(f"读取文件失败：{path} ({e})", "ERROR")
+
+        return documents
+
+    def split_text(self, text):
+        text = (text.replace("\r\n", "\n").replace("\r", "\n").strip())
+
+        if not text:
+            return []
+
+        chunks = []
+        start = 0
+        text_length = len(text)
+
+        while start < text_length:
+            end = min(start + self.chunk_size, text_length)
+            chunk = text[start:end].strip()
+
+            if chunk:
+                chunks.append(chunk)
+            if end >= text_length:
+                break
+
+            start = max(0, end - self.overlap)
+
+        return chunks
+
+    def create_chunks(self):
+        documents = self.read_documents()
+        chunks = []
+
+        for document in documents:
+            text_chunks = self.split_text(document["text"])
+            for index, chunk in enumerate(text_chunks):
+                chunks.append(
+                    {"id": str(len(chunks)), "source": document["source"], "chunk_index": index, "text": chunk})
+
+        return chunks
+
+    @staticmethod
+    def tokenize(text):
+        return list(text)
+
+    def get_embedding(self, text):
+        response = ollama.embeddings(model=self.embed_model, prompt=text)
+        return response["embedding"]
+
+    def build_bm25(self, chunks):
+        self.bm25_chunks = chunks
+        corpus = []
+        for chunk in chunks:
+            corpus.append(self.tokenize(chunk["text"]))
+        self.bm25 = BM25Okapi(corpus)
+
+    def build(self):
+        if self.collection is None:
+            self.init_chroma()
+
+        chunks = self.create_chunks()
+        self.build_bm25(chunks)
+
+        if not chunks:
+            self.log("知识库中没有可用内容", "WARN")
+            return False
+
+        if self.collection.count() > 0:
+            all_ids = self.collection.get()["ids"]
+            if all_ids: self.collection.delete(ids=all_ids)
+
+        for index, chunk in enumerate(chunks):
+            try:
+                vector = self.get_embedding(chunk["text"])
+
+                self.collection.add(ids=[chunk["id"]], embeddings=[vector], documents=[chunk["text"]],
+                                    metadatas=[{"source": chunk["source"], "chunk_index": chunk["chunk_index"]}])
+
+            except Exception as e:
+                self.log(f"Embedding失败：Chunk {index} ({e})", "ERROR")
+                return False
+
+        self.log(f"索引建立完成，共 {len(chunks)} 个chunk")
+
+        return True
+
+    def load(self):
+        if self.collection is None:
+            self.init_chroma()
+
+        count = self.collection.count()
+        if count <= 0:
+            self.log("Chroma索引为空", "WARN")
+            return False
+
+        return True
+
+    def load_or_build(self):
+        if self.load():
+            return True
+
+        self.log("没有现有索引，开始建立", "WARN")
+
+        return self.build()
+
+    def bm25_search(self, query, top_k=None):
+        if self.bm25 is None:
+            return []
+
+        top_k = top_k or self.top_k
+        scores = self.bm25.get_scores(self.tokenize(query))
+        indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        results = []
+
+        for i in indexes:
+            chunk = self.bm25_chunks[i]
+            results.append({"score": scores[i], "source": chunk["source"], "chunk_index": chunk["chunk_index"],
+                            "text": chunk["text"], "type": "bm25"})
+
+        return results
+
+    def search(self, query, top_k=None):
+        top_k = top_k or self.top_k
+        # BM25
+        bm25_results = self.bm25_search(query, top_k)
+        # 向量
+        vector_results = []
+
+        if self.collection.count() > 0:
+            query_vector = self.get_embedding(query)
+            result = self.collection.query(query_embeddings=[query_vector], n_results=top_k)
+            for text, meta, distance in zip(result["documents"][0], result["metadatas"][0], result["distances"][0]):
+                vector_results.append(
+                    {"score": 1 - distance, "source": meta["source"], "chunk_index": meta["chunk_index"], "text": text,
+                     "type": "vector"})
+
+        return self.merge_results(bm25_results, vector_results, top_k)
+
+    def compress_context(self, query, search_results):
+        if not search_results:
+            return "没有检索到相关知识。"
+
+        compressed = []
+        for index, result in enumerate(search_results):
+            try:
+                response = ollama.chat(model=self.chat_model, messages=[{"role": "user",
+                                                                         "content": prompts['rag_compressed'].replace(
+                                                                             "{query}", query).replace('text', result[
+                                                                             'text'])}], )
+                text = (response["message"]["content"].strip())
+
+                if text:
+                    compressed.append(f"[知识片段 {index + 1}]\n来源：\n{result["source"]}\n\n{text}")
+            except Exception as e:
+                self.log(f"压缩失败 {index}: {e}", "ERROR")
+
+        if not compressed:
+            return "没有检索到相关知识。"
+
+        return "\n".join(compressed)
+
+    @staticmethod
+    def merge_results(bm25_results, vector_results, top_k):
+        result_map = {}
+        # BM25权重
+        for r in bm25_results:
+            key = r["text"]
+            result_map[key] = {**r, "final_score": r["score"] * 2}
+
+        # vector权重
+        for r in vector_results:
+            key = r["text"]
+            if key in result_map:
+                result_map[key]["final_score"] += (r["score"])
+            else:
+                result_map[key] = {**r, "final_score": r["score"]}
+
+        results = list(result_map.values())
+        results.sort(key=lambda x: x["final_score"], reverse=True)
+        return results[:top_k]
+
+    @staticmethod
+    def build_context(search_results):
+        if not search_results:
+            return "没有检索到相关知识。"
+
+        parts = []
+        for index, result in enumerate(search_results):
+            parts.append(f"[知识片段 {index + 1}]\n来源：\n{result["source"]}\n\n{result['text']}")
+        return "\n".join(parts)
+
+    def clear(self):
+        if self.collection is None:
+            self.init_chroma()
+
+        if self.collection.count() > 0:
+            all_ids = self.collection.get()["ids"]
+            if all_ids: self.collection.delete(ids=all_ids)
+
+
 class LTMemory:
     """长期记忆：将历史对话压缩摘要后存入 RAG 或本地内存"""
-
-    def __init__(
-        self,
-        rag_instance: Optional[object] = None,
-        summary_model: Optional[str] = None,
-        default_model: str = "glm4:latest"
-    ):
-        self.rag = rag_instance
-        self.summary_model = (
-            summary_model
-            or getattr(rag_instance, "chat_model", None)
-            or default_model
-        )
-        # 当 RAG 不可用时的本地存储
-        self.memory_store: List[Dict] = []
-
-    def consolidate(
-        self,
-        messages: List[Dict],
-        trigger_len: int = 20
-    ) -> Optional[str]:
-        """当短期记忆过长时，提取关键信息写入长期知识库或本地存储"""
-        import ollama
-
-        if len(messages) < trigger_len:
-            return None
-
-        to_summarize = messages[: len(messages) // 2]
-        content = "\n".join(
-            f"{m['role']}: {m.get('content', '')}"
-            for m in to_summarize
-            if isinstance(m.get("content"), str)
-        )
-        if not content.strip():
-            return None
-
-        prompt = (
-            "请将以下对话历史浓缩为一段客观的事实性知识摘要，"
-            "用于未来的长期记忆检索。\n\n"
-            f"{content}"
-        )
-
-        resp = ollama.chat(
-            model=self.summary_model,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        summary = resp["message"]["content"].strip()
-        if not summary:
-            return None
-
-        metadata = {
-            "source": "long_term_memory",
-            "type": "conversation_summary",
-        }
-
-        if self.rag is not None:
-            self.rag.add_documents(
-                [summary],
-                metadatas=[metadata],
-                collection=self.rag.memory_collection,
-            )
-        else:
-            # 无 RAG 时存入本地内存列表
-            self.memory_store.append({
-                "content": summary,
-                "metadata": metadata,
-            })
-
-        return summary
-
-    def get_memories(self) -> List[Dict]:
-        """统一获取长期记忆（兼容 RAG 和本地存储）"""
-        if self.rag is not None:
-            # 根据你的 RAG 实现调整检索方法
-            return self.rag.search(
-                query="long term memory",
-                collection=self.rag.memory_collection,
-            )
-        return self.memory_store
+    # TODO: LT
+    pass
 
 
 class Memory:
     """
     实时对话记忆
     """
+
     def __init__(self):
         self.messages = []
 
@@ -628,7 +685,8 @@ class Memory:
         self.messages.append({"role": "user", "content": msg})
 
     def add_user_image(self, path: str):
-        self.messages.append({"role": "user", "content": {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encode_image(path)}"}}})
+        self.messages.append({"role": "user", "content": {"type": "image_url", "image_url": {
+            "url": f"data:image/png;base64,{encode_image(path)}"}}})
 
     def add_assistant_msg(self, msg: str):
         self.messages.append({"role": "assistant", "content": msg})

@@ -12,6 +12,7 @@ resources/rag/chroma_db/
 resources/rag/chroma_db/chroma_db.db
 .idea/
 .ssh/
+test/
 
 # Distribution / packaging
 .Python

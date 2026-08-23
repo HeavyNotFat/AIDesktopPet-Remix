@@ -133,15 +133,24 @@ class RAGWidgetScroll(QWidget):
         enable_rag_switch.stateChanged.connect(self.check_enable)
         layout.addWidget(enable_rag_switch_card)
         layout.addStretch()
+        # 压缩启用
+        compressed_rag_switch = HackerSwitch(parent=self)
+        compressed_rag_switch.setChecked(Config.rag['compressed_enable'])
+        compressed_rag_switch_card = HackerCard(
+            "启用压缩RAG",
+            compressed_rag_switch,
+            "RAG 字段过长压缩RAG"
+        )
+        compressed_rag_switch.stateChanged.connect(self.check_compressed_enable)
+        layout.addWidget(compressed_rag_switch_card)
+        layout.addStretch()
         # 配置知识库类型
         self.knowledge_base_type = HackerComboBox(parent=self)
         self.knowledge_base_type.setFixedWidth(200)
         for dir_ in os.listdir("./resources/rag"):
-            if os.path.isdir(f"./resources/rag/{dir_}"):
-                continue
-            dir_ = dir_.replace(".txt", "")
+            if dir_ == "chroma_db": continue
             self.knowledge_base_type.addItem(dir_)
-        self.knowledge_base_type.setCurrentText(Config.rag['type'])
+        self.knowledge_base_type.setCurrentText(Config.rag['collection'])
         knowledge_base_type_card = HackerCard(
             "知识库类型",
             self.knowledge_base_type,
@@ -153,53 +162,16 @@ class RAGWidgetScroll(QWidget):
         # RAG 引擎
         rag_engine = HackerComboBox(parent=self)
         rag_engine.setFixedWidth(200)
-        rag_engine.addItems(['chroma', 'lance', 'milvus'])
-        rag_engine.setCurrentText(Config.rag['type'])
+        rag_engine.addItems(['chroma'])
+        rag_engine.setCurrentText(Config.rag['engine'])
         rag_engine_card = HackerCard(
             "RAG引擎",
             rag_engine,
-            "Chroma轻量，Lance多元，Milvus海量。"
+            # "Chroma轻量，Lance多元，Milvus海量。"
+            "Chroma 轻量"
         )
         rag_engine.currentTextChanged.connect(self.check_engine)
         layout.addWidget(rag_engine_card)
-        layout.addStretch()
-        # 元数据过滤
-        metadata_filter_switch = HackerSwitch(parent=self)
-        metadata_filter_switch.setChecked(Config.rag['meta'])
-        metadata_filter_switch_card = HackerCard(
-            "元数据过滤",
-            metadata_filter_switch,
-            "对数据库中多元化数据进行筛选"
-        )
-        metadata_filter_switch.stateChanged.connect(self.check_meta)
-        layout.addWidget(metadata_filter_switch_card)
-        layout.addStretch()
-        # 缓存
-        cache_slide = HackerSlider(parent=self)
-        cache_slide.setFixedWidth(250)
-        cache_slide.setMaximum(512)
-        cache_slide.setValue(Config.rag['cache'])
-        cache_slide_card = HackerCard(
-            "LRU缓存（0-512）",
-            cache_slide,
-            "用内存加速RAG（可能导致无多元化结果）"
-        )
-        cache_slide.valueChanged.connect(self.check_cache)
-        cache_slide.valueChanged.connect(lambda: cache_slide_card.set_title(f"LRU缓存（{cache_slide.value()}）"))
-        layout.addWidget(cache_slide_card)
-        layout.addStretch()
-        # 混合检索
-        bm25_slider = HackerSlider(parent=self)
-        bm25_slider.setFixedWidth(200)
-        bm25_slider.setValue(Config.rag['bm25'] * 100)
-        bm25_slider_card = HackerCard(
-            f"BM25混合检索（{Config.rag['bm25']}）",
-            bm25_slider,
-            "专有名词/昵称敏感"
-        )
-        bm25_slider.valueChanged.connect(self.check_bm25)
-        bm25_slider.valueChanged.connect(lambda: bm25_slider_card.set_title(f"BM25混合检索（{bm25_slider.value() / 100}）"))
-        layout.addWidget(bm25_slider_card)
         layout.addStretch()
         # 区块大小
         block_size = HackerSlider(parent=self)
@@ -217,25 +189,25 @@ class RAGWidgetScroll(QWidget):
         layout.addWidget(block_size_card)
         layout.addStretch()
         # 重排序
-        resort_slider = HackerSlider(parent=self)
-        resort_slider.setFixedWidth(200)
-        resort_slider.setValue(Config.rag['resort'])
-        resort_slider.setMaximum(50)
-        resort_card = HackerCard(
-            f"重排序（{Config.rag['resort']}）",
-            resort_slider,
+        top_k_slider = HackerSlider(parent=self)
+        top_k_slider.setFixedWidth(200)
+        top_k_slider.setValue(Config.rag['top_k'])
+        top_k_slider.setMaximum(50)
+        top_k_card = HackerCard(
+            f"重排序（{Config.rag['top_k']}）",
+            top_k_slider,
             "（Cross-Encoder）增强用户体验(设置top_k)"
         )
-        resort_slider.valueChanged.connect(self.check_resort)
-        resort_slider.valueChanged.connect(lambda: resort_card.set_title(f"重排序（{resort_slider.value()}）"))
-        layout.addWidget(resort_card)
+        top_k_slider.valueChanged.connect(self.check_top_k)
+        top_k_slider.valueChanged.connect(lambda: top_k_card.set_title(f"重排序（{top_k_slider.value()}）"))
+        layout.addWidget(top_k_card)
         layout.addStretch()
         # Overlap
         overlap = HackerSlider(parent=self)
         overlap.setFixedWidth(200)
         overlap.setValue(Config.rag['overlap'])
         overlap_card = HackerCard(
-            "重叠率（15 %）",
+            f"重叠率（{Config.rag['overlap']} %）",
             overlap,
             "话语气和指代关系的连续性。"
         )
@@ -281,7 +253,7 @@ class RAGWidgetScroll(QWidget):
 
     def check_type(self, text: str | None = None):
         if text is None: text = self.knowledge_base_type.currentText()
-        Config.rag['type'] = text
+        Config.rag['collection'] = text
         ConfigLoader.save_config(Config)
 
     def check_embedding(self, text: str | None = None):
@@ -290,33 +262,23 @@ class RAGWidgetScroll(QWidget):
         ConfigLoader.save_config(Config)
 
     @staticmethod
-    def check_engine(value: int):
-        Config.rag['engine'] = value
-        ConfigLoader.save_config(Config)
-
-    @staticmethod
     def check_enable(boo: bool):
         Config.rag['enable'] = boo
         ConfigLoader.save_config(Config)
 
     @staticmethod
-    def check_cache(boo: bool):
-        Config.rag['cache'] = boo
+    def check_compressed_enable(boo: bool):
+        Config.rag['compressed_enable'] = boo
         ConfigLoader.save_config(Config)
 
     @staticmethod
-    def check_bm25(value: int):
-        Config.rag['bm25'] = value / 100
+    def check_engine(value: int):
+        Config.rag['engine'] = value
         ConfigLoader.save_config(Config)
 
     @staticmethod
-    def check_resort(value: int):
-        Config.rag['resort'] = value
-        ConfigLoader.save_config(Config)
-
-    @staticmethod
-    def check_meta(boo: bool):
-        Config.rag['meta'] = boo
+    def check_top_k(value: int):
+        Config.rag['top_k'] = value
         ConfigLoader.save_config(Config)
 
     @staticmethod

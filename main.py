@@ -1,6 +1,7 @@
 import random
-import sys
 import traceback
+import os
+import sys
 
 from PySide6.QtWidgets import (
     QApplication, QSplashScreen, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QProgressBar
@@ -166,9 +167,8 @@ def main():
 
 
 if __name__ == '__main__':
-    import os
-    import shutil
+    # import shutil
+    # if os.path.exists("./resources/rag/chroma_db"):
+    #     shutil.rmtree("./resources/rag/chroma_db")
 
-    if os.path.exists("./resources/rag/chroma_db"):
-        shutil.rmtree("./resources/rag/chroma_db")
     main()

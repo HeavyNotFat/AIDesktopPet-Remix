@@ -1,26 +1,21 @@
-from typing import Generator, Union, Dict, List, Optional
 import os
 import json
-import re
+
+import ollama
 
 from .. import Config
 from . import MCP
 
 from PySide6.QtCore import Signal, QObject
 
-mcp = None
-if Config.mcp['enable']: mcp = MCP()
+mcp: MCP | None = None
+if Config.mcp["enable"]:
+    mcp = MCP()
 for server in Config.mcp["mcp"]:
-    if not Config.mcp['enable']: break
-    runnable_args = [
-        arg.replace("$PATH$", os.getcwd())
-        for arg in server["args"]
-    ]
-    mcp.connect_stdio(
-        server_id=server["server"],
-        command=server["command"],
-        args=runnable_args,
-    )
+    if not Config.mcp["enable"]:
+        break
+    runnable_args = [arg.replace("$PATH$", os.getcwd()) for arg in server["args"]]
+    mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args, )
 with open("./resources/prompts.json", "r", encoding="utf-8") as f:
     prompts = json.load(f)
 
@@ -30,7 +25,7 @@ class LLM(QObject):
 
     def __init__(self, model: str = "glm4", system_prompt: str = ""):
         super().__init__()
-        from . import LTMemory, Memory, rag, FunctionCall
+        from . import Memory, FunctionCall, RAG
 
         self.memory = Memory()
         self.function_call = FunctionCall(model)
@@ -38,183 +33,92 @@ class LLM(QObject):
         self._closed = False
         self.rag = None
 
-        if Config.rag['enable']: self.rag = rag.HybridRAG(
-            Config.rag['model'],
-            Config.rag["embedding"],
-            Config.rag["resort"],
-            Config.rag["chunks"],
-            Config.rag["overlap"],
-        )
-        if Config.mcp['enable']: mcp.inject_to_funcall(self.function_call)
-
-        self.lt_memory = LTMemory(self.rag)
+        if Config.mcp["enable"]:
+            mcp.inject_to_funcall(self.function_call)
+        if Config.rag["enable"]:
+            self.rag = RAG(
+                chat_model=Config.rag['model'],
+                embed_model=Config.rag['embedding'],
+                top_k=Config.rag['top_k'],
+                chunk_size=Config.rag['chunks'],
+                overlap=Config.rag['overlap'],)
+            self.rag.load_or_build()
         if system_prompt.strip():
             self.memory.add_system_msg(system_prompt)
 
-    def chat(self, user_input: str) -> Generator[Union[str, Dict], None, None]:
+    def chat(self, user_input: str):
         if not Config.memory["shortterm"]:
             self.memory.clear()
-
         self.memory.add_user_msg(user_input)
-        if Config.memory["longterm"]:
-            try:
-                self.lt_memory.consolidate(self.memory.messages)
-            except Exception as e:
-                print(f"[Memory] 长期记忆压缩失败: {e}")
-
-        working_messages = self._build_rag_messages(
-            messages=self.memory.messages,
-            user_input=user_input,
-        )
+        messages = self.memory.messages
+        if self.rag and self._need_rag(user_input):
+            messages = self._inject_rag(user_input, messages)
+        print("[RAG MSG]", messages)
 
         reply_parts = []
-        for event in self.function_call.run(working_messages):
+        for event in self.function_call.run(messages):
             if isinstance(event, str):
                 reply_parts.append(event)
                 yield event
+                continue
 
-            elif isinstance(event, dict):
-                event_type = event.get("type")
-
-                if event_type == "tool_call":
-                    print(
-                        f"调用工具: {event.get('name')}"
-                        f"({event.get('args')})"
-                    )
-                    yield event
-
-                elif event_type == "tool_result":
-                    print(f"工具结果: {event.get('result')}")
-                    yield event
-
-                else:
-                    yield event
+            self._handle_event(event)
+            yield event
 
         reply = "".join(reply_parts)
-
         if reply:
             self.memory.add_assistant_msg(reply)
+        self.memory_signal.emit([self.model, self.memory.messages])
 
-        self.memory_signal.emit([
-            self.model,
-            self.memory.messages,
-        ])
-    
-    def _need_rag(self, user_input: str, messages: Optional[List[Dict]] = None) -> bool:
-        """判断当前问题是否需要查询长期记忆。"""
-        import ollama
-
-        recent_context = ""
-
-        if isinstance(messages, list):
-            recent_messages = messages[-6:]
-            context_parts = []
-
-            for message in recent_messages:
-                if not isinstance(message, dict):
-                    continue
-
-                content = message.get("content", "")
-                if not isinstance(content, str) or not content.strip():
-                    continue
-
-                context_parts.append(
-                    f"{message.get('role', '')}: {content}"
-                )
-
-            recent_context = "\n".join(context_parts)
-
+    @staticmethod
+    def _need_rag(user_input: str):
         try:
-            prompt = prompts["rag"].replace("{recent_context}", recent_context).replace("{user_input}", user_input)
-
-            resp = ollama.chat(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+            response = ollama.chat(
+                model=Config.rag['model'],
+                messages=[{"role": "system", "content": prompts['rag']},
+                          {'role': 'user', 'content': user_input}],
             )
+            result = response["message"]["content"].strip().upper()
+            print("[RAG]", result)
+            need_rag = "yes" in result.lower()
 
-            result = resp["message"]["content"].strip()
-            result = result.replace("\\", "")
-            print(f"[RAG Judge] {result}")
-
-        except Exception as e:
-            print(f"[RAG Judge] 判断失败: {e}")
-            return False
-
-        try:
-            data = json.loads(result)
-            if isinstance(data, dict):
-                need_rag = data.get("need_rag", False)
-
-                if isinstance(need_rag, bool):
-                    print(f"[RAG Judge] need_rag={need_rag}")
-                    return need_rag
-
-                if isinstance(need_rag, str):
-                    return need_rag.strip().lower() == "true"
-
-        except (json.JSONDecodeError, TypeError) as e:
-            print(type(e).__name__, str(e))
-
-        match = re.search(r'"need_rag"\s*:\s*(true|false)', result, re.IGNORECASE)
-        if match:
-            need_rag = match.group(1).lower() == "true"
-            print(f"[RAG Judge] need_rag={need_rag}")
+            print(f"[RAG] {'需要' if need_rag else '不需要'}："
+                  f"{user_input}")
             return need_rag
 
-        print("[RAG Judge] 无法解析判断结果，默认不使用 RAG")
-        return False
-    
-    def _build_rag_messages(self, messages: List[Dict], user_input: str) -> List[Dict]:
-        if not isinstance(messages, list):
-            print(f"[RAG] messages 类型错误: {type(messages)}")
-            return []
-
-        need_rag = self._need_rag(user_input=user_input, messages=messages) if Config.rag['enable'] else False
-
-        print(f"[RAG] need_rag={need_rag}")
-        if not need_rag:
-            return messages
-        print("[RAG] 当前问题需要RAG检索")
-
-        try:
-            docs = self.rag.retrieve(user_input, collection=Config.rag['type'])
         except Exception as e:
-            print(f"[RAG] 检索失败: {e}")
+            print(f"[RAG] 判断失败：{e}")
+            return False
+
+    def _inject_rag(self, user_input: str, messages: list):
+        results = self.rag.search(user_input, top_k=Config.rag['top_k'])
+        if not results:
             return messages
+        if Config.rag['compressed_enable']:
+            context = self.rag.compress_context(user_input, results)
+        else:
+            context = self.rag.build_context(results)
+        rag_message = {"role": "user",
+                       "content": ("以下是与当前问题相关的知识库内容。\n"
+                                   "请优先依据这些内容回答。\n"
+                                   "如果知识库没有足够信息，不要编造。\n\n"
+                                   "===== 知识库 =====\n\n"
+                                   f"{context}\n"
+                                   f"===== 用户问题 =====\n\n"
+                                   f"{user_input}")}
 
-        if not docs:
-            print("[RAG] 未找到相关RAG")
-            return messages
+        if not messages:
+            return [rag_message]
 
-        print("[RAG] 找到相关RAG")
-        context = "\n\n".join(
-            f"- {doc.content}"
-            for doc in docs
-            if getattr(doc, "content", None)
-        )
+        return [*messages, rag_message]
 
-        if not context:
-            return messages
+    @staticmethod
+    def _handle_event(event):
+        event_type = event.get("type")
 
-        rag_message = {
-            "role": "system",
-            "content": prompts["ltmemory"].replace("{context}", context),
-        }
+        if event_type == "tool_call":
+            print(f"调用工具: {event.get('name')}"
+                  f"({event.get('args')})")
 
-        result = list(messages)
-        insert_index = 0
-
-        while (
-            insert_index < len(result)
-            and isinstance(result[insert_index], dict)
-            and result[insert_index].get("role") == "system"
-        ):
-            insert_index += 1
-
-        result.insert(insert_index, rag_message)
-        return result
+        elif event_type == "tool_result":
+            print(f"工具结果: {event.get('result')}")

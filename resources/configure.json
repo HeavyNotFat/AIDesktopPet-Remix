@@ -6,16 +6,14 @@
    },
    "rag": {
       "enable": true,
+      "compressed_enable": false,
       "engine": "chroma",
-      "type": "Identity",
+      "collection": "VTuber",
       "embedding": "bge-m3:latest",
-      "model": "qwen2:1.5b",
-      "meta": true,
-      "cache": 128,
-      "bm25": 0.3,
-      "resort": 10,
-      "chunks": 148,
-      "overlap": 10
+      "model": "huihui_ai/gemma-4-abliterated:e4b",
+      "top_k": 3,
+      "chunks": 210,
+      "overlap": 30
    },
    "mcp": {
       "enable": false,

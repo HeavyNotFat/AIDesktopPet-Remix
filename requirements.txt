@@ -2,12 +2,18 @@ PySide6==6.11.2
 live2d-py==0.3.6
 PyOpenGL==3.1.9
 pypiwin32==223
-markdown==3.10.3
+
+rank_bm25==0.2.2
 numpy==1.26.4
+markdown==3.10.3
+
+httpx==0.28.1
 requests==2.32.3
 mcp==2.0.0
+
 ollama==0.6.2
 openai==2.14.0
+
 chromadb==1.5.9
-lancedb==0.37.1
-pymilvus==3.0.1
+# lancedb==0.37.1
+# pymilvus==3.0.1
