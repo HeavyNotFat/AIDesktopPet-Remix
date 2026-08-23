@@ -7,7 +7,7 @@
    "rag": {
       "enable": true,
       "engine": "chroma",
-      "type": "test",
+      "type": "Identity",
       "embedding": "bge-m3:latest",
       "model": "qwen2:1.5b",
       "meta": true,

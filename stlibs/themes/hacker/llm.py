@@ -30,23 +30,23 @@ class Basic(QWidget):
 
         # AI 名字
         HackerLabel("AI 名字", self).setGeometry(20, 20, 120, 30)
-        self.ai_name = HackerLineEdit(self)
+        self.ai_name = HackerLineEdit(parent=self)
         self.ai_name.setGeometry(150, 20, 450, 30)
 
         # AI Model
         HackerLabel("AI 模型", self).setGeometry(20, 60, 120, 30)
-        self.ai_model = HackerLineEdit(self)
+        self.ai_model = HackerLineEdit(parent=self)
         self.ai_model.setGeometry(150, 60, 450, 30)
 
         # API Key
         HackerLabel("API Key", self).setGeometry(20, 100, 120, 30)
-        self.api_key = HackerLineEdit(self)
+        self.api_key = HackerLineEdit(parent=self)
         self.api_key.setEchoMode(QLineEdit.Password)
         self.api_key.setGeometry(150, 100, 450, 30)
 
         # Base URL
         HackerLabel("Base URL", self).setGeometry(20, 140, 120, 30)
-        self.api_url = HackerLineEdit(self)
+        self.api_url = HackerLineEdit(parent=self)
         self.api_url.setGeometry(150, 140, 450, 30)
 
         # 添加
@@ -102,11 +102,13 @@ class Memory(QWidget):
         layout.addWidget(self.tab_widget)
         layout.setGeometry(QRect(10, 75, 600, 360))
 
-    def check_short(self, boo: bool):
+    @staticmethod
+    def check_short(boo: bool):
         Config.memory['shortterm'] = boo
         ConfigLoader.save_config(Config)
 
-    def check_long(self, boo: bool):
+    @staticmethod
+    def check_long(boo: bool):
         Config.memory['longterm'] = boo
         ConfigLoader.save_config(Config)
 
@@ -132,20 +134,20 @@ class RAGWidgetScroll(QWidget):
         layout.addWidget(enable_rag_switch_card)
         layout.addStretch()
         # 配置知识库类型
-        knowledge_base_type = HackerComboBox(parent=self)
-        knowledge_base_type.setFixedWidth(200)
+        self.knowledge_base_type = HackerComboBox(parent=self)
+        self.knowledge_base_type.setFixedWidth(200)
         for dir_ in os.listdir("./resources/rag"):
             if os.path.isdir(f"./resources/rag/{dir_}"):
                 continue
             dir_ = dir_.replace(".txt", "")
-            knowledge_base_type.addItem(dir_)
-        knowledge_base_type.setCurrentText(Config.rag['type'])
+            self.knowledge_base_type.addItem(dir_)
+        self.knowledge_base_type.setCurrentText(Config.rag['type'])
         knowledge_base_type_card = HackerCard(
             "知识库类型",
-            knowledge_base_type,
+            self.knowledge_base_type,
             "选择知识库类型"
         )
-        knowledge_base_type.currentTextChanged.connect(self.check_type)
+        self.knowledge_base_type.currentTextChanged.connect(self.check_type)
         layout.addWidget(knowledge_base_type_card)
         layout.addStretch()
         # RAG 引擎
@@ -242,73 +244,89 @@ class RAGWidgetScroll(QWidget):
         layout.addWidget(overlap_card)
         layout.addStretch()
         # Embedding Model
-        embedding_model = HackerLineEdit(parent=self)
-        embedding_model.setText(Config.rag['embedding'])
-        embedding_model.setFixedWidth(200)
+        self.embedding_model = HackerLineEdit(parent=self)
+        self.embedding_model.setText(Config.rag['embedding'])
+        self.embedding_model.setFixedWidth(200)
         embedding_model_card = HackerCard(
             "嵌入（向量）模型",
-            embedding_model,
+            self.embedding_model,
             "捕获文本的语义信息"
         )
-        embedding_model.textChanged.connect(self.check_embedding)
+        self.embedding_model.textChanged.connect(self.check_embedding)
         layout.addWidget(embedding_model_card)
         layout.addStretch()
         # Model
-        model = HackerComboBox(parent=self)
-        model.addItems(get_model_lists())
-        model.setCurrentText(Config.rag['model'])
-        model.setFixedWidth(200)
+        self.model = HackerComboBox(parent=self)
+        self.model.addItems(get_model_lists())
+        self.model.setCurrentText(Config.rag['model'])
+        self.model.setFixedWidth(200)
         model_card = HackerCard(
             "识别模型",
-            model,
+            self.model,
             "识别是否需要RAG检索"
         )
-        model.currentTextChanged.connect(self.check_model)
+        self.model.currentTextChanged.connect(self.check_model)
         layout.addWidget(model_card)
         layout.addStretch()
 
-    def check_model(self, value: str):
-        Config.rag['model'] = value
+        for methods in dir(self):
+            if methods.startswith('check_'):
+                try: getattr(self, methods)()
+                except: pass
+
+    def check_model(self, text: str | None = None):
+        if text is None: text = self.model.currentText()
+        Config.rag['model'] = text
         ConfigLoader.save_config(Config)
 
-    def check_engine(self, value: int):
+    def check_type(self, text: str | None = None):
+        if text is None: text = self.knowledge_base_type.currentText()
+        Config.rag['type'] = text
+        ConfigLoader.save_config(Config)
+
+    def check_embedding(self, text: str | None = None):
+        if text is None: text = self.embedding_model.text()
+        Config.rag['embedding'] = text
+        ConfigLoader.save_config(Config)
+
+    @staticmethod
+    def check_engine(value: int):
         Config.rag['engine'] = value
         ConfigLoader.save_config(Config)
 
-    def check_enable(self, boo: bool):
+    @staticmethod
+    def check_enable(boo: bool):
         Config.rag['enable'] = boo
         ConfigLoader.save_config(Config)
 
-    def check_type(self, value: int):
-        Config.rag['type'] = value
-        ConfigLoader.save_config(Config)
-
-    def check_cache(self, boo: bool):
+    @staticmethod
+    def check_cache(boo: bool):
         Config.rag['cache'] = boo
         ConfigLoader.save_config(Config)
 
-    def check_bm25(self, value: int):
+    @staticmethod
+    def check_bm25(value: int):
         Config.rag['bm25'] = value / 100
         ConfigLoader.save_config(Config)
 
-    def check_resort(self, value: int):
+    @staticmethod
+    def check_resort(value: int):
         Config.rag['resort'] = value
         ConfigLoader.save_config(Config)
 
-    def check_meta(self, boo: bool):
+    @staticmethod
+    def check_meta(boo: bool):
         Config.rag['meta'] = boo
         ConfigLoader.save_config(Config)
 
-    def check_chunks(self, value: int):
+    @staticmethod
+    def check_chunks(value: int):
         Config.rag['chunks'] = value
         ConfigLoader.save_config(Config)
 
-    def check_overlap(self, value: int):
+    @staticmethod
+    def check_overlap(value: int):
         Config.rag['overlap'] = value
-        ConfigLoader.save_config(Config)
-
-    def check_embedding(self, text: str):
-        Config.rag['embedding'] = text
         ConfigLoader.save_config(Config)
 
 
@@ -353,7 +371,8 @@ class MCP(QWidget):
         remove_mcp_button.setGeometry(130, 360, 100, 30)
         remove_mcp_button.clicked.connect(self.remove_mcp)
 
-    def change_data(self, item: QTableWidgetItem):
+    @staticmethod
+    def change_data(item: QTableWidgetItem):
         if item.column() == 0:
             Config.mcp['mcp'][item.row()]['server'] = item.text()
         elif item.column() == 1:
@@ -362,7 +381,8 @@ class MCP(QWidget):
             Config.mcp['mcp'][item.row()]['command'] = item.text()
         ConfigLoader.save_config(Config)
 
-    def check_mcp(self, boo: bool):
+    @staticmethod
+    def check_mcp(boo: bool):
         Config.mcp['enable'] = boo
         ConfigLoader.save_config(Config)
 
