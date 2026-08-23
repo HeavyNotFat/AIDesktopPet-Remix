@@ -39,7 +39,7 @@ class LLM(QObject):
         self.rag = None
 
         if Config.rag['enable']: self.rag = rag.HybridRAG(
-            model,
+            Config.rag['model'],
             Config.rag["embedding"],
             Config.rag["resort"],
             Config.rag["chunks"],

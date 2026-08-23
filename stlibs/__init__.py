@@ -5,6 +5,7 @@ import subprocess
 import inspect
 import importlib
 import json
+import shutil
 
 CONFIG_PATH = "./resources/configure.json"
 
@@ -219,6 +220,10 @@ EMBEDDING = ['bge-m3']
 
 def get_model_lists() -> list:
     try:
+        ollama_path = shutil.which("ollama")
+        print(ollama_path)
+        if ollama_path is None: ollama_path = "ollama"
+
         result = subprocess.run(
             ["ollama", "list"],
             capture_output=True,

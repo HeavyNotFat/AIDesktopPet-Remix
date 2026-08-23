@@ -263,7 +263,7 @@ class RAGWidgetScroll(QWidget):
             model,
             "识别是否需要RAG检索"
         )
-        embedding_model.textChanged.connect(self.check_model)
+        model.currentTextChanged.connect(self.check_model)
         layout.addWidget(model_card)
         layout.addStretch()
 

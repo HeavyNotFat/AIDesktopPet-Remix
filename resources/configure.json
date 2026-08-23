@@ -8,14 +8,14 @@
       "enable": true,
       "engine": "chroma",
       "type": "test",
-      "embedding": "qwen3-embedding:4b",
-      "model": "glm4:latest",
+      "embedding": "bge-m3:latest",
+      "model": "qwen2:1.5b",
       "meta": true,
       "cache": 128,
       "bm25": 0.3,
       "resort": 10,
-      "chunks": 255,
-      "overlap": 15
+      "chunks": 148,
+      "overlap": 10
    },
    "mcp": {
       "enable": false,
@@ -28,14 +28,6 @@
                "$PATH$"
             ],
             "command": "npx"
-         },
-         {
-            "server": "fetch",
-            "args": [
-               "-m",
-               "mcp_server_fetch"
-            ],
-            "command": "python"
          }
       ]
    },
