@@ -1,6 +1,7 @@
 import json
 import os
 
+from ...ai.rag.engine import SUPPORTED_ENGINES
 from ... import Config, ConfigLoader, SharingData
 from ... import get_model_lists
 
@@ -116,12 +117,23 @@ class Memory(QWidget):
 class RAGWidgetScroll(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerComboBox, HackerSwitch, HackerSlider, HackerCard, HackerLineEdit
+        from . import HackerComboBox, HackerSwitch, HackerSlider, HackerCard, HackerLineEdit, HackerButton
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
+        # 下次启动清除缓存
+        clear_cache_next_time = HackerButton("清除缓存", parent=self)
+        clear_cache_next_time.setChecked(Config.rag['enable'])
+        clear_cache_next_time_card = HackerCard(
+            "清除缓存",
+            clear_cache_next_time,
+            "下次启动时清除RAG缓存（加入新RAG时请清除）"
+        )
+        clear_cache_next_time.clicked.connect(self.check_clear_cache)
+        layout.addWidget(clear_cache_next_time_card)
+        layout.addStretch()
         # 启用？
         enable_rag_switch = HackerSwitch(parent=self)
         enable_rag_switch.setChecked(Config.rag['enable'])
@@ -132,6 +144,17 @@ class RAGWidgetScroll(QWidget):
         )
         enable_rag_switch.stateChanged.connect(self.check_enable)
         layout.addWidget(enable_rag_switch_card)
+        layout.addStretch()
+        # 启用BM25
+        enable_bm25_switch = HackerSwitch(parent=self)
+        enable_bm25_switch.setChecked(Config.rag['enable'])
+        enable_bm25_switch_card = HackerCard(
+            "启用BM25",
+            enable_bm25_switch,
+            "强化关键字检索，答案更符合问题"
+        )
+        enable_bm25_switch.stateChanged.connect(self.check_bm25_enable)
+        layout.addWidget(enable_bm25_switch_card)
         layout.addStretch()
         # 压缩启用
         compressed_rag_switch = HackerSwitch(parent=self)
@@ -162,13 +185,13 @@ class RAGWidgetScroll(QWidget):
         # RAG 引擎
         rag_engine = HackerComboBox(parent=self)
         rag_engine.setFixedWidth(200)
-        rag_engine.addItems(['chroma'])
+        rag_engine.addItems(SUPPORTED_ENGINES)
         rag_engine.setCurrentText(Config.rag['engine'])
         rag_engine_card = HackerCard(
             "RAG引擎",
             rag_engine,
             # "Chroma轻量，Lance多元，Milvus海量。"
-            "Chroma 轻量"
+            "Chroma 轻量，Lance多元"
         )
         rag_engine.currentTextChanged.connect(self.check_engine)
         layout.addWidget(rag_engine_card)
@@ -262,6 +285,11 @@ class RAGWidgetScroll(QWidget):
         ConfigLoader.save_config(Config)
 
     @staticmethod
+    def check_clear_cache():
+        Config.rag['clear_cache'] = True
+        ConfigLoader.save_config(Config)
+
+    @staticmethod
     def check_enable(boo: bool):
         Config.rag['enable'] = boo
         ConfigLoader.save_config(Config)
@@ -269,6 +297,11 @@ class RAGWidgetScroll(QWidget):
     @staticmethod
     def check_compressed_enable(boo: bool):
         Config.rag['compressed_enable'] = boo
+        ConfigLoader.save_config(Config)
+
+    @staticmethod
+    def check_bm25_enable(boo: bool):
+        Config.rag['bm25_enable'] = boo
         ConfigLoader.save_config(Config)
 
     @staticmethod

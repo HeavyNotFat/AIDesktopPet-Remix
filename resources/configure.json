@@ -5,9 +5,11 @@
       "longterm": true
    },
    "rag": {
+      "clear_cache": true,
       "enable": true,
+      "bm25_enable": true,
       "compressed_enable": false,
-      "engine": "chroma",
+      "engine": "lancedb",
       "collection": "VTuber",
       "embedding": "bge-m3:latest",
       "model": "huihui_ai/gemma-4-abliterated:e4b",
@@ -16,7 +18,7 @@
       "overlap": 30
    },
    "mcp": {
-      "enable": false,
+      "enable": true,
       "mcp": [
          {
             "server": "filesystem",

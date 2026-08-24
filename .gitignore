@@ -9,7 +9,7 @@ __pycache__/
 # Resources
 resources/rag/Identity.txt
 resources/rag/chroma_db/
-resources/rag/chroma_db/chroma_db.db
+resources/rag/lancedb_db
 .idea/
 .ssh/
 test/

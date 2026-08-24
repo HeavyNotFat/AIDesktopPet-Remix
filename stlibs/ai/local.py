@@ -4,13 +4,13 @@ import json
 import ollama
 
 from .. import Config
-from . import MCP
+from . import mcp as mcp_server
 
 from PySide6.QtCore import Signal, QObject
 
-mcp: MCP | None = None
+mcp: mcp_server.MCP | None = None
 if Config.mcp["enable"]:
-    mcp = MCP()
+    mcp = mcp_server.MCP()
 for server in Config.mcp["mcp"]:
     if not Config.mcp["enable"]:
         break
@@ -25,10 +25,10 @@ class LLM(QObject):
 
     def __init__(self, model: str = "glm4", system_prompt: str = ""):
         super().__init__()
-        from . import Memory, FunctionCall, RAG
+        from . import Memory, fc, rag
 
         self.memory = Memory()
-        self.function_call = FunctionCall(model)
+        self.function_call = fc.FunctionCall(model)
         self.model = model
         self._closed = False
         self.rag = None
@@ -36,7 +36,7 @@ class LLM(QObject):
         if Config.mcp["enable"]:
             mcp.inject_to_funcall(self.function_call)
         if Config.rag["enable"]:
-            self.rag = RAG(
+            self.rag = rag.RAG(
                 chat_model=Config.rag['model'],
                 embed_model=Config.rag['embedding'],
                 top_k=Config.rag['top_k'],
