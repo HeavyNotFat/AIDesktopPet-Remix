@@ -31,23 +31,23 @@ class Basic(QWidget):
 
         # AI 名字
         HackerLabel("AI 名字", self).setGeometry(20, 20, 120, 30)
-        self.ai_name = HackerLineEdit(parent=self)
+        self.ai_name = HackerLineEdit("", parent=self)
         self.ai_name.setGeometry(150, 20, 450, 30)
 
         # AI Model
         HackerLabel("AI 模型", self).setGeometry(20, 60, 120, 30)
-        self.ai_model = HackerLineEdit(parent=self)
+        self.ai_model = HackerLineEdit("", parent=self)
         self.ai_model.setGeometry(150, 60, 450, 30)
 
         # API Key
         HackerLabel("API Key", self).setGeometry(20, 100, 120, 30)
-        self.api_key = HackerLineEdit(parent=self)
+        self.api_key = HackerLineEdit("", parent=self)
         self.api_key.setEchoMode(QLineEdit.Password)
         self.api_key.setGeometry(150, 100, 450, 30)
 
         # Base URL
         HackerLabel("Base URL", self).setGeometry(20, 140, 120, 30)
-        self.api_url = HackerLineEdit(parent=self)
+        self.api_url = HackerLineEdit("", parent=self)
         self.api_url.setGeometry(150, 140, 450, 30)
 
         # 添加
@@ -64,10 +64,10 @@ class Basic(QWidget):
             {
                 "name": self.ai_model.text(),
                 "apikey": self.api_key.text(),
-                "apiurl": self.api_url.text(),
+                "baseurl": self.api_url.text(),
             }
         )
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
 
 class Memory(QWidget):
@@ -106,12 +106,12 @@ class Memory(QWidget):
     @staticmethod
     def check_short(boo: bool):
         Config.memory['shortterm'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_long(boo: bool):
         Config.memory['longterm'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
 
 class RAGWidgetScroll(QWidget):
@@ -125,13 +125,12 @@ class RAGWidgetScroll(QWidget):
 
         # 下次启动清除缓存
         clear_cache_next_time = HackerButton("清除缓存", parent=self)
-        clear_cache_next_time.setChecked(Config.rag['enable'])
+        clear_cache_next_time.clicked.connect(self.clear_cache)
         clear_cache_next_time_card = HackerCard(
             "清除缓存",
             clear_cache_next_time,
             "下次启动时清除RAG缓存（加入新RAG时请清除）"
         )
-        clear_cache_next_time.clicked.connect(self.check_clear_cache)
         layout.addWidget(clear_cache_next_time_card)
         layout.addStretch()
         # 启用？
@@ -272,57 +271,57 @@ class RAGWidgetScroll(QWidget):
     def check_model(self, text: str | None = None):
         if text is None: text = self.model.currentText()
         Config.rag['model'] = text
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     def check_type(self, text: str | None = None):
         if text is None: text = self.knowledge_base_type.currentText()
         Config.rag['collection'] = text
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     def check_embedding(self, text: str | None = None):
         if text is None: text = self.embedding_model.text()
         Config.rag['embedding'] = text
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
-    def check_clear_cache():
+    def clear_cache():
         Config.rag['clear_cache'] = True
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_enable(boo: bool):
         Config.rag['enable'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_compressed_enable(boo: bool):
         Config.rag['compressed_enable'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_bm25_enable(boo: bool):
         Config.rag['bm25_enable'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_engine(value: int):
         Config.rag['engine'] = value
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_top_k(value: int):
         Config.rag['top_k'] = value
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_chunks(value: int):
         Config.rag['chunks'] = value
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_overlap(value: int):
         Config.rag['overlap'] = value
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
 
 class RAG(QWidget):
@@ -374,12 +373,12 @@ class MCP(QWidget):
             Config.mcp['mcp'][item.row()]['args'] = item.text().split(' ')
         else:
             Config.mcp['mcp'][item.row()]['command'] = item.text()
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     @staticmethod
     def check_mcp(boo: bool):
         Config.mcp['enable'] = boo
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     def add_data(self, server, args, command):
         row = self.mcp_table.rowCount()
@@ -400,7 +399,7 @@ class MCP(QWidget):
         if row >= 0:
             self.mcp_table.removeRow(row)
         Config.mcp['mcp'].pop(row)
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
 
 class Cooperation(QWidget):

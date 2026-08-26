@@ -7,11 +7,18 @@ from . import tts
 from . import settings
 from . import animation
 
+from ... import derfer
+from ... import SharingData
+from ...ai import local
+from ...ai import cloud
+
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSizePolicy, QHBoxLayout, QStackedWidget, QPushButton, \
     QScrollArea, QLineEdit, QTextEdit, QSlider, QComboBox, QTabWidget, QFrame, QToolButton, QTableWidget, QHeaderView, QAbstractItemView
 from PySide6.QtCore import Qt, Signal, QSize, QTimer, QPropertyAnimation, QEasingCurve, QRectF, Property
 from PySide6.QtGui import QAction, QCursor, QFontDatabase, QFont, QIcon, QPainter, QBrush, QColor, QPen, QPixmap, \
     QFontMetrics, QKeySequence, QShortcut, QPainterPath
+
+cache_llm_class = {}
 
 
 class _HackerTitleBar(QWidget):
@@ -1800,6 +1807,72 @@ class _ChatInputEdit(HackerTextEdit):
             return
 
         super().keyPressEvent(event)
+
+
+# BASE
+class ModelChat(QWidget):
+    def __init__(
+        self,
+        ai_name: str, model: str,
+        is_local: bool,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        if is_local:
+            if model in cache_llm_class.keys():
+                self.ai_llm = cache_llm_class[model]
+            else:
+                self.ai_llm = local.LLM(model)
+                cache_llm_class[model] = self.ai_llm
+        else:
+            if model in cache_llm_class.keys():
+                self.ai_llm = cache_llm_class[model]
+            else:
+                # noinspection PyTypeChecker
+                self.ai_llm = cloud.LLM(model, api_key, base_url)
+                cache_llm_class[model] = self.ai_llm
+        # noinspection PyTypeChecker
+        self.ai_llm.memory_signal.connect(SharingData.add_memory_to_ui[model])
+
+        self.setWindowTitle(ai_name)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        title = SharingData.theme.Label("AI TERMINAL")
+        title.setFixedHeight(30)
+        layout.addWidget(title)
+
+        self.chat = SharingData.theme.ChatWidget()
+        self.chat.userInputSignal.connect(self.add_user_msg)
+
+        layout.addWidget(self.chat)
+
+        self.current_assistant_bubble = None
+
+    def chat_finished(self, all_message):
+        self.chat.enable_send_button()
+
+    def add_user_msg(self, msg: str):
+        self.current_assistant_bubble = self.chat.add_assistant_msg()
+        self.chat.disable_send_button()
+
+        t = derfer.LLMAICallback(self.ai_llm, msg, self)
+        t.finished.connect(self.chat_finished)
+        t.text_chunk.connect(self.add_assistant_msg)
+        t.start()
+
+    def add_assistant_msg(self, msg: str):
+        if not msg:
+            return
+
+        if self.current_assistant_bubble is not None:
+            self.current_assistant_bubble.append_text(msg)
+            self.chat.update_bubble_widths()
+            self.chat.scroll_to_bottom()
 
 
 IconList = IconList()

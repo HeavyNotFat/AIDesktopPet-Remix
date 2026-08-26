@@ -176,6 +176,6 @@ if __name__ == '__main__':
         if os.path.exists("./resources/rag/lancedb_db"):
             shutil.rmtree("./resources/rag/lancedb_db")
         Config.rag['clear_cache'] = False
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     main()

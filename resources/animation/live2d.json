@@ -1,0 +1,14 @@
+{
+  "smart_control": true,
+  "animation": {
+    "ClickEar": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "ClickHead": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "ClickChest": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "ClickBody": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "ClickLeg": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "TorchEar": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "TorchHead": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "TorchBody": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
+    "TorchLeg": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""}
+  }
+}

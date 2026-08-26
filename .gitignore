@@ -13,6 +13,7 @@ resources/rag/lancedb_db
 .idea/
 .ssh/
 test/
+search.py
 
 # Distribution / packaging
 .Python

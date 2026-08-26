@@ -1,8 +1,12 @@
-PySide6==6.11.2
+PySide6
+PySide6-Fluent-Widgets
+
 live2d-py==0.3.6
 PyOpenGL==3.1.9
 pypiwin32==223
 
+sounddevice==0.5.6
+soundfile==0.13.1
 rank_bm25==0.2.2
 numpy==1.26.4
 markdown==3.10.3
@@ -15,5 +19,5 @@ ollama==0.6.2
 openai==2.14.0
 
 chromadb==1.5.9
-# lancedb==0.37.1
+lancedb==0.37.1
 # pymilvus==3.0.1

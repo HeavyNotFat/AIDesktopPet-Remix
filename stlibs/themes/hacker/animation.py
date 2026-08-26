@@ -1,7 +1,12 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 
 
-class Basic(QWidget):
+class Live2D(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+
+class Static(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -20,8 +25,8 @@ class AnimationPage(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 40, 20, 20)
         self.tab_widget = HackerTabWidget(self)
-        self.tab_widget.addTab(Basic(self), "Live2D 动画")
-        self.tab_widget.addTab(Basic(self), "静态 动画")
+        self.tab_widget.addTab(Live2D(self), "Live2D 动画")
+        self.tab_widget.addTab(Static(self), "静态 动画")
         layout.addWidget(self.tab_widget)
         self.setLayout(layout)
 

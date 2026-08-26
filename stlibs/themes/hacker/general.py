@@ -60,7 +60,7 @@ class GeneralPage(QWidget):
         self.save_button = HackerButton("保存", parent=self)
         self.save_button.set_border()
         self.save_button.setGeometry(20, 230, 100, 30)
-        self.save_button.clicked.connect(lambda: ConfigLoader.save_config(Config))
+        self.save_button.clicked.connect(lambda: ConfigLoader.save_config())
 
     def resizeEvent(self, event, /):
         super().resizeEvent(event)
@@ -68,7 +68,7 @@ class GeneralPage(QWidget):
 
     def check_name(self, name):
         Config.name = name
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()
 
     def check_character(self, character):
         if os.path.exists(f"./resources/model/{character}/3") or os.path.exists(f"./resources/model/{character}/2"):
@@ -78,4 +78,4 @@ class GeneralPage(QWidget):
         else:
             Config.model_live2d = ""
             Config.static_model = character
-        ConfigLoader.save_config(Config)
+        ConfigLoader.save_config()

@@ -8,6 +8,8 @@ import json
 import shutil
 
 CONFIG_PATH = "./resources/configure.json"
+ANIMATION_LIVE2D_PATH = "./resources/animation/live2d.json"
+ANIMATION_STATIC_PATH = "./resources/animation/static.json"
 
 
 @dataclass
@@ -123,6 +125,49 @@ class Physics:
 
 
 @dataclass
+class _BaseModelAnimation:
+    smart_control: bool
+
+    ClickEar: dict
+    ClickHead: dict
+    ClickChest: dict
+    ClickBody: dict
+    ClickLeg: dict
+    TorchEar: dict
+    TorchHead: dict
+    TorchBody: dict
+    TorchLeg: dict
+
+    path: str
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+
+class AnimationLoader:
+    @staticmethod
+    def load_config(path: str) -> _BaseModelAnimation:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            f.close()
+
+        filtered = data['animation'] | {"smart_control": data['smart_control']}
+        filtered.update({"path": path})
+        animation_config = _BaseModelAnimation(**filtered)
+
+        return animation_config
+
+    @staticmethod
+    def save_config(animation: _BaseModelAnimation | None = None) -> None:
+        if animation is None: animation = Animation
+        ani_dict = {field.name: getattr(animation, field.name) for field in fields(animation)}
+        ani_dict = ani_dict.pop("path")
+        with open(animation.path, "w", encoding="utf-8") as f:
+            json.dump(ani_dict, f, ensure_ascii=False, indent=3)
+
+
+# 配置文件
+@dataclass
 class _BaseModelConfig:
     models: dict
     memory: dict
@@ -152,7 +197,8 @@ class ConfigLoader:
         return _BaseModelConfig(**filtered)
 
     @staticmethod
-    def save_config(config: _BaseModelConfig) -> None:
+    def save_config(config: _BaseModelConfig | None = None) -> None:
+        if config is None: config = Config
         config = {field.name: getattr(config, field.name) for field in fields(config)}
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=3)
@@ -176,6 +222,7 @@ class _ThemeTypingProtocol(Protocol):
     ScrollArea: Callable
     ChatWidget: Callable
     ChatBubble: Callable
+    ModelChat: Callable
 
 
 class SharingData:
@@ -256,3 +303,5 @@ with open("./resources/static.json", "r", encoding="utf-8") as f:
     f.close()
 SharingData.static_models = static_models
 Config = ConfigLoader.load_config()
+if Config.model_live2d.strip(): Animation = AnimationLoader.load_config(ANIMATION_LIVE2D_PATH)
+else: Animation = AnimationLoader.load_config(ANIMATION_STATIC_PATH)

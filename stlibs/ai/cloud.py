@@ -1,3 +1,5 @@
+from typing import Any, Generator
+
 from .. import Config
 
 import httpx
@@ -8,13 +10,12 @@ from PySide6.QtCore import Signal, QObject
 class LLM(QObject):
     memory_signal = Signal(list)
 
-    def __init__(self, model: str, api_key: str, base_url: str,  system_prompt: str = ""):
+    def __init__(self, model: str, api_key: str, base_url: str, system_prompt: str = ""):
         super().__init__()
         from . import Memory
 
         self.model = model
         self.memory = Memory()
-        self.model = model
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -22,42 +23,55 @@ class LLM(QObject):
         )
         if system_prompt.strip(): self.memory.add_system_msg(system_prompt)
 
-    def chat(self, query) -> dict | None:
+    def chat(self, query) -> Generator[dict[str, str | None] | str | dict[str, str | Any] | Any, Any, None]:
         if not Config.memory['shortterm']: self.memory.clear()
         self.memory.add_user_msg(query)
         reply_parts = []
 
+        # noinspection PyTypeChecker
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=self.memory.messages,
             extra_body={"enable_thinking": False},
             stream=True,
+            modalities=["text", "audio"],
+            audio={"voice": "default", "format": "mp3"},
         )
         for chunk in completion:
+            # noinspection PyUnresolvedReferences
             if not chunk.choices: continue
 
             try:
-                if chunk.choices[0].delta.function_call:
-                    yield {"type": "tool_call",
-                           "name": chunk.choices[0].delta.function_call.name,
-                           "args": chunk.choices[0].delta.function_call.arguments}
-                    continue
-                ans = chunk.choices[0].delta.content
-                if ans is None: continue
-                reply_parts.append(ans)
-                yield ans
+                # noinspection PyUnresolvedReferences
+                delta = chunk.choices[0].delta
             except AttributeError:
-                if chunk.choices[0].message.function_call:
-                    yield {"type": "tool_call",
-                           "name": chunk.choices[0].message.function_call.name,
-                           "args": chunk.choices[0].message.function_call.arguments}
-                    continue
-                ans = chunk.choices[0].message.content
-                if ans is None: continue
-                reply_parts.append(ans)
-                yield ans
+                # noinspection PyUnresolvedReferences
+                delta = chunk.choices[0].message
+
+            # 工具调用
+            function_call = getattr(delta, "function_call", None)
+            if function_call:
+                yield {"type": "tool_call",
+                       "name": function_call.name,
+                       "args": function_call.arguments}
+                continue
+
+            # 音频（流式文本结束后，服务端会推一个带完整 audio 的 chunk）
+            audio = getattr(delta, "audio", None)
+            if audio:
+                audio_data = audio.get("data") if isinstance(audio, dict) else getattr(audio, "data", None)
+                transcript = audio.get("transcript") if isinstance(audio, dict) else getattr(audio, "transcript", None)
+                if audio_data:
+                    yield {"type": "audio", "data": audio_data, "transcript": transcript}
+                continue
+
+            ans = getattr(delta, "content", None)
+            if ans is None: continue
+            reply_parts.append(ans)
+            yield ans
 
         reply = "".join(reply_parts)
         if reply:
             self.memory.add_assistant_msg(reply)
         self.memory_signal.emit([self.model, self.memory.messages])
+
