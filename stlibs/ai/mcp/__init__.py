@@ -126,33 +126,6 @@ class MCP:
 
         print(f"[MCP] 已断开 Server: {server_id}")
 
-    def shutdown(self):
-        if self._closed:
-            return
-
-        try:
-            if self._loop.is_running():
-
-                for sid in list(self._sessions.keys()):
-                    try:
-                        asyncio.run_coroutine_threadsafe(self._disconnect_async(sid), self._loop, )
-                    except Exception:
-                        pass
-
-                import time
-                time.sleep(0.5)
-
-                self._loop.call_soon_threadsafe(self._loop.stop)
-
-            if self._thread.is_alive():
-                self._thread.join(timeout=2.0)
-
-        except Exception:
-            pass
-
-        finally:
-            self._closed = True
-
     def close_sync(self):
         if self._closed:
             return

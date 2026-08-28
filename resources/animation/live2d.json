@@ -1,5 +1,6 @@
 {
   "smart_control": true,
+  "ai_control": false,
   "animation": {
     "ClickEar": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},
     "ClickHead": {"x": 0, "y": 0, "dx": 0, "dy": 0, "anim": "", "expr": ""},

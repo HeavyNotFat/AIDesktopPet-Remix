@@ -7,6 +7,8 @@ from . import tts
 from . import settings
 from . import animation
 
+from ..base import MainWindowABS, IconListABS, MenuWidgetABS, SwitchWidgetABS, CombinedMeta
+
 from ... import derfer
 from ... import SharingData
 from ...ai import local
@@ -19,6 +21,21 @@ from PySide6.QtGui import QAction, QCursor, QFontDatabase, QFont, QIcon, QPainte
     QFontMetrics, QKeySequence, QShortcut, QPainterPath
 
 cache_llm_class = {}
+MAPPING_ANIMATION = {
+    "捏耳朵": "ClickEar",
+    "拍拍头": "ClickHead",
+    "拍胸脯": "ClickChest",
+    "按肚子": "ClickBody",
+    "捏捏腿": "ClickLeg",
+    "摸耳朵": "TorchEar",
+    "摸摸头": "TorchHead",
+    "摸肚子": "TorchBody",
+    "摸摸腿": "TorchLeg",
+}
+MAPPING_SPECTIAL_ANIMATION = {
+    "程序启动": "AppInitial",
+    "程序退出": "AppExit",
+}
 
 
 class _HackerTitleBar(QWidget):
@@ -930,7 +947,7 @@ class HackerTabWidget(QTabWidget):
         """)
 
 
-class HackerSwitch(QWidget):
+class HackerSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
     stateChanged = Signal(bool)
 
     def __init__(self, parent=None):
@@ -1351,7 +1368,7 @@ class HackerTextEdit(QTextEdit):
         """)
 
 
-class HackerMenu(QWidget):
+class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
     triggered = Signal(object)
 
     def __init__(self, parent=None):
@@ -1490,7 +1507,7 @@ class HackerMenu(QWidget):
         self.show()
 
 
-class IconList:
+class IconList(IconListABS):
     SETTING = None
     CHAT = None
     SHUTDOWN = None
@@ -1576,7 +1593,7 @@ class IconList:
         self.SHUTDOWN = QIcon(pixmap)
 
 
-class HackerWindow(QWidget):
+class HackerWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)

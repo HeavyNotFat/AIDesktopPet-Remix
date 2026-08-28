@@ -6,7 +6,7 @@
    },
    "rag": {
       "clear_cache": false,
-      "enable": true,
+      "enable": false,
       "bm25_enable": true,
       "compressed_enable": false,
       "engine": "chroma",
@@ -18,7 +18,7 @@
       "overlap": 30
    },
    "mcp": {
-      "enable": true,
+      "enable": false,
       "mcp": [
          {
             "server": "filesystem",

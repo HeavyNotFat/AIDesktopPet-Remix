@@ -10,9 +10,10 @@ import shutil
 CONFIG_PATH = "./resources/configure.json"
 ANIMATION_LIVE2D_PATH = "./resources/animation/live2d.json"
 ANIMATION_STATIC_PATH = "./resources/animation/static.json"
+EMBEDDING = ['bge-m3']
 
 
-@dataclass
+@dataclass(slots=True)
 class Physics:
     """
     桌宠物理模拟器
@@ -237,6 +238,12 @@ class SharingData:
 
 
 class Signature:
+    """
+    参数冻结签名容错类
+    用于驱动UI变量冻结的类
+    """
+    __slots__ = ("func", "kwargs")
+
     def __init__(self, func, **kwargs):
         self.func = func
         self.kwargs = kwargs
@@ -246,10 +253,6 @@ class Signature:
 
     def run(self):
         return self.func(**self.kwargs)
-
-
-def import_attributes(module: str, attribute: str):
-    return getattr(importlib.import_module(module), attribute)
 
 
 def analyze_signature(func, **kwargs) -> Signature:
@@ -263,7 +266,9 @@ def analyze_signature(func, **kwargs) -> Signature:
     return Signature(func, **function_args)
 
 
-EMBEDDING = ['bge-m3']
+def import_attributes(module: str, attribute: str):
+    return getattr(importlib.import_module(module), attribute)
+
 
 def get_model_lists() -> list:
     try:

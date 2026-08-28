@@ -18,7 +18,6 @@ class Memory:
     """
     实时对话记忆
     """
-
     def __init__(self):
         self.messages = []
 
