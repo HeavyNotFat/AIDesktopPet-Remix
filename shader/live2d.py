@@ -2,6 +2,7 @@ import os
 import sys
 import ctypes
 from difflib import get_close_matches
+from typing import Literal
 
 from . import ADPOpenGLCanvas
 try:
@@ -12,7 +13,7 @@ try:
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import stlibs
-    from stlibs import architecture
+    from stlibs import architecture, SharingData
     from stlibs.graphics import chat
     from stlibs.graphics import settings
 
@@ -40,7 +41,6 @@ class PublicShader(ADPOpenGLCanvas):
         # 初始化
         self.is_transparent_raise = False
         self.current_size = 1000
-        self.model_json_path: str = ""
         self.pet_model: architecture.live2d.LAppModel | None = None
         self.click_in_area, self.click_x, self.click_y = -1, -1, -1
         self.drag_position, self.drag_start_position, self.is_dragging = None, None, None
@@ -52,6 +52,8 @@ class PublicShader(ADPOpenGLCanvas):
         self.customContextMenuRequested.connect(self.show_context_menu)
 
         stlibs.SharingData.setting_window = settings.Settings()
+        stlibs.SharingData.setting_window.live2d_mot_signal.connect(lambda data: self.play(*data, type_="mot"))
+        stlibs.SharingData.setting_window.live2d_exp_signal.connect(lambda data: self.play(*data, type_="exp"))
         stlibs.SharingData.chat_window = chat.Chat()
         stlibs.SharingData.setting_window.general_changed.connect(self.realtime_revise_config)
 
@@ -113,23 +115,22 @@ class PublicShader(ADPOpenGLCanvas):
             model_files = os.listdir(f"./resources/model/{model}")
             # 寻找最像模型json文件的那一个文件
             model_json_file = get_close_matches(f"{model}.model.json", model_files)[0]
-            self.model_json_path = (f"./resources/model/{model}/"
-                                    f"{model_json_file}")
+            SharingData.model_json_path = f"./resources/model/{model}/{model_json_file}"
             # 加载架构
             if model_json_file.split(".")[1] == "model3":
                 if is_info:
-                    return 3, self.model_json_path
+                    return 3, SharingData.model_json_path
                 if architecture.live2d.LIVE2D_VERSION != 3:
                     architecture.reload(3)
             elif model_json_file.split(".")[1] == "model":
                 if is_info:
-                    return 2, self.model_json_path
+                    return 2, SharingData.model_json_path
                 if architecture.live2d.LIVE2D_VERSION != 2:
                     architecture.reload(2)
             else:
                 raise FileNotFoundError()
 
-            self.pet_model.LoadModelJson(self.model_json_path)
+            self.pet_model.LoadModelJson(SharingData.model_json_path)
         except (KeyError, FileNotFoundError):
             self.exit_program()
         finally:
@@ -196,6 +197,13 @@ class PublicShader(ADPOpenGLCanvas):
         """鼠标拖动时间及按下事件"""
         x, y = event.globalPosition().x(), event.globalPosition().y()
         if self.is_in_live2d_area(QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y()):
+            if SharingData.coordinates[0] == -1 and SharingData.coordinates[1] == -1:
+                SharingData.coordinates[0] = int(x)
+                SharingData.coordinates[1] = int(y)
+            elif SharingData.coordinates[2] == -1 and SharingData.coordinates[3] == -1:
+                SharingData.coordinates[2] = int(x)
+                SharingData.coordinates[3] = int(y)
+
             self.is_dragging = True
             self.click_in_area = True
             self.click_x, self.click_y = x, y
@@ -234,9 +242,9 @@ class PublicShader(ADPOpenGLCanvas):
         else:
             super().wheelEvent(event)
 
-    def play(self, animation):
-        # TODO
-        pass
+    def play(self, name, index: int = 0, *, type_: Literal['exp', 'mot']):
+        if type_ == "mot": self.pet_model.StartMotion(name, index, architecture.live2d.MotionPriority.FORCE)
+        else: self.pet_model.SetExpression(name)
 
     def pause(self): pass
     def stop(self): pass
@@ -264,9 +272,4 @@ class PublicShader(ADPOpenGLCanvas):
     def exit_program(self):
         architecture.live2d.dispose()
         self.close()
-
-        try:
-            os.remove("./logs/backup/configure.json")
-        except FileNotFoundError:
-            pass
         os.kill(os.getpid(), __import__("signal").SIGINT)

@@ -62,3 +62,14 @@ class SwitchWidgetABS(metaclass=ABCMeta):
     def setChecked(self, checked: bool): pass
     @abstractmethod
     def isChecked(self): pass
+
+
+# 内部页面抽象类
+class AnimationABS(metaclass=ABCMeta):
+    """动画"""
+    @property
+    @abstractmethod
+    def live2d_mot_signal(self): pass
+    @property
+    @abstractmethod
+    def live2d_exp_signal(self): pass

@@ -10,62 +10,56 @@
 		"DisplayInfo": "mao_pro.cdi3.json",
 		"Expressions": [
 			{
-				"Name": "exp_01",
-				"File": "expressions/exp_01.exp3.json"
+				"Name": "嫌弃",
+				"File": "expressions/cloudshoulder.exp3.json"
 			},
 			{
-				"Name": "exp_02",
-				"File": "expressions/exp_02.exp3.json"
+				"Name": "开心",
+				"File": "expressions/happy.exp3.json"
 			},
 			{
-				"Name": "exp_03",
-				"File": "expressions/exp_03.exp3.json"
+				"Name": "默认",
+				"File": "expressions/initial.exp3.json"
 			},
 			{
-				"Name": "exp_04",
-				"File": "expressions/exp_04.exp3.json"
+				"Name": "惊恐",
+				"File": "expressions/panic.exp3.json"
 			},
 			{
-				"Name": "exp_05",
-				"File": "expressions/exp_05.exp3.json"
+				"Name": "害怕",
+				"File": "expressions/scary.exp3.json"
 			},
 			{
-				"Name": "exp_06",
-				"File": "expressions/exp_06.exp3.json"
+				"Name": "害羞",
+				"File": "expressions/shame.exp3.json"
 			},
 			{
-				"Name": "exp_07",
-				"File": "expressions/exp_07.exp3.json"
-			},
-			{
-				"Name": "exp_08",
-				"File": "expressions/exp_08.exp3.json"
+				"Name": "无聊",
+				"File": "expressions/sleepy.exp3.json"
 			}
 		],
 		"Motions": {
-			"Idle": [
+			"动画": [
 				{
-					"File": "motions/mtn_01.motion3.json"
-				}
-			],
-			"": [
-				{
-					"File": "motions/mtn_02.motion3.json"
+					"File": "motions/默认.motion3.json"
 				},
 				{
-					"File": "motions/mtn_03.motion3.json"
+					"File": "motions/跳舞.motion3.json"
 				},
 				{
-					"File": "motions/mtn_04.motion3.json"
+					"File": "motions/摇晃.motion3.json"
 				},
 				{
-					"File": "motions/special_01.motion3.json"
+					"File": "motions/查看.motion3.json"
 				},
 				{
-					"File": "motions/special_02.motion3.json"
+					"File": "motions/爱你.motion3.json"
 				},
 				{
-					"File": "motions/special_03.motion3.json"
+					"File": "motions/升级失败.motion3.json"
+				},
+				{
+					"File": "motions/升级成功.motion3.json"
 				}
 			]
 		}

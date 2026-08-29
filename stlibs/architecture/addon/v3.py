@@ -22,7 +22,7 @@ class Live2DParameters:
 
     @property
     def get_motions(self) -> dict[str, list[str]]:
-        motions: dict[str, list[str]] = {"NULL": ["motions/null.json"]}
+        motions: dict[str, list[str]] = {}
         try:
             for motion in self.parameters['FileReferences']['Motions']:
                 for file in self.parameters['FileReferences']['Motions'][motion]:
