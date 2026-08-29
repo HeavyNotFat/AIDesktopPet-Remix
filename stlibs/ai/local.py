@@ -45,8 +45,6 @@ class LLM(QObject):
             self.rag.load_or_build()
         if system_prompt.strip():
             self.memory.add_system_msg(system_prompt)
-        # else:
-        #     self.memory.add_system_msg(prompts['general'])
 
     def chat(self, user_input: str):
         if not Config.memory["shortterm"]:

@@ -18,7 +18,7 @@
       "overlap": 30
    },
    "mcp": {
-      "enable": true,
+      "enable": false,
       "mcp": [
          {
             "server": "filesystem",
@@ -28,20 +28,13 @@
                "$PATH$"
             ],
             "command": "npx"
-         },
-         {
-            "server": "live2d",
-            "args": [
-               "./mcp_servers/live2d_motion.py"
-            ],
-            "command": "python"
          }
       ]
    },
    "name": "",
-   "model_live2d": "Hiyori桃濑日和",
+   "model_live2d": "Mao",
    "static_model": "",
    "opacity": 1,
-   "size": 110,
+   "size": 75,
    "rotate": 0
 }

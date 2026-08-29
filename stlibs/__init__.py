@@ -1,4 +1,4 @@
-from typing import Protocol, Callable, Literal
+from typing import Protocol, Callable
 from types import ModuleType
 from dataclasses import dataclass, fields
 import subprocess
@@ -128,7 +128,6 @@ class Physics:
 @dataclass
 class _BaseModelAnimation:
     smart_control: bool
-    ai_control: bool
 
     ClickEar: dict
     ClickHead: dict
@@ -140,9 +139,6 @@ class _BaseModelAnimation:
     TorchBody: dict
     TorchLeg: dict
 
-    AppInitial: str
-    AppExit: str
-
     path: str
 
     def __setitem__(self, key, value):
@@ -151,41 +147,24 @@ class _BaseModelAnimation:
 
 class AnimationLoader:
     @staticmethod
-    def load_animation(path: str) -> _BaseModelAnimation:
+    def load_config(path: str) -> _BaseModelAnimation:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
             f.close()
 
-        filtered = (data['special'] | data['animation'] |
-                    {"smart_control": data['smart_control']} | {"ai_control": data['ai_control']})
+        filtered = data['animation'] | {"smart_control": data['smart_control']}
         filtered.update({"path": path})
         animation_config = _BaseModelAnimation(**filtered)
 
         return animation_config
 
     @staticmethod
-    def save_animation(animation: _BaseModelAnimation | None = None) -> None:
+    def save_config(animation: _BaseModelAnimation | None = None) -> None:
         if animation is None: animation = Animation
-
-        ani_dict = {}
-        special_dict = {}
-        for field in fields(animation):
-            name = field.name
-            value = getattr(animation, name)
-
-            if name == "path": continue
-            if name.startswith("Click") or name.startswith("Torch"): ani_dict[name] = value
-            elif name.startswith("App"): special_dict[name] = value
-
-        save_data = {
-            "smart_control": animation.smart_control,
-            "ai_control": animation.ai_control,
-            "animation": ani_dict,
-            "special": special_dict
-        }
-        with open(animation.path, "w", encoding="utf-8") as af:
-            json.dump(save_data, af, ensure_ascii=False, indent=3)
-            af.close()
+        ani_dict = {field.name: getattr(animation, field.name) for field in fields(animation)}
+        ani_dict = ani_dict.pop("path")
+        with open(animation.path, "w", encoding="utf-8") as f:
+            json.dump(ani_dict, f, ensure_ascii=False, indent=3)
 
 
 # 配置文件
@@ -256,13 +235,6 @@ class SharingData:
     add_memory_to_ui: dict[Callable] = {}
 
     static_models: dict
-
-    coordinates: list[int, int, int, int, Literal["live2d", "static", ""]] = [0, 0, 0, 0, ""]  # X, Y, DX, DY]
-
-    model_json_path: str
-
-    motions: list
-    expressions: list
 
 
 class Signature:
@@ -336,5 +308,5 @@ with open("./resources/static.json", "r", encoding="utf-8") as f:
     f.close()
 SharingData.static_models = static_models
 Config = ConfigLoader.load_config()
-if Config.model_live2d.strip(): Animation = AnimationLoader.load_animation(ANIMATION_LIVE2D_PATH)
-else: Animation = AnimationLoader.load_animation(ANIMATION_STATIC_PATH)
+if Config.model_live2d.strip(): Animation = AnimationLoader.load_config(ANIMATION_LIVE2D_PATH)
+else: Animation = AnimationLoader.load_config(ANIMATION_STATIC_PATH)

@@ -9,18 +9,24 @@
 		"Physics": "rice_pro_t03.physics3.json",
 		"DisplayInfo": "rice_pro_t03.cdi3.json",
 		"Motions": {
-			"动画": [
+			"Idle": [
 				{
-					"File": "motions/展示火术.motion3.json"
-				},
+					"File": "motions/idle.motion3.json"
+				}
+			],
+			"FlickLeft": [
 				{
-					"File": "motions/火柱.motion3.json"
-				},
+					"File": "motions/mtn_01.motion3.json"
+				}
+			],
+			"Tap@Body": [
 				{
-					"File": "motions/魔法冰球.motion3.json"
-				},
+					"File": "motions/mtn_02.motion3.json"
+				}
+			],
+			"FlickUp": [
 				{
-					"File": "motions/默认.motion3.json"
+					"File": "motions/mtn_03.motion3.json"
 				}
 			]
 		}

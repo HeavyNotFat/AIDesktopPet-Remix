@@ -1,6 +1,5 @@
 import math
 import random
-import json
 
 from . import general
 from . import llm
@@ -37,9 +36,6 @@ MAPPING_SPECTIAL_ANIMATION = {
     "程序启动": "AppInitial",
     "程序退出": "AppExit",
 }
-with open("./resources/prompts.json", "r", encoding="utf-8") as f:
-    prompts = json.load(f)
-    f.close()
 
 
 class _HackerTitleBar(QWidget):
