@@ -24,37 +24,72 @@ class MemoryShowItem(QWidget):
             self.memory_json.setText(json.dumps(data[1], ensure_ascii=False, indent=3))
 
 
-class Basic(QWidget):
+class BasicWidgetScroll(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerLabel, HackerLineEdit, HackerButton
+        from . import HackerLineEdit, HackerButton, HackerCard
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         # AI 名字
-        HackerLabel("AI 名字", self).setGeometry(20, 20, 120, 30)
         self.ai_name = HackerLineEdit("", parent=self)
-        self.ai_name.setGeometry(150, 20, 450, 30)
+        ai_name_card = HackerCard(
+            "AI的名字",
+            self.ai_name,
+            "给AI取的别名"
+        )
+        layout.addWidget(ai_name_card)
+        layout.addStretch()
 
         # AI Model
-        HackerLabel("AI 模型", self).setGeometry(20, 60, 120, 30)
         self.ai_model = HackerLineEdit("", parent=self)
-        self.ai_model.setGeometry(150, 60, 450, 30)
+        self.ai_model.setFixedWidth(250)
+        ai_model_card = HackerCard(
+            "AI模型",
+            self.ai_model,
+            "需要使用的AI模型"
+        )
+        layout.addWidget(ai_model_card)
+        layout.addStretch()
 
         # API Key
-        HackerLabel("API Key", self).setGeometry(20, 100, 120, 30)
         self.api_key = HackerLineEdit("", parent=self)
+        self.api_key.setFixedWidth(350)
         self.api_key.setEchoMode(QLineEdit.Password)
-        self.api_key.setGeometry(150, 100, 450, 30)
+        api_key_card = HackerCard(
+            "AI Key密钥",
+            self.api_key,
+            "访问AI必要的密钥 Key"
+        )
+        layout.addWidget(api_key_card)
+        layout.addStretch()
 
         # Base URL
-        HackerLabel("Base URL", self).setGeometry(20, 140, 120, 30)
         self.api_url = HackerLineEdit("", parent=self)
-        self.api_url.setGeometry(150, 140, 450, 30)
+        self.api_url.setFixedWidth(350)
+        api_url_card = HackerCard(
+            "Base URL",
+            self.api_url,
+            "AI响应的API Url"
+        )
+        layout.addWidget(api_url_card)
+        layout.addStretch()
 
         # 添加
         self.add_button = HackerButton("添加", parent=self)
         self.add_button.set_border()
         self.add_button.clicked.connect(self.add_llm)
-        self.add_button.setGeometry(520, 180, 80, 30)
+        button_card = HackerCard(
+            "保存配置",
+            self.add_button,
+            "添加AI配置"
+        )
+        layout.addWidget(button_card)
+        layout.addStretch()
+
+        self.setLayout(layout)
 
     def add_llm(self):
         if self.ai_name.text() in Config.models.keys():
@@ -68,6 +103,17 @@ class Basic(QWidget):
             }
         )
         ConfigLoader.save_config()
+
+
+class Basic(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        from . import ScrollArea
+
+        card = BasicWidgetScroll(self)
+        scroll = ScrollArea(self)
+        scroll.setWidget(card)
+        scroll.setGeometry(QRect(10, 10, 600, 400))
 
 
 class Memory(QWidget):
@@ -146,7 +192,7 @@ class RAGWidgetScroll(QWidget):
         layout.addStretch()
         # 启用BM25
         enable_bm25_switch = HackerSwitch(parent=self)
-        enable_bm25_switch.setChecked(Config.rag['enable'])
+        enable_bm25_switch.setChecked(Config.rag['bm25_enable'])
         enable_bm25_switch_card = HackerCard(
             "启用BM25",
             enable_bm25_switch,
@@ -253,7 +299,7 @@ class RAGWidgetScroll(QWidget):
         self.model = HackerComboBox(parent=self)
         self.model.addItems(get_model_lists())
         self.model.setCurrentText(Config.rag['model'])
-        self.model.setFixedWidth(200)
+        self.model.setFixedWidth(350)
         model_card = HackerCard(
             "识别模型",
             self.model,

@@ -144,7 +144,8 @@ class PublicShader(QWidget):
             else:
                 self.animations[animation_name] = self._parse_prefix_list(folder, frame_list)
 
-    def _parse_file_list(self, folder: str, frame_list: list[str]) -> list[str]:
+    @staticmethod
+    def _parse_file_list(folder: str, frame_list: list[str]) -> list[str]:
         result = []
 
         for filename in frame_list['frames']:
@@ -199,7 +200,7 @@ class PublicShader(QWidget):
     def get_fps(self) -> int:
         return self.fps
 
-    def play(self, animation_name: str, loop: bool = True, restart: bool = True):
+    def play(self, animation_name: str, /, *, loop: bool = True, restart: bool = True):
         if animation_name not in self.animations:
             raise KeyError(f"不存在动画: {animation_name}")
 
