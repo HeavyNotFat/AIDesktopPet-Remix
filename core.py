@@ -1,8 +1,14 @@
 import sys
 import traceback
 
-import stlibs
+from stlibs.sdk import server as sdk_server
+def console(msg):
+    print(msg)
+# 初始化SDK
+server = sdk_server.SDKServer()
+server.start()
 
+import stlibs
 stlibs.SharingData.theme = stlibs.import_attributes("stlibs.themes", "hacker")
 if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
 else: from shader import static as shader
@@ -46,7 +52,7 @@ class DesktopPetRemix(shader.PublicShader):
         self._drag_velocity_x = 0.0
         self._drag_velocity_y = 0.0
 
-        self.play("idle")
+        if stlibs.Config.static_model.strip(): self.play("idle")
 
     def update_physics(self):
         """
