@@ -25,7 +25,7 @@ class GeneralPage(QWidget):
         # 宠物形象
         HackerLabel("形象", self).setGeometry(10, 85, 120, 20)
         self.select_character = HackerComboBox(self)
-        self.select_character.addItems(os.listdir("./resources/model") + os.listdir("./resources/static"))
+        self.select_character.addItems(os.listdir("./resources/character/model") + os.listdir("./resources/character/static"))
         self.select_character.setCurrentText(Config.model_live2d)
         self.select_character.currentTextChanged.connect(self.check_character)
         self.select_character.setGeometry(180, 80, 250, 20)
@@ -71,7 +71,7 @@ class GeneralPage(QWidget):
         ConfigLoader.save_config()
 
     def check_character(self, character):
-        if os.path.exists(f"./resources/model/{character}/3") or os.path.exists(f"./resources/model/{character}/2"):
+        if os.path.exists(f"./resources/character/model/{character}/3") or os.path.exists(f"./resources/character/model/{character}/2"):
             Config.model_live2d = character
             Config.static_model = ""
             self.model_live2d.emit(character)

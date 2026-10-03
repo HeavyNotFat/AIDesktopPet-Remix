@@ -5,7 +5,7 @@ from ...ai.rag.engine import SUPPORTED_ENGINES
 from ... import Config, ConfigLoader, SharingData
 from ... import get_model_lists
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QTableWidgetItem
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QTableWidgetItem, QHeaderView
 from PySide6.QtCore import QRect
 
 
@@ -399,6 +399,10 @@ class MCP(QWidget):
         self.mcp_table.setHorizontalHeaderLabels(['服务器ID', '参数', '启动命令'])
         for server in Config.mcp['mcp']:
             self.add_data(server['server'], ' '.join(server['args']), server['command'])
+        # 调整宽度
+        self.mcp_table.setColumnWidth(0, 110)
+        self.mcp_table.setColumnWidth(1, 400)
+        self.mcp_table.setColumnWidth(2, 90)
         self.mcp_table.itemChanged.connect(self.change_data)
 
         # 增加MCP面板
@@ -467,7 +471,7 @@ class LLMPage(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 40, 20, 20)
         self.tab_widget = HackerTabWidget(self)
-        self.tab_widget.addTab(Basic(self), "基础 设置")
+        self.tab_widget.addTab(Basic(self), "新增 LLM")
         self.tab_widget.addTab(Memory(self), "记忆 配置")
         self.tab_widget.addTab(RAG(self), "RAG 配置")
         self.tab_widget.addTab(MCP(self), "MCP 设置")

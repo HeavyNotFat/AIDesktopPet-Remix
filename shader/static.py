@@ -128,7 +128,7 @@ class PublicShader(QWidget):
             if not isinstance(frame_list, dict):
                 raise TypeError(f"{animation_name} 的 frames 必须是 dict")
 
-            folder = os.path.join("./resources/static", stlibs.Config.static_model, animation_name)
+            folder = os.path.join("./resources/character/static", stlibs.Config.static_model, animation_name)
 
             if not os.path.isdir(folder):
                 raise FileNotFoundError(f"动画文件夹不存在: {folder}")

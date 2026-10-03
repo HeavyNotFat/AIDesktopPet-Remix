@@ -1,5 +1,6 @@
 import sys
 import traceback
+import multiprocessing
 
 from stlibs.sdk import server as sdk_server
 def console(msg):
@@ -9,6 +10,7 @@ server = sdk_server.SDKServer()
 server.start()
 
 import stlibs
+from stlibs.mproc import onlinechat
 stlibs.SharingData.theme = stlibs.import_attributes("stlibs.themes", "hacker")
 if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
 else: from shader import static as shader
@@ -120,8 +122,15 @@ class DesktopPetRemix(shader.PublicShader):
 
         super().mouseReleaseEvent(event)
 
+    def closeEvent(self, event):
+        proc_onlinechat.terminate()
+        proc_onlinechat.kill()
+        self.closeEvent(event)
+
 
 sys.excepthook = handle_exception
+proc_onlinechat = multiprocessing.Process(target=onlinechat.main)
+proc_onlinechat.start()
 stlibs.SharingData.theme.IconList.init()
 
 desktop = DesktopPetRemix()

@@ -12,6 +12,3 @@ for item in os.listdir(current_dir):
         mod = importlib.import_module(f'.{item}', __name__)
         globals()[item] = mod
         __all__.append(item)
-
-
-

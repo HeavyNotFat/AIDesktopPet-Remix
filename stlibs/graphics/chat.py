@@ -1,5 +1,5 @@
 from .. import SharingData, Config
-from .. import analyze_signature, get_model_lists
+from .. import analyze_signature, get_model_lists, get_translation
 
 
 class Chat(SharingData.theme.Window):
@@ -9,15 +9,15 @@ class Chat(SharingData.theme.Window):
         self.init_model()
 
     def init_model(self):
-        if hasattr(self, "create_category"): self.create_category("本地")
+        if hasattr(self, "create_category"): self.create_category(get_translation("graphics.chat.local"))
         for model in get_model_lists():
             _model_ = SharingData.theme.ModelChat(model.split("/")[-1], model, True, parent=self)
-            analyze_signature(self.addNavigation, text=_model_.windowTitle(), widget=_model_, category="本地").run()
+            analyze_signature(self.addNavigation, text=_model_.windowTitle(), widget=_model_, category=get_translation("graphics.chat.local")).run()
 
-        if hasattr(self, "create_category"): self.create_category("云端")
+        if hasattr(self, "create_category"): self.create_category(get_translation("graphics.chat.api"))
         for model, parameters in Config.models.items():
             _model_ = SharingData.theme.ModelChat(model, parameters['name'], False, parameters['apikey'], parameters['baseurl'], self)
-            analyze_signature(self.addNavigation, text=_model_.windowTitle(), widget=_model_, category="云端").run()
+            analyze_signature(self.addNavigation, text=_model_.windowTitle(), widget=_model_, category=get_translation("graphics.chat.api")).run()
 
     def closeEvent(self, event):
         self.hide()

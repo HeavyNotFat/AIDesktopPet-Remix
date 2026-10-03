@@ -6,6 +6,7 @@ import inspect
 import importlib
 import json
 import shutil
+import gettext
 
 CONFIG_PATH = "./resources/configure.json"
 ANIMATION_LIVE2D_PATH = "./resources/animation/live2d.json"
@@ -302,10 +303,10 @@ def get_model_lists() -> list:
     try:
         ollama_path = shutil.which("ollama")
         print(ollama_path)
-        if ollama_path is None: ollama_path = "ollama"
+        if ollama_path is None or (not ollama_path.strip()): ollama_path = "ollama"
 
         result = subprocess.run(
-            ["ollama", "list"],
+            [ollama_path, "list"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -329,6 +330,15 @@ def get_model_lists() -> list:
         if "emb" in model_name or model_name.split(':')[0] in EMBEDDING: continue
         models.append(model_name)
     return models
+
+
+def get_translation(msgid):
+    t = gettext.translation(
+        "zh_CN",
+        localedir="./resources/locale",
+        languages=["zh_CN"],
+    )
+    return t.gettext(msgid)
 
 
 with open("./resources/static.json", "r", encoding="utf-8") as f:

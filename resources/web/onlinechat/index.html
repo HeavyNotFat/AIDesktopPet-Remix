@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千问</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="qlogo" viewBox="0 0 24 24">
+      <g fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+        <path d="M12 2.8L19.6 7.4 12 11.8Z"/>
+        <path d="M12 2.8L19.6 7.4 12 11.8Z" transform="rotate(120 12 12)"/>
+        <path d="M12 2.8L19.6 7.4 12 11.8Z" transform="rotate(240 12 12)"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="app no-anim" id="app">
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="side-inner">
+      <div class="side-top">
+        <div class="logo">AI Desktop Pet Remix</div>
+        <div class="side-tools">
+          <button class="icon-btn" id="searchBtn" type="button" title="搜索对话" aria-label="搜索对话">
+            <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+          </button>
+          <button class="icon-btn" id="collapseBtn" type="button" title="收起侧边栏" aria-label="收起侧边栏">
+            <svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="search-box" id="searchBox" hidden>
+        <input id="searchInput" type="text" placeholder="搜索历史对话" autocomplete="off">
+      </div>
+      <button class="nav-item" id="newChatBtn" type="button">
+        <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span>新对话</span>
+      </button>
+      <div class="side-label">最近对话</div>
+      <div class="history" id="history"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn expand-btn" id="expandBtn" type="button" title="展开侧边栏" aria-label="展开侧边栏">
+        <svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
+      </button>
+    </header>
+
+    <section class="stage" id="stage" data-empty="true">
+      <div class="hello" id="hello">
+        <svg viewBox="0 0 24 24"><use href="#qlogo"/></svg>
+        <span>你好，我是<span id="helloName"></span></span>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="messages-inner" id="messagesInner"></div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <textarea id="input" rows="1" placeholder="提问"></textarea>
+          <div class="composer-bar">
+            <div class="model-wrap">
+              <button class="model-btn" id="modelBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="modelLabel">加载模型…</span>
+                <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="model-menu" id="modelMenu" role="listbox" hidden></div>
+            </div>
+            <button class="send" id="sendBtn" type="button" disabled aria-label="发送"></button>
+          </div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请仔细甄别</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/dom.js"></script>
+<script src="js/api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/render.js"></script>
+<script src="js/sidebar.js"></script>
+<script src="js/model-picker.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import sys
 import ctypes
 from difflib import get_close_matches
 from typing import Literal
+import webbrowser
 
 from . import ADPOpenGLCanvas
 try:
@@ -13,7 +14,7 @@ try:
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import stlibs
-    from stlibs import architecture, SharingData
+    from stlibs import architecture, SharingData, get_translation
     from stlibs.graphics import chat
     from stlibs.graphics import settings
 
@@ -112,10 +113,10 @@ class PublicShader(ADPOpenGLCanvas):
     def loadModelEvent(self, model, is_info: bool = False):
         """模型加载事件"""
         try:
-            model_files = os.listdir(f"./resources/model/{model}")
+            model_files = os.listdir(f"./resources/character/model/{model}")
             # 寻找最像模型json文件的那一个文件
             model_json_file = get_close_matches(f"{model}.model.json", model_files)[0]
-            SharingData.model_json_path = f"./resources/model/{model}/{model_json_file}"
+            SharingData.model_json_path = f"./resources/character/model/{model}/{model_json_file}"
             # 加载架构
             if model_json_file.split(".")[1] == "model3":
                 if is_info:
@@ -175,19 +176,23 @@ class PublicShader(ADPOpenGLCanvas):
 
         context_menu = stlibs.SharingData.theme.Menu(self)
 
-        setting_visible_action = stlibs.SharingData.theme.Action("设置", self, stlibs.SharingData.theme.IconList.SETTING)
+        setting_visible_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.settings"), self, stlibs.SharingData.theme.IconList.SETTING)
         setting_visible_action.triggered.connect(lambda: window_visible(stlibs.SharingData.setting_window, settings.Settings))
         context_menu.addAction(setting_visible_action)
 
         context_menu.addSeparator()
 
-        chat_action = stlibs.SharingData.theme.Action("聊天", self, stlibs.SharingData.theme.IconList.CHAT)
+        chat_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.chat"), self, stlibs.SharingData.theme.IconList.CHAT)
         chat_action.triggered.connect(lambda: window_visible(stlibs.SharingData.chat_window, chat.Chat))
         context_menu.addAction(chat_action)
 
+        online_chat_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.online_chat"), self, stlibs.SharingData.theme.IconList.CHAT)
+        online_chat_action.triggered.connect(lambda: webbrowser.open("http://127.0.0.1:52493"))
+        context_menu.addAction(online_chat_action)
+
         context_menu.addSeparator()
 
-        shut_program_action = stlibs.SharingData.theme.Action("关闭", self, stlibs.SharingData.theme.IconList.SHUTDOWN)
+        shut_program_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.shut"), self, stlibs.SharingData.theme.IconList.SHUTDOWN)
         shut_program_action.triggered.connect(self.exit_program)
         context_menu.addAction(shut_program_action)
 
