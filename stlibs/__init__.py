@@ -8,6 +8,7 @@ import json
 import shutil
 import gettext
 
+
 CONFIG_PATH = "./resources/configure.json"
 ANIMATION_LIVE2D_PATH = "./resources/animation/live2d.json"
 ANIMATION_STATIC_PATH = "./resources/animation/static.json"
@@ -90,7 +91,7 @@ class Physics:
         left = bounds.left()
         right = bounds.right() - width
 
-        bottom = bounds.bottom() - height
+        bottom = bounds.ottom() - height
 
         # 左墙
         if self.x < left:

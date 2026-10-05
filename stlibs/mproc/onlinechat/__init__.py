@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config
-from .llm import LLMError, generate
+from .llm import generate
 
 
 class ChatRequest(BaseModel):
@@ -32,13 +32,13 @@ def chat(req: ChatRequest):
     if not question:
         raise HTTPException(status_code=400, detail='问题不能为空')
 
-    if req.model not in {m['value'] for m in config.MODELS}:
+    if req.model not in config.MODELS:
         raise HTTPException(status_code=400, detail=f'未知模型：{req.model}')
 
     try:
         answer = generate(req.model, question)
-    except LLMError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}")
 
     return {'answer': answer}
 

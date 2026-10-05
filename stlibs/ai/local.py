@@ -48,7 +48,7 @@ class LLM(QObject):
         # else:
         #     self.memory.add_system_msg(prompts['general'])
 
-    def chat(self, user_input: str):
+    def chat(self, user_input: str, should_emit: bool = True):
         if not Config.memory["shortterm"]:
             self.memory.clear()
         self.memory.add_user_msg(user_input)
@@ -70,7 +70,7 @@ class LLM(QObject):
         reply = "".join(reply_parts)
         if reply:
             self.memory.add_assistant_msg(reply)
-        self.memory_signal.emit([self.model, self.memory.messages])
+        if should_emit: self.memory_signal.emit([self.model, self.memory.messages])
 
     @staticmethod
     def _need_rag(user_input: str):

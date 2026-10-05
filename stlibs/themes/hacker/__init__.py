@@ -8,7 +8,7 @@ from . import tts
 from . import settings
 from . import animation
 
-from ..base import MainWindowABS, IconListABS, MenuWidgetABS, SwitchWidgetABS, CombinedMeta
+from ..base import ModelChatABS, MainWindowABS, IconListABS, MenuWidgetABS, SwitchWidgetABS, CombinedMeta
 
 from ... import derfer
 from ... import SharingData
@@ -1831,7 +1831,7 @@ class _ChatInputEdit(HackerTextEdit):
 
 
 # BASE
-class ModelChat(QWidget):
+class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
     def __init__(
         self,
         ai_name: str, model: str,
@@ -1873,6 +1873,10 @@ class ModelChat(QWidget):
         layout.addWidget(self.chat)
 
         self.current_assistant_bubble = None
+
+    @staticmethod
+    def return_llm_class(model) -> local.LLM | cloud.LLM:
+        return cache_llm_class[model]
 
     def chat_finished(self, all_message):
         self.chat.enable_send_button()

@@ -1,6 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from PySide6.QtWidgets import QWidget
 
+from ..ai import local, cloud
+
 _QWidgetMeta = type(QWidget)
 
 
@@ -14,6 +16,13 @@ class CombinedMeta(_QWidgetMeta, ABCMeta):
 
 
 # 定义抽象类
+class ModelChatABS(metaclass=ABCMeta):
+    """模型聊天的构建页面"""
+    @staticmethod
+    @abstractmethod
+    def return_llm_class(model) -> local.LLM | cloud.LLM: pass
+
+
 class MainWindowABS(metaclass=ABCMeta):
     """UI主窗口"""
     @abstractmethod
