@@ -91,7 +91,7 @@ class Physics:
         left = bounds.left()
         right = bounds.right() - width
 
-        bottom = bounds.ottom() - height
+        bottom = bounds.bottom() - height
 
         # 左墙
         if self.x < left:
@@ -203,6 +203,8 @@ class _BaseModelConfig:
     opacity: int
     size: int
     rotate: int
+    #: 主题包名（stlibs/themes/<theme>），改动需重启生效
+    theme: str = "hacker"
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
@@ -230,7 +232,11 @@ class ConfigLoader:
 
 class _ThemeTypingProtocol(Protocol):
     """
-    用于公开必须实现的方法
+    主题契约：一个主题包必须对外提供的类映射与子模块。
+
+    这是**单一事实来源**：``tools/ci`` 的 ``theme/*`` 检查直接读这份声明，
+    少给一个映射、或者映射形态和别的主题不一致，CI 就会失败。
+    新增主题时照着补全即可。
     """
     theme: ModuleType
     general: ModuleType
@@ -243,10 +249,18 @@ class _ThemeTypingProtocol(Protocol):
     Button: Callable
     Label: Callable
     Menu: Callable
+    Action: Callable
     ScrollArea: Callable
+    TextEdit: Callable
+    LineEdit: Callable
+    Slider: Callable
+    ComboBox: Callable
+    CardWidget: Callable
     ChatWidget: Callable
     ChatBubble: Callable
     ModelChat: Callable
+    #: IconList 是实例（主题里 ``IconList = IconList()``），不是类
+    IconList: object
 
 
 class SharingData:
@@ -297,13 +311,37 @@ def analyze_signature(func, **kwargs) -> Signature:
 
 
 def import_attributes(module: str, attribute: str):
+    """按名字取模块属性。
+
+    公开给主题/插件加载使用（``core.py`` 现在自己按配置解析主题，
+    所以这里是给外部扩展用的入口，不是死代码）。
+    """
     return getattr(importlib.import_module(module), attribute)
 
 
+def load_theme(name: str | None = None) -> ModuleType:
+    """按名字加载主题包（``stlibs/themes/<name>``）。
+
+    名字为空或不认识时回退到 hacker 并打印提示，
+    避免配置里写错一个字母就整个界面起不来。
+    """
+    themes = importlib.import_module("stlibs.themes")
+    wanted = (name or "").strip() or "hacker"
+    if not hasattr(themes, wanted):
+        print(f"[theme] 未知主题 {wanted!r}，回退到 hacker")
+        wanted = "hacker"
+    return getattr(themes, wanted)
+
+
 def get_model_lists() -> list:
+    """列出本地 Ollama 模型。
+
+    Ollama 没装、没启动、或者卡住时都返回空列表 —— 以前只捕获了
+    FileNotFoundError，``ollama list`` 超时会直接把导入方一起带崩。
+    超时给 5 秒：调用方（网页聊天注册表）会在请求线程里刷新，不能挂太久。
+    """
     try:
         ollama_path = shutil.which("ollama")
-        print(ollama_path)
         if ollama_path is None or (not ollama_path.strip()): ollama_path = "ollama"
 
         result = subprocess.run(
@@ -311,9 +349,10 @@ def get_model_lists() -> list:
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=10
+            timeout=5
         )
-    except FileNotFoundError: return []
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return []
 
     if result.returncode != 0:
         return []

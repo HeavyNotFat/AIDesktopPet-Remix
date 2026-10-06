@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-desktop-pet-remix"
+version = "1.0.0"
+description = "AI 桌宠（Live2D / 静态形象 + 本地或云端 LLM + 网页聊天）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "HeavyNotFat" }]
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+adpci = "tools.ci.__main__:main"
+
+[tool.setuptools]
+py-modules = ["core", "main"]
+
+[tool.setuptools.packages.find]
+include = ["stlibs*", "shader*", "mcp_servers*", "tools*"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".venv", ".git", "build", "dist", ".PluginDevOld", "test"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "C4", "SIM"]
+ignore = [
+    "E501",   # 行宽交给 line-length
+    "B008",   # Qt 里 QTimer.singleShot(...) 这类默认值是常见的
+    "SIM108", # 三元表达式不强制
+    "UP038",  # isinstance 元组写法在 Qt 类型上更直观
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/ci/**" = ["SIM102"]
+"stlibs/themes/hacker/__init__.py" = ["E402", "F401", "I001"]
+"stlibs/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "platform: 记录 PySide6 / Qt 的平台行为（拿不到 Qt 时自动跳过）",
+]
+
+[tool.adpci]
+fail-on = "error"
+exclude = [
+  ".git/*",
+  ".venv/*",
+  ".idea/*",
+  "build/*",
+  "dist/*",
+  "__pycache__/*",
+  "*/__pycache__/*",
+  "*/*/__pycache__/*",
+  ".mypy_cache/*",
+  ".ruff_cache/*",
+  ".pytest_cache/*",
+  ".ci-tmp/*",
+  "node_modules/*",
+  "test/*",
+
+  "tests/*",
+]
+ignore = []
+disable = []
+allow = []

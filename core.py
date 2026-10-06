@@ -1,16 +1,22 @@
 import sys
-import traceback
 import threading
+import traceback
 
 from stlibs.sdk import server as sdk_server
+
+
 def console(msg):
     print(msg)
+
+
 # 初始化SDK
 server = sdk_server.SDKServer()
 server.start()
 
 import stlibs
-stlibs.SharingData.theme = stlibs.import_attributes("stlibs.themes", "hacker")
+# 主题必须在 stlibs.graphics / shader 之前绑定：
+# 那些模块在导入期就拿 SharingData.theme.Window 当基类
+stlibs.SharingData.theme = stlibs.load_theme(stlibs.Config.theme)
 from stlibs.mproc import onlinechat
 if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
 else: from shader import static as shader

@@ -24,9 +24,20 @@ class ModelChatABS(metaclass=ABCMeta):
 
 
 class MainWindowABS(metaclass=ABCMeta):
-    """UI主窗口"""
+    """UI主窗口
+
+    参数顺序必须与主题实现保持一致（``stlibs/graphics`` 走关键字调用，
+    但按位置调用的代码也必须能正确绑定）。
+    """
     @abstractmethod
-    def addNavigation(self, text: str, widget, category: str): pass
+    def addNavigation(
+        self,
+        text: str,
+        widget,
+        shortcut_keys: tuple[int, ...] | None = None,
+        position: str = "top",
+        category: str | None = None,
+    ): pass
     @abstractmethod
     def removeNavigation(self, widget): pass
     @abstractmethod
@@ -57,7 +68,7 @@ class MenuWidgetABS(metaclass=ABCMeta):
     @abstractmethod
     def addSeparator(self): pass
     @abstractmethod
-    def addAction(self): pass
+    def addAction(self, action): pass
 
 
 class SwitchWidgetABS(metaclass=ABCMeta):

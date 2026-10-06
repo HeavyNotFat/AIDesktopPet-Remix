@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABCMeta, abstractmethod
 
 import numpy as np
 import OpenGL.GL as GL
@@ -71,7 +71,22 @@ def create_canvas_framebuffer(width, height):
     return fbo, texture
 
 
-class ADPOpenGLCanvas(QOpenGLWidget):
+class _CombinedMeta(type(QOpenGLWidget), ABCMeta):
+    """QOpenGLWidget 的元类与 ABCMeta 合并，否则 metaclass conflict。"""
+
+
+class ADPOpenGLCanvas(QOpenGLWidget, metaclass=_CombinedMeta):
+    """OpenGL 画布基类。
+
+    子类必须实现 ``on_init`` / ``on_draw`` / ``on_resize``。
+
+    注意这里的约束是**静态**的：以前只写了 ``@abstractmethod`` 却没有 ABCMeta，
+    装饰器完全失效；现在合并元类让继承关系显式可查（``tools/ci`` 的
+    ``abs/contract`` 会在 CI 里校验子类是否补齐钩子）。
+    但 PySide6 运行期依然不会因为漏实现而拒绝实例化
+    （见 docs/CI.md「Qt + ABCMeta 的抽象约束在运行期不生效」），
+    所以别指望 new 的时候报错，缺的实现只会在 ``paintGL`` 里抛 AttributeError。
+    """
 
     def __init__(self):
         super().__init__()

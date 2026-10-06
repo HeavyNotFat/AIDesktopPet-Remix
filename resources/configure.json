@@ -43,5 +43,6 @@
    "static_model": "",
    "opacity": 1,
    "size": 110,
-   "rotate": 0
+   "rotate": 0,
+   "theme": "hacker"
 }

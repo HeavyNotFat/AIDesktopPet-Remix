@@ -26,6 +26,8 @@
   function deleteChat(id) {
     if (state.pending && state.pending.chatId === id) state.pending.controller.abort();
     QW.store.removeChat(id);
+    // 顺手释放后台该会话独占的 LLM 实例
+    QW.api.resetSession(id);
     refresh();
   }
 
@@ -47,7 +49,8 @@
     refresh();
 
     try {
-      const answer = await QW.api.chat(model, question, controller.signal);
+      // sessionId = 本地会话 id：后台据此分配**独立**的 LLM 实例与记忆
+      const answer = await QW.api.chat(model, question, chat.id, controller.signal);
       chat.messages.push({ role: 'assistant', content: answer });
     } catch (e) {
       if (e.name !== 'AbortError') {

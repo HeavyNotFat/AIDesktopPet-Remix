@@ -10,12 +10,20 @@ from PySide6.QtCore import Signal, QObject
 
 mcp: mcp_server.MCP | None = None
 if Config.mcp["enable"]:
-    mcp = mcp_server.MCP()
+    try:
+        mcp = mcp_server.MCP()
+    except Exception as exc:  # noqa: BLE001 - MCP 起不来不该拖垮聊天
+        print(f"[MCP] 管理器初始化失败，本次将不加载任何 MCP 工具：{type(exc).__name__}: {exc}")
+        mcp = None
+
 for server in Config.mcp["mcp"]:
-    if not Config.mcp["enable"]:
+    if not Config.mcp["enable"] or mcp is None:
         break
     runnable_args = [arg.replace("$PATH$", os.getcwd()) for arg in server["args"]]
-    mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args, )
+    try:
+        mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args, )
+    except Exception as exc:  # noqa: BLE001 - 单个 MCP server 失败不影响对话
+        print(f"[MCP] 启动 {server.get('server')!r} 失败，跳过该工具：{type(exc).__name__}: {exc}")
 with open("./resources/prompts.json", "r", encoding="utf-8") as f:
     prompts = json.load(f)
 
@@ -33,8 +41,11 @@ class LLM(QObject):
         self._closed = False
         self.rag = None
 
-        if Config.mcp["enable"]:
-            mcp.inject_to_funcall(self.function_call)
+        if Config.mcp["enable"] and mcp is not None:
+            try:
+                mcp.inject_to_funcall(self.function_call)
+            except Exception as exc:  # noqa: BLE001 - 注不进工具也要能正常聊天
+                print(f"[MCP] 注入工具失败，将只做纯对话：{type(exc).__name__}: {exc}")
         if Config.rag["enable"]:
             self.rag = rag.RAG(
                 chat_model=Config.rag['model'],

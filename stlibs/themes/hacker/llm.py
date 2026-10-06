@@ -311,8 +311,10 @@ class RAGWidgetScroll(QWidget):
 
         for methods in dir(self):
             if methods.startswith('check_'):
-                try: getattr(self, methods)()
-                except: pass
+                try:
+                    getattr(self, methods)()
+                except Exception:  # noqa: BLE001 - 逐个字段容错，缺字段不影响其它配置
+                    pass
 
     def check_model(self, text: str | None = None):
         if text is None: text = self.model.currentText()
@@ -446,8 +448,9 @@ class MCP(QWidget):
     def remove_mcp(self):
         # 删除表格
         row = self.mcp_table.currentRow()
-        if row >= 0:
-            self.mcp_table.removeRow(row)
+        if row < 0:
+            return  # 没有选中行时 pop(-1) 会误删最后一条
+        self.mcp_table.removeRow(row)
         Config.mcp['mcp'].pop(row)
         ConfigLoader.save_config()
 

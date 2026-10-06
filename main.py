@@ -24,7 +24,7 @@ class SplashWindow(QSplashScreen):
         if not os.path.exists("./resources/icons/startup.png"):
             image_pixmap = QPixmap(250, 412)
             image_pixmap.fill(QColor(200, 200, 200))
-            painter = QPainter("./resources/icons/startup.png")
+            painter = QPainter(image_pixmap)
             painter.setPen(QColor(100, 100, 100))
             painter.setFont(QFont("Arial", 12))
             painter.drawText(image_pixmap.rect(), Qt.AlignCenter, "Image\nNot\nFound")
@@ -153,7 +153,7 @@ class Application:
     def _create_main_window(self):
         try:
             import core
-        except:
+        except Exception:
             print(traceback.format_exc())
             if self.splash:
                 self.splash.finish(None)

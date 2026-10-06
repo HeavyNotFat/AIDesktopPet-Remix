@@ -92,7 +92,7 @@ class PublicShader(ADPOpenGLCanvas):
 
             # 应用新的样式
             ctypes.windll.user32.SetWindowLongW(window_handle, GWL_EX_STYLE, new_ex_style)
-        except:
+        except Exception:
             self.is_transparent_raise = True
 
     def is_in_live2d_area(self, click_x: int | None = None, click_y: int | None = None):

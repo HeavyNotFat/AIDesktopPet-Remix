@@ -1,0 +1,40 @@
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-json
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+        exclude: ^resources/character/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ['--fix']
+        files: ^(tools/|tests/|stlibs/mproc/)
+      - id: ruff-format
+        files: ^(tools/|tests/|stlibs/mproc/)
+
+  # UI 冲突 / 抽象契约 / 主题映射门禁（本地脚本，零第三方依赖）
+  - repo: local
+    hooks:
+      - id: adpci
+        name: UI & 架构质量门禁 (python -m tools.ci)
+        entry: python -m tools.ci --no-color --quiet
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: adpci-tests
+        name: 门禁自身 + 网页聊天实例测试
+        entry: python -m pytest tests -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

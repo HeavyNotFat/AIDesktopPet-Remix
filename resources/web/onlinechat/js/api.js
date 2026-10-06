@@ -77,11 +77,21 @@
     return raw;
   }
 
-  async function chat(model, question, signal) {
-    const raw = await post('/chat', { model, question }, signal);
+  async function chat(model, question, sessionId, signal) {
+    const raw = await post('/chat', { model, question, session_id: sessionId || null }, signal);
     const data = parse(raw);
     if (typeof data === 'string') return data.trim() || '（空响应）';
     return pick(data, ANSWER_KEYS) || JSON.stringify(data, null, 2);
+  }
+
+  // 删除对话时让后台丢掉对应的 LLM 实例与上下文记忆。
+  async function resetSession(sessionId) {
+    if (!sessionId) return null;
+    try {
+      return await post('/reset', { session_id: sessionId });
+    } catch (e) {
+      return null;
+    }
   }
 
   async function getModelName() {
@@ -101,5 +111,5 @@
     return models;
   }
 
-  QW.api = { chat, getModelName, getModelList };
+  QW.api = { chat, resetSession, getModelName, getModelList };
 })();
