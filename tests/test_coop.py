@@ -31,6 +31,35 @@ def make_coop(agents, replies=None, **config):
     return MultiAgentCoop(config=settings, builder=builder), built
 
 
+def test_local_llm_complete_streams_without_touching_memory(monkeypatch):
+    """本地模型走协作时用的是 complete()：它必须能产出文本，且不写短期记忆。
+
+    回归：这一行以前调了不存在的 self._call_chat(...)，本地模型的协作会
+    AttributeError 然后被降级成"主模型没有给出初稿"，表面看只是没输出。
+    """
+    pytest.importorskip("PySide6.QtCore")
+
+    import stlibs
+    from stlibs.ai import local
+
+    monkeypatch.setattr(stlibs.Config, "mcp", {"enable": False, "mcp": []}, raising=False)
+    monkeypatch.setattr(stlibs.Config, "rag", {"enable": False}, raising=False)
+    monkeypatch.setattr(stlibs.Config, "memory", {"shortterm": True, "longterm": False}, raising=False)
+
+    llm = local.LLM("fake-model", coop=False)
+
+    def fake_run(messages):
+        yield "初稿"
+        yield {"type": "tool_call", "name": "demo", "args": {}}
+
+    monkeypatch.setattr(llm.function_call, "run", fake_run)
+
+    text = "".join(chunk for chunk in llm.complete([{"role": "user", "content": "问题"}]) if isinstance(chunk, str))
+
+    assert text == "初稿"
+    assert llm.memory.messages == [], "complete() 不该写短期记忆"
+
+
 def collect(coop, lead, query="问题"):
     events = []
     text = ""

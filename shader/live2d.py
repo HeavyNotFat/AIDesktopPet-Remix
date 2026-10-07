@@ -234,6 +234,7 @@ class PublicShader(ADPOpenGLCanvas):
     @staticmethod
     def emit_sdk_event(name: str, data=None):
         """把桌宠上的动作告诉订阅了 SDK 事件的外部程序（统一走 stlibs）。"""
+        stlibs.emit_sdk_event(name, data)
 
     def mousePressEvent(self, event):
         """鼠标拖动时间及按下事件"""

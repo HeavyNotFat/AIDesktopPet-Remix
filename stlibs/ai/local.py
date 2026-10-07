@@ -106,7 +106,9 @@ class LLM(QObject):
 
     def complete(self, messages: list):
         """按给定消息跑一轮，不读写短期记忆（协作成员与初稿走这里）。"""
-        for event in self._call_chat(messages, should_emit=False):
+        # 走和 chat() 同一条生成链路，只是不碰记忆：以前这里调了不存在的
+        # self._call_chat(...)，本地模型做协作时会直接 AttributeError 然后静默失败。
+        for event in self.function_call.run(list(messages)):
             if isinstance(event, str):
                 yield event
                 continue
