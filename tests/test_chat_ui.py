@@ -34,7 +34,9 @@ def notify_spy(monkeypatch):
         calls.append((level, text))
 
     # 主题里直接用 HackerNotify；设置页走的是 from ... import notify
-    monkeypatch.setattr("stlibs.themes.hacker.HackerNotify", fake)
+    # （主题按职责拆过模块：直接调用提示条的是 chat / model_chat）
+    monkeypatch.setattr("stlibs.themes.hacker.chat.HackerNotify", fake)
+    monkeypatch.setattr("stlibs.themes.hacker.model_chat.HackerNotify", fake)
     monkeypatch.setattr(
         "stlibs.themes.hacker.llm.notify",
         lambda text, level="info", timeout=3200: calls.append((level, text)),
@@ -509,7 +511,7 @@ def test_model_chat_passes_active_skill_to_worker(model_chat, monkeypatch):
         def start(self):
             seen["started"] = True
 
-    monkeypatch.setattr("stlibs.themes.hacker.derfer.LLMAICallback", FakeWorker)
+    monkeypatch.setattr("stlibs.themes.hacker.model_chat.derfer.LLMAICallback", FakeWorker)
 
     model_chat.chat.set_skill({"name": "翻译", "prompt": "只输出译文"})
     model_chat.add_user_msg("你好")
@@ -537,7 +539,7 @@ def test_model_chat_without_skill_sends_none(model_chat, monkeypatch):
         def start(self):
             pass
 
-    monkeypatch.setattr("stlibs.themes.hacker.derfer.LLMAICallback", FakeWorker)
+    monkeypatch.setattr("stlibs.themes.hacker.model_chat.derfer.LLMAICallback", FakeWorker)
 
     model_chat.add_user_msg("没有技能")
 
@@ -785,7 +787,7 @@ def test_send_message_hands_attachments_to_worker(model_chat, monkeypatch):
         def start(self):
             seen["started"] = True
 
-    monkeypatch.setattr("stlibs.themes.hacker.derfer.LLMAICallback", FakeWorker)
+    monkeypatch.setattr("stlibs.themes.hacker.model_chat.derfer.LLMAICallback", FakeWorker)
 
     model_chat.chat.add_attachment(attachment_api.from_bytes(PNG, "cat.png"))
     model_chat.chat.input_edit.setPlainText("看看这张图")
@@ -817,7 +819,7 @@ def worker_spy(monkeypatch):
         def start(self):
             seen["started"] = True
 
-    monkeypatch.setattr("stlibs.themes.hacker.derfer.LLMAICallback", FakeWorker)
+    monkeypatch.setattr("stlibs.themes.hacker.model_chat.derfer.LLMAICallback", FakeWorker)
     return seen
 
 

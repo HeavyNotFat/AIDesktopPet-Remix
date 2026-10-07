@@ -177,7 +177,12 @@ class PublicShader(ADPOpenGLCanvas):
         def open_browser():
             webbrowser.open("http://127.0.0.1:52493")
 
+        # 开菜单前把拖拽状态清干净：弹出之后鼠标事件归 Popup 管，
+        # 桌宠收不到 release，残留的 is_dragging 会让它把后续点击当成"拖动"
+        self.reset_drag_state()
+
         context_menu = stlibs.SharingData.theme.Menu(self)
+        self.connect_menu_closed(context_menu)
 
         setting_visible_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.settings"), self, stlibs.SharingData.theme.IconList.SETTING)
         setting_visible_action.triggered.connect(lambda: window_visible(stlibs.SharingData.setting_window, settings.Settings))
@@ -209,6 +214,29 @@ class PublicShader(ADPOpenGLCanvas):
 
         return menu_module.add_plugin_menu(context_menu, action_factory=self.plugin_menu_action)
 
+    def connect_menu_closed(self, context_menu):
+        """菜单收起来时清一次拖拽状态。
+
+        主题的菜单会在关闭时发 ``menu_closed``；没有这个信号的实现直接跳过
+        （主题是可插拔的，不能因为少一个信号就把右键菜单整个搞坏）。
+        菜单是每次右键新建的，所以按菜单实例去重。
+        """
+        signal = getattr(context_menu, "menu_closed", None)
+        if signal is None or getattr(context_menu, "_pet_drag_reset_hooked", False):
+            return
+        signal.connect(self.reset_drag_state)
+        context_menu._pet_drag_reset_hooked = True
+
+    def reset_drag_state(self):
+        """清掉拖拽残留状态。
+
+        Popup 开着时 release 会被它吃掉，``is_dragging`` 卡在 True 的话桌宠会把
+        之后的点击都当成"拖动"，连 pet_click 都不发了。
+        """
+        self.is_dragging = False
+        self.drag_position = None
+        self.drag_start_position = None
+
     def plugin_menu_action(self, text, icon):
         """主题动作工厂：主题的 Action 签名是 (text, parent, icon)。"""
         return stlibs.SharingData.theme.Action(text, self, icon)
@@ -226,25 +254,31 @@ class PublicShader(ADPOpenGLCanvas):
     def mousePressEvent(self, event):
         """鼠标拖动时间及按下事件"""
         x, y = event.globalPosition().x(), event.globalPosition().y()
-        if self.is_in_live2d_area(QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y()):
-            if SharingData.coordinates[0] == -1 and SharingData.coordinates[1] == -1:
-                SharingData.coordinates[0] = int(x)
-                SharingData.coordinates[1] = int(y)
-            elif SharingData.coordinates[2] == -1 and SharingData.coordinates[3] == -1:
-                SharingData.coordinates[2] = int(x)
-                SharingData.coordinates[3] = int(y)
-
-            self.is_dragging = True
-            self.click_in_area = True
-            self.click_x, self.click_y = x, y
-        else:
-            self.is_dragging = False
 
         if event.button() == Qt.LeftButton:
+            # 只有左键才谈得上拖拽：以前不管按哪个键都先置 is_dragging=True，
+            # 右键唤菜单时就会留下"正在拖拽"的状态
+            if self.is_in_live2d_area(QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y()):
+                if SharingData.coordinates[0] == -1 and SharingData.coordinates[1] == -1:
+                    SharingData.coordinates[0] = int(x)
+                    SharingData.coordinates[1] = int(y)
+                elif SharingData.coordinates[2] == -1 and SharingData.coordinates[3] == -1:
+                    SharingData.coordinates[2] = int(x)
+                    SharingData.coordinates[3] = int(y)
+
+                self.is_dragging = True
+                self.click_in_area = True
+                self.click_x, self.click_y = x, y
+            else:
+                self.is_dragging = False
+
             self.drag_position = event.globalPosition() - self.frameGeometry().topLeft()
             self.drag_start_position = QPoint(event.globalPosition().x(), event.globalPosition().y())
         else:
+            # 右键/中键：既不拖拽也不记抓取点，顺手把上一个左键的残留清掉
             self.is_dragging = False
+            self.drag_position = None
+            self.drag_start_position = None
         event.accept()
 
     def mouseMoveEvent(self, event):

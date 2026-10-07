@@ -1,16 +1,29 @@
-"""插件右键菜单的装配与子菜单展开（两个 shader 共用的那份逻辑）。"""
+"""插件右键菜单的装配（两个 shader 共用的那份逻辑）。
+
+插件菜单是**一层平铺**的：插件注册几条就往下排几条，标签写成「插件名 · 菜单名」，
+左边带这个插件自己的图标。以前按插件分组、悬浮展开，鼠标一抖菜单就没了，
+还得横着再找一次，所以去掉了。
+"""
 
 import os
 
 import pytest
 
 import stlibs
-from stlibs.graphics.menu import add_plugin_menu, plugin_menu_groups, trigger_plugin_action
+from stlibs.graphics.menu import (
+    add_plugin_menu,
+    item_label,
+    plugin_menu_groups,
+    plugin_menu_items,
+    trigger_plugin_action,
+)
 
 pytestmark = pytest.mark.ui
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets", reason="菜单测试需要 PySide6")
-QPoint = pytest.importorskip("PySide6.QtCore", reason="菜单测试需要 PySide6").QPoint
+QtCore = pytest.importorskip("PySide6.QtCore", reason="菜单测试需要 PySide6")
+QPoint = QtCore.QPoint
+Qt = QtCore.Qt
 
 
 @pytest.fixture(scope="module")
@@ -78,7 +91,29 @@ def build_menu(theme):
     return menu, groups
 
 
-def test_two_plugins_get_two_sub_menus(theme, plugins_dir):
+def texts(menu):
+    """菜单里一层的条目文字（自己画的条目要翻 _action_items）。"""
+    return [entry["text"] for entry in menu._action_items]
+
+
+def settle(times=4):
+    app = QtWidgets.QApplication.instance()
+    for _ in range(times):
+        app.processEvents()
+
+
+class FakeClick:
+    """只带 button() 的最小鼠标事件替身。"""
+
+    def __init__(self, button=Qt.MouseButton.LeftButton):
+        self._button = button
+
+    def button(self):
+        return self._button
+
+
+def test_two_plugins_are_flattened_into_one_list(theme, plugins_dir):
+    """两个插件各两条：全部平铺，一条一层，没有子菜单。"""
     root, manager = plugins_dir
     write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel"), ("状态", "state")], order=10)
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
@@ -87,33 +122,37 @@ def test_two_plugins_get_two_sub_menus(theme, plugins_dir):
     menu, groups = build_menu(theme)
 
     assert [group.title for group in groups] == ["养成系统", "桌宠扭蛋机"]
-    assert [entry["text"] for entry in menu._action_items] == ["设置", "养成系统", "桌宠扭蛋机", "关闭"]
-    assert len(menu.sub_menus()) == 2
-    assert [item["text"] for item in menu.sub_menus()[0]._action_items] == ["打开面板", "状态"]
-    assert [item["text"] for item in menu.sub_menus()[1]._action_items] == ["扭一次"]
+    assert texts(menu) == [
+        "设置",
+        "养成系统 · 打开面板",
+        "养成系统 · 状态",
+        "桌宠扭蛋机 · 扭一次",
+        "关闭",
+    ]
+    assert not hasattr(menu, "addMenu"), "子菜单那套已经从主题菜单里拿掉了"
 
 
-def test_sub_menu_entries_show_arrow(theme, plugins_dir):
-    """有子菜单的条目要留出 ▸ 的位置（宽度里能看出来，比没有子菜单的宽）。"""
+def test_flat_entries_keep_their_plugin_icon(theme, plugins_dir):
+    """平铺之后没有分组标题兜底了：每条得带插件自己的图标，才看得出是谁加的。"""
     root, manager = plugins_dir
     write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
     manager.load_all()
 
     menu, _groups = build_menu(theme)
-    has_sub = next(entry for entry in menu._action_items if entry["submenu"] is not None)
-    plain = next(entry for entry in menu._action_items if entry["submenu"] is None)
 
-    from PySide6.QtGui import QFontMetrics
+    entries = [entry for entry in menu._action_items if " · " in entry["text"]]
+    assert len(entries) == 2
+    for entry in entries:
+        assert entry["pixmap"] is not None, f"{entry['text']} 少了插件图标"
 
-    metrics = QFontMetrics(menu.hacker_font)
-    assert has_sub["width"] - menu._measure(has_sub["text"], has_sub["pixmap"], False) == \
-        metrics.horizontalAdvance("  ▸") + 4
-    assert plain["width"] == menu._measure(plain["text"], plain["pixmap"], False)
+    # 条目的 QAction 上也得有图标（SDK/探针读的是 QAction）
+    icons = [action.icon() for action in menu.menu_actions() if " · " in action.text()]
+    assert all(not icon.isNull() for icon in icons)
 
 
-def test_single_plugin_single_item_is_flat(theme, plugins_dir):
-    """只有一个插件的一条菜单：平铺，不套一层子菜单。"""
+def test_single_plugin_single_item_is_still_flat(theme, plugins_dir):
+    """只有一个插件的一条菜单：照样平铺（标签仍带插件名前缀）。"""
     root, manager = plugins_dir
     write_plugin(root, "solo", "唯一插件", [("唯一一条", "one")])
     manager.load_all()
@@ -121,74 +160,126 @@ def test_single_plugin_single_item_is_flat(theme, plugins_dir):
     menu, groups = build_menu(theme)
 
     assert len(groups) == 1
-    assert menu.sub_menus() == [], "只有一条就别套子菜单了"
-    assert [entry["text"] for entry in menu._action_items] == ["设置", "唯一一条", "关闭"]
+    assert texts(menu) == ["设置", "唯一插件 · 唯一一条", "关闭"]
 
 
-def test_single_plugin_with_two_items_still_groups(theme, plugins_dir):
+def test_item_label_formats_plugin_then_menu(theme, plugins_dir):
+    """标签格式：``插件名 · 菜单名``；插件名已在菜单名里就不重复，没有标题则退化。"""
     root, manager = plugins_dir
-    write_plugin(root, "solo", "唯一插件", [("第一条", "one"), ("第二条", "two")])
+    write_plugin(root, "solo", "唯一插件", [("唯一一条", "one"), ("唯一插件：自报家门", "two")])
+    write_plugin(root, "gacha", "桌宠扭蛋机", [("扭蛋机：来一发", "roll")], order=20)
     manager.load_all()
 
-    menu, _groups = build_menu(theme)
+    labels = {item.action: item_label(group, item) for group, item in plugin_menu_items()}
 
-    assert len(menu.sub_menus()) == 1, "两条以上就该分组"
-    assert [entry["text"] for entry in menu._action_items] == ["设置", "唯一插件", "关闭"]
+    assert labels["one"] == "唯一插件 · 唯一一条"
+    assert labels["two"] == "唯一插件：自报家门", "插件名已经写进菜单名了，别再加前缀"
+    assert labels["roll"] == "扭蛋机：来一发", "标题「桌宠扭蛋机」去掉桌宠前缀就是菜单名前缀，也别重复"
+
+    class NoTitle:
+        title = ""
+
+    group, item = next(pair for pair in plugin_menu_items() if pair[1].action == "roll")
+    assert item_label(NoTitle(), item) == "扭蛋机：来一发"
 
 
-def test_hover_opens_sub_menu_and_switching_closes_old(theme, plugins_dir):
+def test_clicking_a_flat_entry_runs_plugin_and_closes(theme, plugins_dir):
+    """点平铺的插件条目：要触发插件回调，并把菜单收起来。"""
     root, manager = plugins_dir
     write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
     manager.load_all()
 
-    menu, _groups = build_menu(theme)
-    menu.exec(QPoint(30, 30))
+    called = []
+    from stlibs.graphics import menu as menu_module
 
-    first = next(entry for entry in menu._action_items if entry["text"] == "养成系统")
-    second = next(entry for entry in menu._action_items if entry["text"] == "桌宠扭蛋机")
+    original = menu_module.trigger_plugin_action
+    menu_module.trigger_plugin_action = lambda action: called.append(action)
 
-    qapp = QtWidgets.QApplication.instance()
+    try:
+        menu, _groups = build_menu(theme)
+        menu.exec(QPoint(30, 30))
+        entry = next(item for item in menu._action_items if item["text"] == "养成系统 · 打开面板")
+        entry["label"].mousePressEvent(FakeClick(Qt.MouseButton.LeftButton))
+        settle(6)
+    finally:
+        menu_module.trigger_plugin_action = original
 
-    first["label"].enterEvent(None)
-    qapp.processEvents()
-    assert first["submenu"].isVisible()
-    assert not second["submenu"].isVisible()
+    assert called == ["panel"]
+    assert not menu.isVisible(), "点完要把菜单收起来"
 
-    second["label"].enterEvent(None)
-    qapp.processEvents()
-    assert second["submenu"].isVisible()
-    assert not first["submenu"].isVisible(), "换一组时旧子菜单要收起来"
 
+def test_right_clicking_a_flat_entry_does_nothing(theme, plugins_dir):
+    """右键点条目不该触发动作，也不该把菜单收掉。"""
+    root, manager = plugins_dir
+    write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
+    write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
+    manager.load_all()
+
+    called = []
+    from stlibs.graphics import menu as menu_module
+
+    original = menu_module.trigger_plugin_action
+    menu_module.trigger_plugin_action = lambda action: called.append(action)
+
+    try:
+        menu, _groups = build_menu(theme)
+        menu.exec(QPoint(30, 30))
+        entry = next(item for item in menu._action_items if item["text"] == "养成系统 · 打开面板")
+        entry["label"].mousePressEvent(FakeClick(Qt.MouseButton.RightButton))
+        settle(4)
+    finally:
+        menu_module.trigger_plugin_action = original
+
+    assert called == []
+    assert menu.isVisible(), "右键不该顺手把菜单关了"
     menu.close()
 
 
-def test_clicking_sub_menu_entry_runs_plugin_and_closes(theme, plugins_dir):
+def test_entries_share_the_widest_row(theme, plugins_dir):
+    """一行铺满：所有条目宽度一致，短的不会只亮一半。"""
     root, manager = plugins_dir
-    write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
+    write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel"), ("状态", "state")], order=10)
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
     manager.load_all()
 
     menu, _groups = build_menu(theme)
+
+    widths = {entry["label"].width() for entry in menu._action_items}
+    assert len(widths) == 1, f"条目宽度不一致：{widths}"
+
+
+def test_menu_closed_signal_fires_once_per_close(theme, plugins_dir):
+    """菜单收起要通知宿主（桌宠靠它复位拖拽状态，否则会跟着鼠标漂）。"""
+    root, manager = plugins_dir
+    write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
+    manager.load_all()
+
+    menu, _groups = build_menu(theme)
+    fired = []
+    menu.menu_closed.connect(lambda: fired.append(1))
+
     menu.exec(QPoint(30, 30))
-    entry = next(item for item in menu._action_items if item["text"] == "养成系统")
-    entry["label"].enterEvent(None)
+    settle()
+    assert fired == [], "只是打开不该发关闭信号"
 
-    qapp = QtWidgets.QApplication.instance()
-    qapp.processEvents()
-    submenu = entry["submenu"]
-    submenu._action_items[0]["label"].mousePressEvent(None)
-    qapp.processEvents()
+    menu.close()
+    settle()
+    assert len(fired) == 1, f"收起一次只该通知一次（实际 {len(fired)}）"
 
-    assert not submenu.isVisible(), "点完子菜单要收起来"
-    assert not menu.isVisible(), "父菜单也要一起收（否则只剩一个空菜单挂在屏幕上）"
+    # 再开再关：每次关闭都要通知（Popup 是被反复开关的）
+    menu.exec(QPoint(30, 30))
+    settle()
+    menu.close()
+    settle()
+    assert len(fired) == 2
 
 
 def test_no_plugins_means_no_extra_separator(theme, plugins_dir):
     menu, groups = build_menu(theme)
 
     assert groups == []
-    assert [entry["text"] for entry in menu._action_items] == ["设置", "关闭"]
+    assert texts(menu) == ["设置", "关闭"]
 
 
 def test_broken_manager_does_not_break_the_menu(theme, monkeypatch):
@@ -200,7 +291,7 @@ def test_broken_manager_does_not_break_the_menu(theme, monkeypatch):
     menu.addAction(theme.Action("设置", menu))
 
     assert add_plugin_menu(menu, manager=Boom()) == []
-    assert [entry["text"] for entry in menu._action_items] == ["设置"]
+    assert texts(menu) == ["设置"]
 
 
 def test_trigger_reports_plugin_result(theme, plugins_dir, monkeypatch):

@@ -43,7 +43,8 @@ def _exports(src: SourceFile) -> dict[str, tuple[str, ast.AST]]:
                 if alias.name == "*":
                     continue
                 local = alias.asname or alias.name
-                exports.setdefault(local, ("import", node))
+                # 存 alias 本身：后面要靠它把 import 进来的映射解析回真实类
+                exports.setdefault(local, ("import", alias))
     return exports
 
 
@@ -57,16 +58,37 @@ def _value_kind(value: ast.AST | None, class_names: set[str]) -> tuple[str, ast.
     return "value", value
 
 
-def _export_class_name(entry: tuple[str, ast.AST] | None) -> str | None:
-    """映射绑定到哪个类：``Window = Window`` 和 ``IconList = IconList()`` 都要认。"""
+def _export_class_name(sources, src: SourceFile, entry: tuple[str, ast.AST] | None) -> str | None:
+    """映射绑定到哪个类，认这几种写法：
+
+    * ``Window = HackerWindow``（本文件定义的，或从别的模块 import 进来的）
+    * ``from .window import HackerWindow``（直接重新导出）
+    * ``IconList = IconList()``（实例映射，取被实例化的那个类）
+
+    主题按职责拆成多个文件之后，映射大多不再是"本文件定义的类"了。以前只认
+    "本文件里的 ClassDef"，拆分后会静默解析不到，``theme/member-missing``
+    等于白跑——所以这里统一走 ``SourceIndex.resolve_class``（它会跟 import 表）。
+    """
     if not entry:
         return None
+
     kind, node = entry
     if kind == "class" and isinstance(node, ast.Name):
-        return node.id
-    if kind == "instance" and isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-        return node.func.id
-    return None
+        name = node.id
+    elif kind == "instance" and isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        name = node.func.id
+    elif kind == "value" and isinstance(node, ast.Name):
+        name = node.id
+    elif kind == "import":
+        alias = getattr(node, "asname", None) or getattr(node, "name", None)
+        if not isinstance(alias, str):
+            return None
+        name = alias
+    else:
+        return None
+
+    record = sources.resolve_class(src, name)
+    return record.name if record is not None else None
 
 
 def _module_members(ctx, theme: str, submodule: str) -> set[str] | None:
@@ -167,10 +189,10 @@ def check_member_missing(ctx) -> Iterator[Finding]:
         for mapping, members in contract.required_members.items():
             if mapping not in exports:
                 continue  # 缺映射本身已经由 theme/mapping-missing 报过
-            class_name = _export_class_name(exports[mapping])
+            class_name = _export_class_name(ctx.sources, src, exports[mapping])
             if class_name is None:
                 continue
-            record = ctx.sources.class_in_module(src.module, class_name)
+            record = ctx.sources.resolve_class(src, class_name)
             if record is None:
                 continue
             provided = set(record.methods) | set(record.attributes)
@@ -200,10 +222,10 @@ def check_member_kind(ctx) -> Iterator[Finding]:
     for theme, src in sorted(_theme_packages(ctx).items()):
         exports = _exports(src)
         for mapping in contract.required_members:
-            class_name = _export_class_name(exports.get(mapping))
+            class_name = _export_class_name(ctx.sources, src, exports.get(mapping))
             if class_name is None:
                 continue
-            record = ctx.sources.class_in_module(src.module, class_name)
+            record = ctx.sources.resolve_class(src, class_name)
             if record is None:
                 continue
             for base in hierarchy.bases(record):

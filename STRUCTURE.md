@@ -70,7 +70,7 @@ ADPRemix/
 │   ├── graphics/              窗口装配层
 │   │   ├── chat.py            聊天窗：主题 Window + 按「本地/API」分类的模型页导航
 │   │   ├── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）
-│   │   └── menu.py            插件右键菜单装配：按插件分组、标题带图标、悬浮子菜单
+│   │   └── menu.py            插件右键菜单装配：所有条目一层平铺、每条带自己插件的图标
 │   ├── derfer/__init__.py     线程边界与音频：LLMAICallback(QThread) + 音频解码/播放
 │   ├── mproc/onlinechat/      网页聊天服务端（FastAPI）
 │   │   ├── __init__.py        路由：/api/chat、/chat/stream(SSE)、/chat/recall、/reset、/status、/getmodellist、/getmodelname、/health + 静态托管
@@ -211,7 +211,7 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 两者都会在鼠标释放（未拖动）时发 `pet_click`：插件总线 `plugin_manager().emit_event("pet_click")`
 与 SDK 事件 `stlibs.emit_sdk_event(...)`。
 
-插件菜单的装配（按插件分组、子菜单悬浮展开）抽在 `stlibs/graphics/menu.py`，两个 shader 都调它。
+插件菜单的装配（所有插件条目一层平铺、每条带自己插件的图标）抽在 `stlibs/graphics/menu.py`，两个 shader 都调它。
 
 ### 4.4 线程边界（`stlibs/derfer/`）
 
@@ -225,22 +225,43 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 * `chat.py`：聊天窗 = 主题 Window + 左侧「本地 / API」两分类下的模型页导航；提供 `add_model/find_model/reload_models`。
 * `settings.py`：设置窗 = 6 页（常规 / LLM / 语音 / 动画 / 插件 / 设置），把子页信号中转成窗口级信号。
-* `menu.py`：插件右键菜单的装配（按插件分组 → 子菜单，标题带图标；单插件单条目时平铺）+ 点击回调转发。
+* `menu.py`：插件右键菜单的装配（所有插件的条目**一层平铺**，每条带自己插件的图标、标签是「插件名 · 菜单名」）+ 点击回调转发。
 
-`stlibs/themes/hacker/`（默认主题实现，`__init__.py` 约 2900 行）：
+`stlibs/themes/hacker/`（默认主题实现，按职责拆成一包文件，`__init__.py` 只做契约门面）：
 
-| 文件                          | 内容                                                                                                                                                                                                                                                                                                                                                                                    |
-|:----------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `__init__.py`               | 全部控件与契约映射：`HackerWindow`（标题栏/导航/堆叠页/快捷键）、`HackerMenu`（Qt.Popup 自绘菜单，`addMenu` 子菜单悬浮展开 + ▸ 指示）/`HackerSubMenu`（子菜单，独立工具窗不抢弹出状态）、`HackerNotify`（窗口内提示条，多级配色 + 堆叠）、`HackerSwitch`/`HackerSlider`/`HackerComboBox`/`HackerTable`/`HackerCard`/`HackerTabWidget`、`_CodeRain` 背景、`HackerChatBubble`（复制/播放/技能标签/附件）、`HackerChatWidget`（消息区 + 技能栏 + 附件栏 + 输入行）、`_ChatInputEdit`（回车发送、Ctrl+V 图片转附件）、`ModelChat`（单模型聊天页：LLM 缓存、函数线程、插件改写、技能与插件提示词合并、协作提示） |
-| `llm.py`                    | LLM 设置页六 Tab：新增 LLM / 记忆（模型下拉 + JSON 视图）/ RAG / MCP / 协作 / 技能                                                                                                                                                                                                                                                                                                                         |
-| `general.py`                | 常规设置：名字、形象、透明度、大小、旋转                                                                                                                                                                                                                                                                                                                                                                  |
-| `animation.py`              | 动画页：Live2D 动作/表情面板、坐标录入、智能与 AI 控制开关                                                                                                                                                                                                                                                                                                                                                   |
-| `settings.py`               | 设置页外壳：主题下拉（`available_themes()`）                                                                                                                                                                                                                                                                                                                                                      |
-| `plugins.py`                | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标                                                                                                                                                                                                                                                                                                                                   |
-| `tts.py` / `recognition.py` | 语音页占位 / 空文件（未实现）                                                                                                                                                                                                                                                                                                                                                                      |
+| 文件               | 内容                                                                                                                                                                        |
+|:-----------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `__init__.py`    | 契约门面：把下面各模块的实现重新导出 + 14 个映射别名（`Window`/`Menu`/`Button`/`ChatWidget`/`ModelChat`…）+ `IconList()` 实例。新增控件加到对应模块再从这儿 import，别再往里堆实现 |
+| `primitives.py`  | 基础控件：`HackerLabel`/`HackerButton`/`HackerLineEdit`/`HackerTextEdit`/`HackerComboBox`/`HackerSlider`/`HackerSwitch`/`HackerCard`/`HackerTable`/`HackerTabWidget`/`HackerScrollArea` |
+| `menu.py`        | 自绘右键菜单 `HackerMenu`（每条一张 QPixmap，一行铺满 + 整行高亮，**一层平铺、没有子菜单**）+ `Action` + `menu_icon_pixmap` |
+| `chrome.py`      | 主窗口零件：`_HackerTitleBar`、`_CodeRain` 代码雨、侧栏 `_HackerCategory`/`_HackerNavButton`，外加动画名映射表与 `prompts` |
+| `feedback.py`    | 操作反馈条 `HackerNotify`（贴窗口顶部，多级配色 + 堆叠 + 进出场动画）                                                                                                                              |
+| `chat.py`        | 聊天区：`HackerChatBubble`（复制/播放/技能标签/附件）、`HackerChatWidget`（消息区 + 技能栏 + 附件栏 + 输入行）、`HackerAttachmentChip`、`_ChatInputEdit`（回车发送、Ctrl+V 图片转附件） |
+| `window.py`      | 主窗口 `HackerWindow`（标题栏/导航/堆叠页/快捷键）+ 菜单图标集 `IconList`                                                                                                                       |
+| `model_chat.py`  | 单模型聊天页 `ModelChat`（LLM 缓存 `cache_llm_class`、函数线程、插件改写、技能与插件提示词合并、协作提示）                                                                                                      |
+| `llm.py`         | LLM 设置页六 Tab：新增 LLM / 记忆（模型下拉 + JSON 视图）/ RAG / MCP / 协作 / 技能                                                                                                                |
+| `general.py`     | 常规设置：名字、形象、透明度、大小、旋转                                                                                                                                                      |
+| `animation.py`   | 动画页：Live2D 动作/表情面板、坐标录入、智能与 AI 控制开关                                                                                                                                         |
+| `settings.py`    | 设置页外壳：主题下拉（`available_themes()`）                                                                                                                                            |
+| `plugins.py`     | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标                                                                                                                          |
+| `tts.py` / `recognition.py` | 语音页占位 / 空文件（未实现）                                                                                                                                          |
 
 **主题契约三处必须同步**：`stlibs/__init__.py::_ThemeTypingProtocol`（类型）、
-`stlibs/themes/base.py`（ABC）、`tools/ci/contract.py`（CI 侧），外加主题包尾部的映射别名。
+`stlibs/themes/base.py`（ABC）、`tools/ci/contract.py`（CI 侧），外加 `hacker/__init__.py` 尾部的映射别名。
+映射类可以定义在主题包的任意子模块里（`Window = HackerWindow` 或 `from .window import HackerWindow` 都行），
+`tools/ci` 会顺着 import 表把映射解析回真实类再校验成员。
+
+**为什么菜单不做子菜单**：`HackerMenu` 原先支持"悬浮条目 → 右边展开一层 `Qt.Tool` 子菜单"，
+但桌宠右键菜单里体验不好——鼠标从条目滑向子菜单的途中菜单就收了（得跟"离开条目后延迟收合"的计时器打架），
+还得横着再找一次。插件菜单因此改成**一层平铺**：插件注册几条就排几条，标签「插件名 · 菜单名」
+（插件名已经在菜单名里就不重复），左边带各自插件的图标。`HackerMenu` 不再提供 `addMenu`。
+
+**Popup 与拖拽状态的冲突**（`menu_closed` 信号的由来）：菜单是 `Qt.Popup`，弹出来之后鼠标事件归它管，
+宿主窗口收不到那一下 `release`，于是"正在拖拽"的标志会一直挂着——之后鼠标随手在桌宠上移一下（没按任何键）
+桌宠就跟着光标漂。所以：`HackerMenu` 关闭时发 `menu_closed`；
+`PublicShader.connect_menu_closed()` 把它接到 `reset_drag_state()`（两个 shader 都有），
+开菜单前也先复位一次；`core.DesktopPetRemix` 再通过 `reset_host_drag_state` 清自己的 `_dragging`。
+两个 shader 的 `mouseMoveEvent` 另外都要求"左键真的按住"才跟着走，这样即使标志泄漏也不会漂。
 
 ### 4.6 网页聊天（`stlibs/mproc/onlinechat/` + `resources/web/onlinechat/`）
 
@@ -268,10 +289,10 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 * API：日志、提示、设置、私有存储、菜单项、命令注册、系统提示词、动作表情、`send_to_chat`、`run_on_ui`。
 * 图标：清单 `icon` 指插件目录内的相对路径（png/svg/jpg/webp/ico/bmp），没有或文件不在时由 `icons.py`
   按插件名生成字母/汉字徽章（颜色由 id 哈希决定，进程级缓存）；没有 QGuiApplication 时一律返回空图标
-  （Qt 在这种情况下构造 `QPixmap` 会**直接终止进程**，不是抛异常）。设置页表格首列与插件菜单组标题共用它。
-* 菜单：`menu_groups()` 按插件分组（标题 = 清单 `menu`，默认 `name`），`stlibs/graphics/menu.py` 把每组挂成
-  一层子菜单（`HackerMenu.addMenu` + 悬浮展开）；只有"一个插件 + 一条菜单"时平铺。`menu_items()` 保留扁平结果给
-  SDK/探针等老调用方。
+  （Qt 在这种情况下构造 `QPixmap` 会**直接终止进程**，不是抛异常）。设置页表格首列与插件菜单条目共用它。
+* 菜单：`menu_groups()` 按插件分组（标题 = 清单 `menu`，默认 `name`），`stlibs/graphics/menu.py` 把**所有组**的条目
+  平铺到一层上（标签「插件名 · 菜单名」，左边是各插件自己的图标）；`menu_items()` 给出同样的扁平结果，
+  SDK/探针等老调用方用它。
 * 宿主挂载点：`core.py`（加载）、两个 shader（右键菜单 + `pet_click`）、`ModelChat`（发送前/回复后/提示词）、网页聊天（插件提示词）。
 * 隔离：单个 hook 异常只记进该插件状态并提示一次；JS 单次调用有超时；插件目录 `.data/<id>.json` 存私有数据。
 * 示例与玩法见 `plugins/README.md`；养成系统是完整玩法样例（`cultivation_model.py` 纯逻辑 + `cultivation_window.py` 面板 +
@@ -299,7 +320,7 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
   支持 `# ci: ignore[=id]` 内联抑制、5 种输出格式（text/json/markdown/github/sarif）。
   用法：`python -m tools.ci [检查id|分类|前缀*] [--strict] [--format …]`。
 * `tools/manual/`：真机联调脚本（附件/协作/养成/插件/技能/网页聊天各一个）、
-  `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件子菜单、养成面板、聊天窗）、
+  `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件菜单、养成面板、聊天窗）、
   `make_plugin_icons.py` 用 Pillow 画插件图标、`strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
 * `tests/`：602 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
   前端 js 用例用 node 跑真实脚本（`test_web_*.py`）；`conftest.py` 统一把临时目录收敛到 `.ci-tmp/`。

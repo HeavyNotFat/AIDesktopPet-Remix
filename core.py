@@ -81,6 +81,24 @@ class DesktopPetRemix(shader.PublicShader):
 
         self.move(round(self.physics.x), round(self.physics.y))
 
+    def _reset_drag(self):
+        """清掉拖拽状态。
+
+        右键弹出菜单后鼠标事件会被 Popup 接走，桌宠再也收不到那一下 release——
+        留着 ``_dragging=True`` 的话，之后鼠标随手一动桌宠就跟着漂。
+        """
+        self._dragging = False
+        self.drag_position = None
+        self.drag_start_position = None
+        self.is_dragging = False
+        self._drag_velocity_x = 0.0
+        self._drag_velocity_y = 0.0
+        self.physics.dragging = False
+        self.physics.set_position(self.x(), self.y())
+
+    # shader 那边（PublicShader.reset_drag_state）在菜单收起时回调这个复位桌宠状态
+    reset_host_drag_state = _reset_drag
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
@@ -93,7 +111,9 @@ class DesktopPetRemix(shader.PublicShader):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._dragging:
+        # 只在左键真的按住时才跟着走：鼠标移过桌宠（没按键）也会进来，
+        # 光看 _dragging 的话一次状态泄漏就会让桌宠追着光标漂
+        if self._dragging and event.buttons() & Qt.MouseButton.LeftButton:
             current_pos = event.globalPosition().toPoint()
             dx = (current_pos.x() - self._drag_last_pos.x())
             dy = (current_pos.y() - self._drag_last_pos.y())

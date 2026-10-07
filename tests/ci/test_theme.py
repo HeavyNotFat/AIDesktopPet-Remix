@@ -194,6 +194,59 @@ def test_instance_mapping_members_are_checked(mini_repo):
     assert any("CHAT" in f.message and "IconList" in f.message for f in findings)
 
 
+def test_members_checked_when_mapping_points_at_imported_class(mini_repo):
+    """主题拆成多个文件后，映射常写成 ``Window = HackerWindow``（类在别的模块里）。
+
+    这条以前会静默解析不到、直接跳过成员校验，等于契约白写。
+    """
+    window_class = (
+        "class HackerWindow:\n"
+        "    def addNavigation(self, text, widget, shortcut_keys=None, position=\"top\", category=None): pass\n"
+        "    def removeNavigation(self, widget): pass\n"
+        "    def create_category(self, category, position=\"top\"): pass\n"
+        "    def setTitle(self, title): pass\n"
+    )
+    files = _theme()
+    # 类挪到 window.py，__init__ 里只剩一个 import（少写 setTitle 用来看有没有被查出来）
+    files["stlibs/themes/hacker/__init__.py"] = files["stlibs/themes/hacker/__init__.py"].replace(
+        window_class,
+        "from .window import HackerWindow\n",
+    )
+    assert "from .window import HackerWindow" in files["stlibs/themes/hacker/__init__.py"], \
+        "替换失败，THEME_HEAD 结构变了"
+    files["stlibs/themes/hacker/window.py"] = window_class.replace(
+        "    def setTitle(self, title): pass\n",
+        "",
+    )
+    root = mini_repo(files, contract=True)
+
+    findings = findings_of(root, "theme/member-missing")
+    assert any("setTitle" in f.message and "Window" in f.message for f in findings), \
+        "映射从别的模块 import 进来时，成员校验必须照样生效"
+
+
+def test_members_checked_when_mapping_is_a_reexport(mini_repo):
+    """``from .window import HackerWindow`` 这种直接重新导出也要能解析到真实类。"""
+    window_class = (
+        "class HackerWindow:\n"
+        "    def addNavigation(self, text, widget, shortcut_keys=None, position=\"top\", category=None): pass\n"
+        "    def removeNavigation(self, widget): pass\n"
+        "    def create_category(self, category, position=\"top\"): pass\n"
+        "    def setTitle(self, title): pass\n"
+    )
+    head = THEME_HEAD.replace(window_class, "from .window import HackerWindow\n")
+    assert "from .window import HackerWindow" in head, "替换失败，THEME_HEAD 结构变了"
+    files = _theme(head=head)
+    files["stlibs/themes/hacker/window.py"] = (
+        "class HackerWindow:\n"
+        "    def addNavigation(self, text, widget, shortcut_keys=None, position=\"top\", category=None): pass\n"
+    )
+    root = mini_repo(files, contract=True)
+
+    findings = findings_of(root, "theme/member-missing")
+    assert any(f.message.startswith("主题 'hacker' 的 Window（HackerWindow）") for f in findings)
+
+
 def test_theme_checks_clean_on_real_repo(repo_root):
     report = run_checks(repo_root, ["theme/*"])
     assert report.crashes == [], [r.crash for r in report.crashes]

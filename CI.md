@@ -514,6 +514,10 @@ pre-commit install --hook-type pre-push   # 装 pre-push 钩子（跑 pytest）
   其余 9 个（`Button`/`Label`/`Action`/`ScrollArea`/`TextEdit`/`LineEdit`/
   `Slider`/`ComboBox`/`CardWidget`）只校验"名字存在 + 各主题形态一致"。
   想加成员约束，就在 `tools/ci/contract.py` 的 `EXTRA_MEMBERS` 里补上调用点来源。
+  校验对象是**映射真正指向的那个类**：类定义在主题包的哪个子模块都行
+  （`Window = HackerWindow`、`from .window import HackerWindow`、`IconList = IconList()`
+  三种写法都会顺着 import 表解析回真实类）；解析不到时会静默跳过，
+  所以给主题换新写法时记得顺手确认门禁还认得出来。
 * **点开头的目录不扫描**（`.venv`/`.git`/`.idea`/`.PluginDevOld` 这类本地残留）。
   代价是 `.github/` 之类也在扫描范围之外——所以**不要把需要检查的代码放进点目录**。
 * **`hygiene/attr-typo` 是启发式**：只在"首字母小写 + 长度 ≥5 + 与 Qt 专用名

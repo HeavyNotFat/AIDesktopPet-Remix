@@ -32,7 +32,6 @@ with open(stlibs.CONFIG_PATH, "w", encoding="utf-8") as handle:
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint
-from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QFrame
 
 app = QApplication([])
@@ -106,10 +105,9 @@ def shoot_menu():
 
 
 def shoot_plugin_menu():
-    """插件右键菜单：每个插件一层子菜单（标题带图标），悬浮才展开。
+    """插件右键菜单：所有插件条目一层平铺（每条带自己插件的图标 + 「插件名 · 菜单名」）。
 
-    截图是"父菜单 + 已展开的子菜单"拼在一起的预览——悬浮展开后的真实样子，
-    单独 grab 父菜单是看不到子菜单的（子菜单是独立窗口）。
+    平铺之后整张菜单就是一个窗口，直接 grab 即可，不用再拼预览图。
     """
     from stlibs.graphics import menu as menu_module
     from stlibs.plugins.manager import core as plugin_core
@@ -127,30 +125,17 @@ def shoot_plugin_menu():
     print("   插件菜单分组：", [(group.title, len(group), "有图" if group.icon is not None else "无图")
                                 for group in groups])
     assert groups, "装了插件却没挂上插件菜单"
-    assert len(menu.sub_menus()) == len(groups), "每个插件应该各有一层子菜单"
+    assert not hasattr(menu, "addMenu"), "插件菜单应该平铺，不该有 addMenu"
 
-    # 悬浮第一组：展开它的子菜单
-    entry = next(item for item in menu._action_items if item['submenu'] is not None)
-    entry['label'].enterEvent(None)
-    for _ in range(3):
-        app.processEvents()
-    submenu = entry['submenu']
-    assert submenu.isVisible(), "悬浮后子菜单要展开"
-    print(f"   悬浮 {entry['text']!r} -> 子菜单 {submenu.title_text!r} "
-          f"{submenu.width()}x{submenu.height()}，条目 {[i['text'] for i in submenu._action_items]}")
+    labels = [entry['text'] for entry in menu._action_items]
+    print(f"   平铺条目：{labels}")
+    # 菜单里除了"设置/聊天/关闭"三条固定项，其余都是插件的（平铺所以没有分组标题）
+    fixed = {"设置", "聊天", "关闭"}
+    plugin_rows = [entry for entry in menu._action_items if entry['text'] not in fixed]
+    assert len(plugin_rows) == sum(len(group) for group in groups), "每条插件菜单项都该平铺在这一层"
+    assert all(entry['pixmap'] is not None for entry in plugin_rows), "插件条目要带自己的图标"
 
-    # 把两个窗口拼成一张预览图（子菜单贴在父菜单右边，和真实位置一致）
-    preview = QPixmap(menu.width() + submenu.width() + 16, max(menu.height(), submenu.height()) + 16)
-    preview.fill(QColor(30, 31, 34))
-    painter = QPainter(preview)
-    painter.drawPixmap(0, 8, menu.grab())
-    painter.drawPixmap(menu.width() + 16, max(0, (menu.height() - submenu.height()) // 2 + 8), submenu.grab())
-    painter.end()
-
-    path = os.path.join(OUT_DIR, "menu-plugin-submenu.png")
-    preview.save(path)
-    print(f"   menu-plugin-submenu.png  {preview.width()}x{preview.height()}")
-
+    shot("menu-plugin-flat.png", menu)
     menu.close()
     return menu
 

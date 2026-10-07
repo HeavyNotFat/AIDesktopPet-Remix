@@ -1,17 +1,22 @@
 """把插件注册的菜单项挂到桌宠右键菜单上（两个 shader 共用）。
 
 规则：
-* 一个插件一组，组标题 = 插件清单的 ``menu``（没写就是插件名），组标题左边是插件图标；
-* 只有一组、且组里只有一条时直接平铺，少一层没必要的子菜单；
+* **直接平铺**：插件注册了几条就往下排几条，不套子菜单（悬浮展开那套在
+  桌宠右键菜单里体验不好：鼠标一抖菜单就没了，还得横着再找一次）；
+* 每条左边带**这个插件自己的图标**，名字写成「插件名 · 菜单名」——
+  平铺之后没有分组标题了，得让用户看得出这条是谁加的；菜单名里已经能看出插件名
+  （`扭蛋机：打开面板` 配插件名 `桌宠扭蛋机`）时就不再重复前缀，见 `item_label`；
 * 插件系统坏了（读不到菜单项）就当没有插件菜单，绝不能连右键菜单一起挂掉。
 
-宿主侧只跟 ``PluginManager.menu_groups()`` 打交道，这里不碰任何插件代码。
+宿主侧只跟 ``PluginManager.menu_groups()`` 打交道（分组信息还留着，用来取标题与图标），
+这里不碰任何插件代码。
 """
 
 from __future__ import annotations
 
 from .. import SharingData
-from ..plugins import MenuGroup
+
+LABEL_SEPARATOR = " · "
 
 
 def plugin_menu_groups(manager=None) -> list:
@@ -27,42 +32,76 @@ def plugin_menu_groups(manager=None) -> list:
         return []
 
 
+def plugin_menu_items(manager=None) -> list:
+    """平铺用的 ``(分组, 菜单项)`` 列表（顺序 = 插件加载顺序 × 组内注册顺序）。"""
+    return [(group, item) for group in plugin_menu_groups(manager) for item in group.items]
+
+
 def add_plugin_menu(context_menu, manager=None, action_factory=None) -> list:
-    """把插件菜单挂到 ``context_menu`` 上，返回挂上去的分组（没有就返回空列表）。
+    """把插件菜单平铺到 ``context_menu`` 上，返回挂上去的分组（没有就返回空列表）。
 
     ``action_factory(text, icon)`` 由主题提供（各主题 Action 的构造签名不一样，
     桌宠这边的 shader 传的是 ``stlibs.SharingData.theme.Action``）。
     """
-    groups = plugin_menu_groups(manager)
-    if not groups:
+    entries = plugin_menu_items(manager)
+    if not entries:
         return []
 
     context_menu.addSeparator()
+    for group, item in entries:
+        _add_item(context_menu, group, item, action_factory)
 
-    if len(groups) == 1 and len(groups[0]) == 1:
-        # 只有一个插件的一条菜单：平铺，别为了分组硬套一层子菜单
-        group = groups[0]
-        item = group.items[0]
-        _add_item(context_menu, item.label, group, item.action, action_factory)
-        return groups
-
-    for group in groups:
-        submenu = context_menu.addMenu(group.title, getattr(group, "icon", None))
-        for item in group.items:
-            _add_item(submenu, item.label, group, item.action, action_factory)
-
-    return groups
+    return plugin_menu_groups(manager)
 
 
-def _add_item(menu, label, group: MenuGroup, action: str, action_factory=None):
-    """挂一条会回调插件 on_command 的菜单项（带这一组插件的图标）。"""
+def item_label(group, item) -> str:
+    """平铺后的显示名：``插件名 · 菜单名``（平铺了就没有分组标题兜底了）。
+
+    有些插件本来就习惯把插件名写进菜单名（``养成系统：打开面板``、
+    ``扭蛋机：打开面板`` 配插件名 ``桌宠扭蛋机``），那种就别再挂前缀重复一遍了。
+    """
+    title = str(getattr(group, "title", "") or "").strip()
+    label = str(getattr(item, "label", "") or "").strip()
+    if not title:
+        return label
+    if not label:
+        return title
+    if _already_names_plugin(title, label):
+        return label
+    return f"{title}{LABEL_SEPARATOR}{label}"
+
+
+def _already_names_plugin(title: str, label: str) -> bool:
+    """菜单名里是不是已经能看出是哪个插件了。
+
+    插件标题是"桌宠扭蛋机"、菜单名是"扭蛋机：打开面板"这种最容易撞：
+    标题去掉"桌宠/宠物"这类前缀之后跟菜单名开头对得上，就别再挂前缀重复了。
+    """
+    if not title or not label:
+        return True
+    if label.startswith(title) or title in label:
+        return True
+    if label in title:                                   # 标题就是菜单名的超集
+        return True
+    for prefix in _TITLE_PREFIX_NOISE:
+        if title.startswith(prefix) and label.startswith(title[len(prefix):]):
+            return True
+    return False
+
+
+# 插件标题里常见、但对不上菜单名的前缀（"桌宠养成系统" vs "养成系统：xxx"）
+_TITLE_PREFIX_NOISE = ("桌宠", "宠物", "我的")
+
+
+def _add_item(menu, group, item, action_factory=None):
+    """平铺一条会回调插件 on_command 的菜单项（带这个插件的图标）。"""
     if action_factory is None:
         def action_factory(text, icon):
             return SharingData.theme.Action(text, None, icon)
 
-    entry = action_factory(label, getattr(group, "icon", None))
-    entry.setToolTip(f"{group.title} · {action}")
-    entry.triggered.connect(lambda _checked=False, name=action: trigger_plugin_action(name))
+    entry = action_factory(item_label(group, item), getattr(group, "icon", None))
+    entry.setToolTip(f"{getattr(group, 'title', '')} · {item.action}")
+    entry.triggered.connect(lambda _checked=False, name=item.action: trigger_plugin_action(name))
     menu.addAction(entry)
     return entry
 
@@ -83,4 +122,10 @@ def trigger_plugin_action(action: str):
     return result
 
 
-__all__ = ["add_plugin_menu", "plugin_menu_groups", "trigger_plugin_action"]
+__all__ = [
+    "add_plugin_menu",
+    "item_label",
+    "plugin_menu_groups",
+    "plugin_menu_items",
+    "trigger_plugin_action",
+]
