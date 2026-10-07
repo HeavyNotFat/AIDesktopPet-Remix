@@ -55,7 +55,8 @@ quote-style = "preserve"
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# 本机沙箱下系统临时目录不可写，pytest 会把 pytest-of-* 丢到仓库根；固定到被忽略的 .ci-tmp 下
+addopts = "-ra --strict-markers --basetemp=.ci-tmp/pytest"
 markers = [
     "platform: 记录 PySide6 / Qt 的平台行为（拿不到 Qt 时自动跳过）",
 ]

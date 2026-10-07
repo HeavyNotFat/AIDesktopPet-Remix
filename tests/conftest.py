@@ -30,6 +30,9 @@ from tools.ci.core import Severity  # noqa: E402
 # 所以即使临时目录被创建在仓库内部（某些环境下 gettempdir() 就是仓库根），
 # 真实仓库的扫描也不会被这些样例文件污染。
 WORK_ROOT = ROOT / ".ci-tmp"
+# pytest 的 --basetemp 指向 .ci-tmp/pytest，而它只创建最后一级目录，
+# 父目录得先有，否则单独跑某个用例会 FileNotFoundError
+WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 # 迷你仓库里可用的最小主题契约（与 stlibs/__init__.py 的 Protocol 保持一致）
 MAPPING_NAMES = (

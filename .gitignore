@@ -219,6 +219,7 @@ tempCodeRunnerFile.py
 
 # CI / 测试临时目录
 .ci-tmp/
+.tmp/
 pytest-of-*/
 tmp*/
 pip-install-*/

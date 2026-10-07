@@ -73,8 +73,6 @@ class LTMemory:
         self.summarizer = summarizer or summarize_turns
 
         self._pending = []
-        self._cache = None
-        self._mtime = None
         self._lock = self._shared_lock(self.path)
 
     @classmethod
@@ -107,17 +105,10 @@ class LTMemory:
         return kept
 
     def _entries(self):
+        # 每次读盘：记忆文件被多个实例（多个网页会话）共享，
+        # 用 mtime 做缓存判据会在两次写入落在同一时间戳刻度时读到旧快照
         with self._lock:
-            try:
-                mtime = os.path.getmtime(self.path)
-            except OSError:
-                mtime = None
-
-            if self._cache is None or mtime != self._mtime:
-                self._cache = self._read()
-                self._mtime = mtime
-
-            return self._cache
+            return self._read()
 
     def remember_turn(self, user, assistant):
         """累积一轮对话；攒够 window 轮就压缩入库并返回新条目。"""
@@ -153,11 +144,7 @@ class LTMemory:
 
             entries = self._read()
             entries.append(entry)
-            self._cache = self._write(entries)
-            try:
-                self._mtime = os.path.getmtime(self.path)
-            except OSError:
-                self._mtime = None
+            self._write(entries)
 
         return entry
 
@@ -225,12 +212,8 @@ class LTMemory:
                 kept = [entry for entry in entries if entry.get("scope") != scope]
 
             removed = len(entries) - len(kept)
-            self._cache = self._write(kept)
+            self._write(kept)
             self._pending = []
-            try:
-                self._mtime = os.path.getmtime(self.path)
-            except OSError:
-                self._mtime = None
 
         return removed
 
