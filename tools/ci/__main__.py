@@ -1,14 +1,3 @@
-"""``adpci`` —— ADPRemix 的 UI / 架构质量门禁。
-
-用法::
-
-    python -m tools.ci                 # 跑全部检查
-    python -m tools.ci --list          # 列出检查项
-    python -m tools.ci ui/*            # 只跑 ui 分类
-    python -m tools.ci --format sarif --output ci.sarif
-    python -m tools.ci --strict        # warning 也算失败
-"""
-
 from __future__ import annotations
 
 import argparse

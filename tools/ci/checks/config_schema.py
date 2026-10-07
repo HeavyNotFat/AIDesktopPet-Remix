@@ -1,20 +1,3 @@
-"""配置与资源结构校验。
-
-这个项目的配置是「dataclass 定义结构 + JSON 存数据」：
-
-* ``resources/configure.json``  ←→ ``stlibs._BaseModelConfig``
-* ``resources/animation/*.json`` ←→ ``stlibs._BaseModelAnimation``
-
-两者的连接处是**静默**的：``ConfigLoader`` 只挑认识的键，JSON 里多写的键
-保存时会被丢掉，少写的键则会在业务代码取用时 ``KeyError``。所以这里既查
-JSON→dataclass，也查代码实际取用的键。
-
-* ``config/schema``      configure.json 与 dataclass 字段对不上
-* ``config/missing-key`` 代码里 ``Config.x['y']`` 用到的键在 JSON 里没有
-* ``config/animation``   动画映射指向的字段在动画 JSON 里不存在
-* ``config/prompts``     prompts.json 缺键
-"""
-
 from __future__ import annotations
 
 import ast
@@ -166,11 +149,6 @@ def check_animation(ctx) -> Iterator[Finding]:
 
 
 def _animation_mappings(ctx) -> dict[str, str]:
-    """从**所有**主题里读 MAPPING_ANIMATION / MAPPING_SPECTIAL_ANIMATION。
-
-    以前只读 hacker：新增主题的动画映射完全不被校验，
-    而报错位置指向 JSON，排查时会看错方向。
-    """
     mappings: dict[str, str] = {}
     for src in ctx.sources.files:
         if not src.rel.startswith("stlibs/themes/") or not src.rel.endswith("__init__.py"):

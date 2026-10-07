@@ -1,17 +1,3 @@
-"""平台行为金丝雀。
-
-记录一条**实测结论**，它是整个 ``abs/*`` 检查存在的理由：
-
-    PySide6 里把 Qt 元类和 ABCMeta 合并（``CombinedMeta``）之后，
-    ``@abstractmethod`` 并不会真正生效 —— Shiboken 的 ``ObjectType.__new__``
-    在 MRO 里排在 ABCMeta 前面，``__abstractmethods__`` 根本不会生成，
-    因此"少实现一个抽象方法"在运行期不会报错，只会在调用到那一行时炸。
-
-所以主题/UI 的抽象契约只能靠静态检查兜底（``tools/ci`` 的 ``abs/*``）。
-这个测试在 PySide6 行为改变时会失败，提醒我们"运行期也开始管了"——
-那时要么删掉这条金丝雀，要么就能放心依赖运行期约束了。
-"""
-
 from __future__ import annotations
 
 import os
@@ -76,11 +62,6 @@ def test_theme_abs_classes_are_statically_complete(repo_root):
 
 
 def test_shader_canvas_abstract_contract_is_static_only(repo_root):
-    """``ADPOpenGLCanvas`` 的 on_init/on_draw/on_resize 同样只能静态校验。
-
-    注意：``shader/static.py`` 的 ``PublicShader(QWidget)`` 是另一条分支
-    （静态形象模式），它不继承画布，所以这里只对 live2d 分支做断言。
-    """
     from tools.ci.checks.abstract_api import Hierarchy, is_abstract
     from tools.ci.settings import Settings
     from tools.ci.source import SourceIndex
@@ -114,12 +95,6 @@ def test_shader_static_branch_has_its_own_base(repo_root):
 
 @pytest.fixture(scope="module")
 def themes_module():
-    """导入主题包。
-
-    先关掉 MCP：``stlibs.ai.local`` 在 import 期就会 ``npx`` 起 MCP server
-    （这是应用原本的启动行为），测试不需要也不该依赖它。
-    这个开关是进程级的，本测试会话里没有别的用例需要 MCP。
-    """
     import stlibs
 
     stlibs.Config.mcp["enable"] = False

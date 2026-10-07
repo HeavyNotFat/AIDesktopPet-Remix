@@ -1,5 +1,3 @@
-"""框架自身：注册表、过滤、抑制、报告输出、崩溃隔离。"""
-
 from __future__ import annotations
 
 import json

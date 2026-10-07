@@ -1,5 +1,3 @@
-"""抽象类 / 抽象方法检测的行为验证。"""
-
 from __future__ import annotations
 
 from conftest import checks_of, findings_of, run_checks

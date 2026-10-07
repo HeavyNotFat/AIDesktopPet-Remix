@@ -1,17 +1,3 @@
-"""UI 主题契约：主题「必须提供哪些类映射」。
-
-单一事实来源
-------------
-1. ``stlibs/__init__.py::_ThemeTypingProtocol`` —— 主题包的对外映射清单
-   （``Window``/``Button``/``ChatWidget``/``ModelChat``…），以及必须提供的子模块
-   （``general``/``llm``/``tts``/``settings``/``animation``）；
-2. ``stlibs/themes/base.py`` 里的抽象基类 —— 每个映射至少要实现哪些方法
-   （``Window`` ← ``MainWindowABS``，``Menu`` ← ``MenuWidgetABS``…）。
-
-所以这份契约不是写死在 CI 里的常量：改了 Protocol 或 ABC，CI 自动跟着变，
-不会出现「文档说要有、CI 不检查」或反过来「CI 要求一个早就删掉的映射」。
-"""
-
 from __future__ import annotations
 
 import ast

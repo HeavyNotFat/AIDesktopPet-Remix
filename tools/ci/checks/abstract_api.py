@@ -1,15 +1,3 @@
-"""抽象类 / 抽象方法检测。
-
-覆盖的坑（都在这个仓库真实出现过或差点出现）：
-
-* ``abs/contract``        —— 抽象方法没实现，实例化时直接 ``TypeError``；
-* ``abs/instantiate``     —— 明明还有抽象方法却去构造（动态取主题映射时最容易踩）；
-* ``abs/decorator-order`` —— ``@abstractmethod`` 与 ``@property`` 顺序写反，装饰器失效；
-* ``abs/not-enforced``    —— 类里写了 ``@abstractmethod`` 但没有 ABCMeta，约束形同虚设；
-* ``abs/metaclass``       —— Qt 类 + 抽象基类没写 ``metaclass=CombinedMeta``，元类冲突；
-* ``abs/signature``       —— 子类签名和抽象声明不一致（按基类写法调用就炸）。
-"""
-
 from __future__ import annotations
 
 import ast
@@ -38,7 +26,6 @@ class ClassInfo:
 
 class Hierarchy:
     """项目内的类继承关系（只解析能解析得动的边）。"""
-
     def __init__(self, sources: SourceIndex):
         self.sources = sources
         self._bases: dict[str, list[ClassRecord]] = {}
@@ -115,11 +102,6 @@ class Hierarchy:
 
     # -- 分类 -------------------------------------------------------------
     def has_abc_metaclass(self, record: ClassRecord) -> bool:
-        """本类或任一祖先是否用上了 ABCMeta 系元类。
-
-        元类会被继承：``class C(A)`` 里 A 用了 ``metaclass=ABCMeta``，
-        C 里再写 ``@abstractmethod`` 也是有效的，不能只看直接基类。
-        """
         meta = record.metaclass
         if meta:
             short = meta.rpartition(".")[2]
@@ -155,11 +137,6 @@ class Hierarchy:
         return any(self.is_qt_like(base, seen) for base in self.bases(record))
 
     def metaclass_kind(self, record: ClassRecord, _seen: set[str] | None = None) -> str:
-        """这个类实际用的元类属于哪一类：``abc`` / ``qt`` / ``plain``。
-
-        元类是会被继承的：``class Child(QtABCBase)`` 不需要再写一次
-        ``metaclass=``，所以不能只看显式声明，否则会误报元类冲突。
-        """
         seen = _seen if _seen is not None else set()
         if record.qualname in seen:
             return "plain"
@@ -232,10 +209,6 @@ def required_params(node: ast.FunctionDef, *, strip_self: bool = True) -> list[a
 
 
 def _theme_mapped_classes(sources: SourceIndex) -> set[str]:
-    """被绑到主题映射名上的类——应用一定会构造它们。
-
-    ``Window = HackerWindow`` 和 ``IconList = IconList()`` 两种形态都要认。
-    """
     mapped: set[str] = set()
     for src in sources.files:
         if not src.rel.startswith("stlibs/themes/") or not src.rel.endswith("__init__.py"):
@@ -313,11 +286,6 @@ def check_contract(ctx) -> Iterator[Finding]:
 
 
 def check_instantiate(ctx) -> Iterator[Finding]:
-    """``abs/instantiate``：构造一个仍有未实现抽象成员的类。
-
-    这里**不**跳过"自己还声明着抽象方法的类"：既然在构造它，
-    那些没实现的成员就是运行期地雷（PySide6 下运行期还不会拦你）。
-    """
     _, infos = collect(ctx.sources)
     by_qualname = {info.record.qualname: info for info in infos}
     by_name: dict[str, ClassInfo] = {}
@@ -386,12 +354,6 @@ def check_not_enforced(ctx) -> Iterator[Finding]:
 
 
 def check_metaclass_conflict(ctx) -> Iterator[Finding]:
-    """``abs/metaclass``：同一个类里直接混合 Qt 与 ABCMeta 才需要合并元类。
-
-    元类会被继承：``class Child(QtABCBase)`` 不需要再写 ``metaclass=``，
-    所以只有当「纯 Qt 元类的基类」和「ABC 元类的基类」同时出现在直接基类里
-    才算冲突——基类已经用 CombinedMeta 合并过的不算。
-    """
     hierarchy = Hierarchy(ctx.sources)
     for record in ctx.sources.classes:
         if record.metaclass:

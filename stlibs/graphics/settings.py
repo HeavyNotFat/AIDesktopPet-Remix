@@ -35,6 +35,10 @@ class Settings(SharingData.theme.Window):
         analyze_signature(self.addNavigation, text=animation_page.windowTitle(), widget=animation_page,
                           shortcut_keys=(Qt.Key_Control, Qt.Key_4)).run()
 
+        plugins_page = SharingData.theme.plugins.PluginsPage(self)
+        analyze_signature(self.addNavigation, text=plugins_page.windowTitle(), widget=plugins_page,
+                          shortcut_keys=(Qt.Key_Control, Qt.Key_5)).run()
+
         settings_page = SharingData.theme.settings.SettingsPage(self)
         analyze_signature(self.addNavigation, text=settings_page.windowTitle(), widget=settings_page,
                           shortcut_keys=(Qt.Key_Control, Qt.Key_0), position="bottom").run()

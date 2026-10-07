@@ -7,6 +7,7 @@ import importlib
 import json
 import shutil
 import gettext
+import weakref
 
 
 CONFIG_PATH = "./resources/configure.json"
@@ -17,17 +18,6 @@ EMBEDDING = ['bge-m3']
 
 @dataclass(slots=True)
 class Physics:
-    """
-    桌宠物理模拟器
-
-    负责：
-        位置
-        速度
-        加速度
-        重力
-        摩擦力
-        边界碰撞
-    """
     # 重力加速度
     GRAVITY: float = 1800.0
     # 空气阻力
@@ -197,6 +187,9 @@ class _BaseModelConfig:
     memory: dict
     rag: dict
     mcp: dict
+    coop: dict
+    skills: list
+    plugins: dict
     name: str
     model_live2d: str
     static_model: str
@@ -231,25 +224,20 @@ class ConfigLoader:
 
 
 class _ThemeTypingProtocol(Protocol):
-    """
-    主题契约：一个主题包必须对外提供的类映射与子模块。
-
-    这是**单一事实来源**：``tools/ci`` 的 ``theme/*`` 检查直接读这份声明，
-    少给一个映射、或者映射形态和别的主题不一致，CI 就会失败。
-    新增主题时照着补全即可。
-    """
     theme: ModuleType
     general: ModuleType
     llm: ModuleType
     tts: ModuleType
     settings: ModuleType
     animation: ModuleType
+    plugins: ModuleType
 
     Window: Callable
     Button: Callable
     Label: Callable
     Menu: Callable
     Action: Callable
+    Notify: Callable
     ScrollArea: Callable
     TextEdit: Callable
     LineEdit: Callable
@@ -267,9 +255,14 @@ class SharingData:
     mainloop_ui = None
     chat_window = None
     setting_window = None
+    # SDK 服务端（core.py 启动后挂上来），界面靠它往外推事件
+    sdk_server = None
     theme: _ThemeTypingProtocol = None
 
     add_memory_to_ui: dict[Callable] = {}
+
+    # 活着的 LLM 实例（弱引用：回收掉的实例不留着）
+    llm_instances = weakref.WeakValueDictionary()
 
     static_models: dict
 
@@ -282,10 +275,6 @@ class SharingData:
 
 
 class Signature:
-    """
-    参数冻结签名容错类
-    用于驱动UI变量冻结的类
-    """
     __slots__ = ("func", "kwargs")
 
     def __init__(self, func, **kwargs):
@@ -311,20 +300,10 @@ def analyze_signature(func, **kwargs) -> Signature:
 
 
 def import_attributes(module: str, attribute: str):
-    """按名字取模块属性。
-
-    公开给主题/插件加载使用（``core.py`` 现在自己按配置解析主题，
-    所以这里是给外部扩展用的入口，不是死代码）。
-    """
     return getattr(importlib.import_module(module), attribute)
 
 
 def load_theme(name: str | None = None) -> ModuleType:
-    """按名字加载主题包（``stlibs/themes/<name>``）。
-
-    名字为空或不认识时回退到 hacker 并打印提示，
-    避免配置里写错一个字母就整个界面起不来。
-    """
     themes = importlib.import_module("stlibs.themes")
     wanted = (name or "").strip() or "hacker"
     if not hasattr(themes, wanted):
@@ -333,13 +312,87 @@ def load_theme(name: str | None = None) -> ModuleType:
     return getattr(themes, wanted)
 
 
-def get_model_lists() -> list:
-    """列出本地 Ollama 模型。
+def notify(text: str, level: str = "info", timeout: int = 2600):
+    theme = SharingData.theme
+    factory = getattr(theme, "Notify", None) if theme is not None else None
+    if factory is None:
+        print(f"[{level}] {text}")
+        return None
 
-    Ollama 没装、没启动、或者卡住时都返回空列表 —— 以前只捕获了
-    FileNotFoundError，``ollama list`` 超时会直接把导入方一起带崩。
-    超时给 5 秒：调用方（网页聊天注册表）会在请求线程里刷新，不能挂太久。
-    """
+    try:
+        return factory(text, level=level, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 - 提示失败不能影响主流程
+        print(f"[{level}] {text}（提示未能显示：{type(exc).__name__}: {exc}）")
+        return None
+
+
+def refresh_models(select: str | None = None) -> None:
+    window = SharingData.chat_window
+    if window is not None and hasattr(window, "reload_models"):
+        window.reload_models(select)
+
+    try:
+        from .mproc.onlinechat.registry import registry
+
+        registry.invalidate()
+    except Exception:  # noqa: BLE001 - 网页服务没起来也不影响桌面端
+        pass
+
+
+def refresh_coop() -> None:
+    from .ai import MultiAgentCoop
+
+    for llm in list(SharingData.llm_instances.values()):
+        # 协作成员本身不再做协作，否则会无限套娃
+        if getattr(llm, "coop_disabled", False):
+            continue
+        if getattr(llm, "coop", None) is None:
+            llm.coop = MultiAgentCoop()
+        else:
+            llm.coop.reconfigure()
+
+
+def plugin_manager():
+    from .plugins.manager import core
+
+    manager = core.manager
+    config = getattr(Config, "plugins", None) or {}
+    manager.directory = str(config.get("directory") or manager.directory)
+
+    timeout = config.get("timeout")
+    if isinstance(timeout, (int, float)) and timeout > 0:
+        manager.timeout = float(timeout)
+    return manager
+
+
+def plugin_prompts() -> list:
+    """插件要求追加的系统提示词（本地与网页聊天都会带上）。"""
+    try:
+        return plugin_manager().system_prompts()
+    except Exception:  # noqa: BLE001 - 插件系统坏了不能影响聊天
+        return []
+
+
+def emit_sdk_event(name: str, data=None) -> int:
+    server = getattr(SharingData, "sdk_server", None)
+    if server is None:
+        return 0
+
+    try:
+        return server.emit(str(name), data)
+    except Exception:  # noqa: BLE001 - 事件推不出去不该影响交互
+        return 0
+
+
+def run_plugin_command(text: str):
+    """聊天命令（/名字 参数）：返回 (是否被插件处理, 结果)。"""
+    try:
+        return plugin_manager().run_command(text)
+    except Exception:  # noqa: BLE001
+        return False, ""
+
+
+def get_model_lists() -> list:
     try:
         ollama_path = shutil.which("ollama")
         if ollama_path is None or (not ollama_path.strip()): ollama_path = "ollama"

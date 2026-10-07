@@ -1,5 +1,3 @@
-"""CI 配置：``pyproject.toml`` 的 ``[tool.adpci]`` + 环境变量覆盖。"""
-
 from __future__ import annotations
 
 import fnmatch
@@ -36,13 +34,6 @@ INLINE_MARKER = "ci: ignore"
 
 @dataclass(slots=True)
 class Settings:
-    """一次运行的全部可调项。
-
-    ``disable`` 与 ``ignore`` 的区别：
-
-    * ``disable``：根本不跑这个检查（也不会计入 suppressed）；
-    * ``ignore``：照跑，但结果不计入报告（``suppressed`` 会统计到）。
-    """
 
     root: Path
     exclude: tuple[str, ...] = DEFAULT_EXCLUDE

@@ -38,6 +38,31 @@
          }
       ]
    },
+   "coop": {
+      "enable": false,
+      "mode": "review",
+      "rounds": 1,
+      "agents": []
+   },
+   "skills": [
+      {
+         "name": "翻译",
+         "description": "翻译成中文",
+         "prompt": "你是翻译。把用户接下来的内容翻译成自然的简体中文，只输出译文，不要解释。"
+      },
+      {
+         "name": "总结",
+         "description": "提炼要点",
+         "prompt": "把用户接下来的内容压缩成不超过 3 条要点，每条一行，不要展开。"
+      }
+   ],
+   "plugins": {
+      "enable": true,
+      "directory": "./plugins",
+      "disabled": [],
+      "settings": {},
+      "timeout": 3.0
+   },
    "name": "Hiyori桃濑日和",
    "model_live2d": "Hiyori桃濑日和",
    "static_model": "",

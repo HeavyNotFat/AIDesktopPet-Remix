@@ -1,16 +1,3 @@
-"""基础卫生：语法、裸 except、可疑属性名。
-
-* ``hygiene/parse-error``   文件读不了/语法错误（CI 里最该先炸的一类）
-* ``hygiene/bare-except``   ``except:`` 会把 KeyboardInterrupt/SystemExit 一起吞掉
-* ``hygiene/attr-typo``     调用了和常见 Qt 方法只差一两个字母、且全项目不存在的属性
-* ``hygiene/todo``          TODO/FIXME 统计（info，用来盯技术债）
-
-注意 ``hygiene/attr-typo`` 的定位：它是"编辑距离 1 + 全项目无同名定义"的启发式，
-只在首字母小写、长度 ≥5、且候选名来自 Qt 专用清单时才报。
-所以它抓的是 ``bounds.ottom()`` 这类真拼错，**不是**通用拼写检查器；
-真要有同名自定义方法，用 ``allow = ["hygiene/attr-typo:缺名字"]`` 放行。
-"""
-
 from __future__ import annotations
 
 import ast
@@ -64,12 +51,6 @@ def check_bare_except(ctx) -> Iterator[Finding]:
 
 
 def check_attribute_typo(ctx) -> Iterator[Finding]:
-    """``bounds.ottom()`` 这类「差一个字母」的调用。
-
-    「已定义」的判定只看**定义位**（函数/类/参数/变量/赋值目标），
-    绝不把属性读取本身算进去 —— 否则 ``x.ottom()`` 会把 ``ottom`` 自己
-    定义成合法名字，检查永远不触发。
-    """
     defined = _defined_names(ctx)
     allowed = ctx.settings.allow_tokens("hygiene/attr-typo")
 

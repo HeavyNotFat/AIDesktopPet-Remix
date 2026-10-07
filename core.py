@@ -17,6 +17,8 @@ import stlibs
 # 主题必须在 stlibs.graphics / shader 之前绑定：
 # 那些模块在导入期就拿 SharingData.theme.Window 当基类
 stlibs.SharingData.theme = stlibs.load_theme(stlibs.Config.theme)
+# 让界面/插件也能推 SDK 事件（桌宠被点了一下、聊天结束之类）
+stlibs.SharingData.sdk_server = server
 from stlibs.mproc import onlinechat
 if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
 else: from shader import static as shader
@@ -63,9 +65,6 @@ class DesktopPetRemix(shader.PublicShader):
         if stlibs.Config.static_model.strip(): self.play("idle")
 
     def update_physics(self):
-        """
-        每一帧更新物理状态
-        """
         if self._dragging:
             return
 
@@ -139,3 +138,12 @@ stlibs.SharingData.theme.IconList.init()
 desktop = DesktopPetRemix()
 stlibs.SharingData.mainloop_ui = desktop
 desktop.show()
+
+# 插件在界面起来之后再加载：插件的 on_load 里可以直接碰窗口/托盘/菜单
+try:
+    loaded = stlibs.plugin_manager().load_all()
+    if loaded:
+        names = "、".join(info.manifest.name for info in loaded if info.loaded)
+        print(f"[plugin] 已加载 {sum(1 for info in loaded if info.loaded)}/{len(loaded)} 个插件：{names}")
+except Exception as exc:  # noqa: BLE001 - 插件系统坏了不能挡住程序启动
+    print(f"[plugin] 插件系统初始化失败：{type(exc).__name__}: {exc}")

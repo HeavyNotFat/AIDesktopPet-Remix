@@ -1,0 +1,166 @@
+import io
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+OUT_DIR = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".tmp/ui-shots")
+os.makedirs(OUT_DIR, exist_ok=True)
+
+import stlibs
+
+# 别碰仓库里的 configure.json
+SAMPLE = {
+    "models": {
+        "DeepseekV4.1Flash": {"name": "deepseek-flash", "apikey": "sk-sample",
+                              "baseurl": "https://api.deepseek.com"},
+        "本地网关": {"name": "qwen", "apikey": "not-needed", "baseurl": "http://127.0.0.1:8000/v1"},
+    },
+    "memory": {"shortterm": True, "longterm": True},
+    "rag": {"enable": False},
+    "mcp": {"enable": False, "mcp": []},
+    "coop": {"enable": True, "mode": "review", "rounds": 2,
+             "agents": [{"model": "glm4:latest", "name": "评审员", "prompt": ""}]},
+    "name": "探针", "model_live2d": "", "static_model": "",
+    "opacity": 1, "size": 100, "rotate": 0, "theme": "hacker",
+}
+stlibs.CONFIG_PATH = os.path.join(OUT_DIR, "configure.json")
+with open(stlibs.CONFIG_PATH, "w", encoding="utf-8") as handle:
+    json.dump(SAMPLE, handle, ensure_ascii=False, indent=3)
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication, QFrame
+
+app = QApplication([])
+
+from stlibs.themes import hacker
+
+stlibs.SharingData.theme = hacker
+stlibs.Config.models = {alias: dict(values) for alias, values in SAMPLE["models"].items()}
+stlibs.Config.coop = dict(SAMPLE["coop"])
+
+settings_module = sys.modules["stlibs.themes.hacker.llm"]
+hacker.HackerNotify._stack.clear()
+
+
+def shot(name, widget):
+    # 先把挂起的布局/样式跑完，否则刚 addWidget 的控件还没尺寸，截出来是空的
+    for _ in range(3):
+        app.processEvents()
+    widget.grab().save(os.path.join(OUT_DIR, name))
+    print(f"  {name}  {widget.width()}x{widget.height()}")
+
+
+def shoot_cultivation():
+    """养成系统插件的面板：给它一点存档，好让进度条/背包有内容。"""
+    plugin_dir = os.path.abspath("plugins/cultivation_system")
+    if plugin_dir not in sys.path:
+        sys.path.insert(0, plugin_dir)
+
+    from cultivation_model import PetState
+    from cultivation_window import CultivationWindow
+
+    state = PetState(storage={"state": {
+        "coin": 320,
+        "foods": ["可乐", "汉堡", "可乐", "剩骨头"],
+        "level": {"level": 4, "current": 62, "next": 780},
+        "favorability": {"favorability": 3, "current": 40, "next": 640},
+        "hungry": {"hungry": 74, "current": 200, "next": 250},
+    }})
+
+    class Api:
+        name = "养成系统"
+        id = "cultivation_system"
+
+    panel = CultivationWindow(Api(), state)
+    panel.resize(560, 580)
+    panel.show()
+    panel.refresh()
+    shot("cultivation-panel.png", panel)
+    return panel
+
+
+# 假窗口：模拟主题窗口的深色底，让提示条有地方贴
+window = QFrame()
+window.setStyleSheet("QFrame { background: #1e1f22; border: 1px solid #00FF00; }")
+window.resize(760, 520)
+window.show()
+stlibs.SharingData.setting_window = window
+
+print("提示条：")
+hacker.HackerNotify("已添加 API 模型「DeepseekV4.1Flash」，聊天列表已刷新", "success")
+shot("notify-single.png", window)
+hacker.HackerNotify("别名「DeepseekV4.1Flash」已经存在，换个名字或先删除旧配置", "error")
+hacker.HackerNotify("协作配置已保存，但还没有配置任何模型", "warning")
+shot("notify-stack.png", window)
+for note in list(hacker.HackerNotify._stack):
+    note.hide()
+hacker.HackerNotify._stack.clear()
+
+print("设置页：")
+page = settings_module.BasicWidgetScroll(None)
+page.resize(660, 500)
+page.show()
+shot("basic-page.png", page)
+print(f"  删除行 -> 下拉 {page.existing.width()}x{page.existing.height()}"
+      f" 按钮 {page.remove_button.width()}x{page.remove_button.height()}")
+
+coop = settings_module.Cooperation(None)
+coop.resize(660, 460)
+coop.show()
+shot("coop-page.png", coop)
+print(f"  协作表 -> {coop.agent_table.rowCount()} 行 {coop.agent_table.columnCount()} 列")
+
+skills = settings_module.Skills(None)
+skills.resize(660, 420)
+skills.show()
+shot("skills-page.png", skills)
+print(f"  技能表 -> {skills.skill_table.rowCount()} 行")
+
+plugins = hacker.plugins.PluginsPage(None)
+plugins.resize(660, 500)
+plugins.show()
+plugins.refresh()
+shot("plugins-page.png", plugins)
+print(f"  插件表 -> {plugins.card.table.rowCount()} 行")
+
+cultivation = shoot_cultivation()
+print(f"  养成面板 -> 商店 {cultivation.shop_grid.count()} 格 / 背包 {cultivation.bag_grid.count()} 格")
+
+print("聊天窗：")
+chat = hacker.HackerChatWidget()
+chat.resize(620, 620)
+chat.show()
+chat.add_user_msg("帮我把这句话翻译一下", skill={"name": "翻译"})
+reply = chat.add_assistant_msg("好的，请把要翻译的内容发给我。")
+reply.attach_audio("ZmFrZQ==")
+
+from stlibs.ai import attachment as attachment_api
+
+# 附件：一张真图片 + 一个文本文档
+from PIL import Image as PILImage
+
+picture = PILImage.new("RGB", (200, 120), (40, 40, 200))
+buffer = io.BytesIO()
+picture.save(buffer, format="PNG")
+chat.add_user_msg("这两张一起看", attachments=[
+    attachment_api.from_bytes(buffer.getvalue(), "示意图.png", "image/png"),
+    attachment_api.from_bytes("这是文档正文".encode("utf-8"), "说明.md"),
+])
+chat.add_user_msg("第二句也一起")
+chat.set_skill({"name": "翻译", "description": "翻译成中文", "prompt": "只输出译文"})
+shot("chat-window.png", chat)
+print(f"  复制按钮 {reply.copy_button.width()}x{reply.copy_button.height()}"
+      f" 播放按钮 {reply.play_button.width()}x{reply.play_button.height()}"
+      f" 气泡高 {reply.height()}")
+print(f"  技能按钮 {chat.skill_button.width()}x{chat.skill_button.height()}"
+      f" 附件按钮 {chat.attach_button.width()}x{chat.attach_button.height()}")
+print(f"  带附件气泡的图片数 {len(chat.bubbles[-2].image_labels)}")
+
+chat.attach_paths([os.path.join(OUT_DIR, "configure.json")])
+shot("chat-attach-chips.png", chat)
+print(f"  待发送附件 {[item['name'] for item in chat.attachments]}")
+
+print(f"\n出图目录：{OUT_DIR}")

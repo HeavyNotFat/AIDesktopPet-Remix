@@ -1,5 +1,3 @@
-"""命令行入口的行为验证。"""
-
 from __future__ import annotations
 
 import json

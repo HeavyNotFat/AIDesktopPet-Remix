@@ -16,10 +16,18 @@ from .registry import registry as model_registry
 logger = logging.getLogger('onlinechat')
 
 
+class AttachmentIn(BaseModel):
+    name: str = Field(default="", max_length=200)
+    mime: str = Field(default="", max_length=120)
+    # 前端统一按 base64 上传（图片直接用，文本类后端自己解码抽正文）
+    data: str = Field(default="", max_length=config.MAX_ATTACHMENT_CHARS)
+
+
 class ChatRequest(BaseModel):
     model: str
-    question: str
+    question: str = ""
     session_id: str | None = Field(default=None, max_length=128)
+    attachments: list[AttachmentIn] = Field(default_factory=list, max_length=config.MAX_ATTACHMENTS)
 
 
 class SessionRequest(BaseModel):
@@ -48,9 +56,23 @@ def _sse(payload: dict) -> str:
 
 def _validate(req: ChatRequest) -> str:
     question = req.question.strip()
-    if not question:
+    if not question and not req.attachments:
         raise HTTPException(status_code=400, detail='问题不能为空')
     return question
+
+
+def _attachments(req: ChatRequest) -> list:
+    """把上传上来的 base64 统一成附件字典（分类、限额、抽正文都在 attachment 模块里）。"""
+    if not req.attachments:
+        return []
+
+    from ...ai import attachment
+
+    items = [item.model_dump() for item in req.attachments]
+    result = attachment.normalize(items)
+    if not result:
+        raise HTTPException(status_code=400, detail='附件无法解析（可能为空或格式不对）')
+    return result
 
 
 @api.post('/getmodelname')
@@ -64,12 +86,24 @@ def get_model_list():
     return {'models': [target.public() for target in targets.values()]}
 
 
+def _plugin_prompt() -> str:
+    """插件要求的系统提示词（网页聊天也带上，否则同一个插件两端行为不一致）。"""
+    try:
+        from ... import plugin_prompts
+
+        return "\n\n".join(plugin_prompts())
+    except Exception:  # noqa: BLE001 - 插件坏了不能挡住聊天
+        return ""
+
+
 @api.post('/chat')
 def chat(req: ChatRequest):
     question = _validate(req)
+    attachments = _attachments(req)
 
     try:
-        answer = pool.chat(req.model, question, req.session_id)
+        answer = pool.chat(req.model, question, req.session_id, attachments,
+                           skill=_plugin_prompt() or None)
     except UnknownModelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except SessionClosedError as e:
@@ -84,16 +118,13 @@ def chat(req: ChatRequest):
 
 @api.post('/chat/stream')
 def chat_stream(req: ChatRequest):
-    """以 SSE 形式逐片段返回回答。
-
-    事件：``start`` → 若干 ``delta`` → ``done``；出错则发一条 ``error``。
-    流开始后 HTTP 状态码已经定了 200，所以错误只能走事件体。
-    """
     question = _validate(req)
+    attachments = _attachments(req)
     stop_event = threading.Event()
 
     try:
-        chunks = pool.stream(req.model, question, req.session_id, stop_event=stop_event)
+        chunks = pool.stream(req.model, question, req.session_id, stop_event=stop_event,
+                             attachments=attachments, skill=_plugin_prompt() or None)
     except UnknownModelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except SessionClosedError as e:

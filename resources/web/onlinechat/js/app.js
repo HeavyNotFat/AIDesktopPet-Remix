@@ -42,18 +42,25 @@
 
   async function send() {
     const question = dom.input.value.trim();
-    if (!question || state.pending || !state.model) return;
+    const pendingAttachments = QW.attach.pending.slice();
+    if ((!question && !pendingAttachments.length) || state.pending || !state.model) return;
 
     const model = state.model;
-    const chat = QW.store.currentChat() || QW.store.createChat(question);
-    chat.messages.push({ role: 'user', content: question });
+    const chat = QW.store.currentChat() || QW.store.createChat(question || pendingAttachments[0].name);
+    chat.messages.push({
+      role: 'user',
+      content: question,
+      attachments: pendingAttachments.map(QW.attach.toStored)
+    });
     chat.updated = Date.now();
     QW.store.saveChats();
 
+    const payload = QW.attach.take().map(QW.attach.toPayload);
     dom.input.value = '';
     QW.render.autosize();
 
-    const cached = QW.cache.get(model, question);
+    // 带附件时不走本地缓存：同样的文字配不同的图，答案不是一回事
+    const cached = payload.length ? null : QW.cache.get(model, question);
     if (cached) {
       pushCached(chat, cached, model, question);
       return;
@@ -68,10 +75,10 @@
       streamed = await QW.api.chatStream(model, question, chat.id, controller.signal, chunk => {
         streamed += chunk;
         QW.render.streamChunk(chunk);
-      });
+      }, payload);
       if (streamed) {
         chat.messages.push({ role: 'assistant', content: streamed });
-        QW.cache.put(model, question, streamed);
+        if (!payload.length) QW.cache.put(model, question, streamed);
       }
     } catch (e) {
       const partial = e.partial || streamed;
@@ -112,15 +119,17 @@
     }
   }
 
-  async function loadModels() {
-    QW.modelPicker.showLoading();
+  async function loadModels(quiet = false) {
+    if (!quiet) QW.modelPicker.showLoading();
     try {
       const models = await QW.api.getModelList();
       const saved = QW.store.loadSavedModel();
+      const keep = state.model && models.some(m => m.value === state.model) ? state.model : null;
       state.models = models;
-      state.model = models.some(m => m.value === saved) ? saved : models[0].value;
+      state.model = keep || (models.some(m => m.value === saved) ? saved : models[0].value);
       QW.modelPicker.render();
     } catch (e) {
+      if (quiet) return;   // 静默刷新失败就留着旧列表，别把界面搞成错误态
       state.models = [];
       state.model = null;
       QW.modelPicker.showError(e.message);
@@ -141,6 +150,25 @@
       }
     });
 
+    // 剪切板里的图片直接变成附件
+    dom.input.addEventListener('paste', e => {
+      QW.attach.handlePaste(e);
+    });
+
+    dom.attachBtn.addEventListener('click', () => dom.attachInput.click());
+    dom.attachInput.addEventListener('change', async () => {
+      await QW.attach.addFiles(dom.attachInput.files);
+      dom.attachInput.value = '';
+    });
+
+    // 整页都能拖文件进来
+    document.addEventListener('dragover', e => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) e.preventDefault();
+    });
+    document.addEventListener('drop', e => {
+      QW.attach.handleDrop(e);
+    });
+
     dom.sendBtn.addEventListener('click', () => {
       if (state.pending) state.pending.controller.abort();
       else send();
@@ -151,9 +179,28 @@
   }
 
   function init() {
+    QW.attach.init({
+      onChange: () => {
+        QW.render.attachments();
+        QW.render.sendButton();
+      },
+      onNotice: (text, level) => {
+        dom.cacheBtn.title = text;
+        dom.cacheBtn.classList.add('flash');
+        setTimeout(() => dom.cacheBtn.classList.remove('flash'), 600);
+        if (level === 'error' || level === 'warning') console.warn(text);
+      }
+    });
+
     QW.sidebar.init({ onSearch: () => QW.render.history(openChat, deleteChat) });
-    QW.modelPicker.init({ onRetry: loadModels, onSelect: () => QW.render.sendButton() });
+    QW.modelPicker.init({
+      onRetry: loadModels,
+      onRefresh: () => loadModels(true),
+      onSelect: () => QW.render.sendButton()
+    });
+
     bind();
+    QW.render.attachments();
     refresh();
     loadGreeting();
     loadModels();

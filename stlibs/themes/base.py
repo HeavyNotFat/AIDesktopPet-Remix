@@ -7,11 +7,6 @@ _QWidgetMeta = type(QWidget)
 
 
 class CombinedMeta(_QWidgetMeta, ABCMeta):
-    """
-    解决冲突。如果需要引入：
-    class X(Slot1, Slot2, metaclass=CombinedMeta):
-        pass
-    """
     pass
 
 
@@ -24,11 +19,6 @@ class ModelChatABS(metaclass=ABCMeta):
 
 
 class MainWindowABS(metaclass=ABCMeta):
-    """UI主窗口
-
-    参数顺序必须与主题实现保持一致（``stlibs/graphics`` 走关键字调用，
-    但按位置调用的代码也必须能正确绑定）。
-    """
     @abstractmethod
     def addNavigation(
         self,
@@ -43,13 +33,12 @@ class MainWindowABS(metaclass=ABCMeta):
     @abstractmethod
     def create_category(self, category: str, position: str = "top"): pass
     @abstractmethod
+    def remove_category(self, category: str): pass
+    @abstractmethod
     def setTitle(self, title: str): pass
 
 
 class IconListABS(metaclass=ABCMeta):
-    """
-    图标抽象类
-    """
     @property
     @abstractmethod
     def SETTING(self): pass
@@ -62,9 +51,6 @@ class IconListABS(metaclass=ABCMeta):
 
 
 class MenuWidgetABS(metaclass=ABCMeta):
-    """
-    右键菜单抽象类
-    """
     @abstractmethod
     def addSeparator(self): pass
     @abstractmethod
@@ -72,9 +58,6 @@ class MenuWidgetABS(metaclass=ABCMeta):
 
 
 class SwitchWidgetABS(metaclass=ABCMeta):
-    """
-    切换式开关抽象类
-    """
     @property
     @abstractmethod
     def stateChanged(self): pass

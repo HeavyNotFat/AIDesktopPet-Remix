@@ -5,6 +5,7 @@
   let status = 'loading';
   let onRetry = () => {};
   let onSelect = () => {};
+  let onRefresh = () => {};
 
   function close() {
     dom.modelMenu.hidden = true;
@@ -75,13 +76,17 @@
   function init(options) {
     onRetry = options.onRetry;
     onSelect = options.onSelect;
+    onRefresh = options.onRefresh || (() => {});
 
     dom.modelBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (status === 'error') onRetry();
       else if (status === 'ready') {
-        if (dom.modelMenu.hidden) open();
-        else close();
+        if (dom.modelMenu.hidden) {
+          open();
+          // 每次展开都重新拉一次：桌面端刚加的 API 模型能立刻出现
+          onRefresh();
+        } else close();
       }
     });
 

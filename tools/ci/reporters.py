@@ -1,12 +1,3 @@
-"""输出格式：给终端看、给 CI 注释看、给看板吃。
-
-* ``text``     —— 人看的彩色/纯文本报告
-* ``json``     —— 机器消费（失败重跑、趋势统计）
-* ``markdown`` —— 直接贴进 GitHub Job Summary
-* ``sarif``    —— GitHub Code Scanning（Security 标签页里能看到行内标注）
-* ``github``   —— ``::error file=...`` 工作流命令，PR 里直接标红行
-"""
-
 from __future__ import annotations
 
 import json
@@ -211,11 +202,6 @@ def _icon(severity: Severity) -> str:
 
 
 def _escape(text: str, *, prop: bool = False) -> str:
-    """GitHub workflow command 的转义。
-
-    property（``file=`` / ``title=``）里逗号与冒号是分隔符，必须一起转义，
-    否则整条注解的属性解析会从逗号处断掉。
-    """
     text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     if prop:
         text = text.replace(",", "%2C").replace(":", "%3A")

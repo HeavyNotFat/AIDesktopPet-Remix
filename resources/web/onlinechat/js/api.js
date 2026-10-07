@@ -55,7 +55,9 @@
       const value = item.value ?? item.id ?? item.model ?? item.model_name ?? item.name;
       if (value == null) return null;
       const label = item.label ?? item.name ?? item.title ?? item.model_name ?? item.model ?? value;
-      return { label: String(label), value: String(value) };
+      const model = { label: String(label), value: String(value) };
+      if (typeof item.vision === 'boolean') model.vision = item.vision;
+      return model;
     }
     if (item == null || item === '') return null;
     return { label: String(item), value: String(item) };
@@ -77,20 +79,24 @@
     return raw;
   }
 
-  async function chat(model, question, sessionId, signal) {
-    const raw = await post('/chat', { model, question, session_id: sessionId || null }, signal);
+  async function chat(model, question, sessionId, signal, attachments) {
+    const raw = await post('/chat', {
+      model, question, session_id: sessionId || null, attachments: attachments || []
+    }, signal);
     const data = parse(raw);
     if (typeof data === 'string') return data.trim() || '（空响应）';
     return pick(data, ANSWER_KEYS) || JSON.stringify(data, null, 2);
   }
 
   // 流式：后台按 SSE 推 delta，这里边收边回调；返回完整回答。
-  async function chatStream(model, question, sessionId, signal, onDelta) {
+  async function chatStream(model, question, sessionId, signal, onDelta, attachments) {
     const res = await fetch(API_BASE + '/chat/stream', {
       method: 'POST',
       signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, question, session_id: sessionId || null })
+      body: JSON.stringify({
+        model, question, session_id: sessionId || null, attachments: attachments || []
+      })
     });
 
     if (!res.ok) {

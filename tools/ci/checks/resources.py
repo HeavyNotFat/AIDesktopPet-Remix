@@ -1,15 +1,3 @@
-"""资源路径与素材完整性。
-
-桌宠的崩法很典型：打包成 exe 后 ``./resources/...`` 少了一层，图标/字体/模型
-读不出来，界面上是一堆空白但控制台什么都没有。
-
-* ``resource/missing``      代码里写死的 ``./resources/...`` 路径不存在
-* ``resource/web-asset``    index.html / CSS 引用的静态文件不存在
-* ``resource/character``    角色目录缺 ``model3.json`` 或版本标记文件
-* ``resource/static-model`` resources/static.json 里的模型目录不存在
-* ``resource/icon``         resources/icons 里的图标没有被任何代码引用
-"""
-
 from __future__ import annotations
 
 import ast
@@ -63,11 +51,6 @@ def check_missing(ctx) -> Iterator[Finding]:
 
 
 def _non_path_strings(sources) -> set[int]:
-    """不该当路径看的字符串：
-
-    * f-string 的片段（``f"resources/{x}"`` 不是完整路径）；
-    * 文档字符串（说明文字里出现 ``resources/...`` 很正常，而且不会被执行）。
-    """
     skipped: set[int] = set()
     for _, node in sources.iter_nodes(ast.JoinedStr):
         for value in node.values:

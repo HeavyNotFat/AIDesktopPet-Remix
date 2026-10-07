@@ -59,6 +59,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --basetemp=.ci-tmp/pytest"
 markers = [
     "platform: 记录 PySide6 / Qt 的平台行为（拿不到 Qt 时自动跳过）",
+    "ui: 需要 Qt（离屏）才能跑的主题/设置页测试",
 ]
 
 [tool.adpci]

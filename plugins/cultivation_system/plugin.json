@@ -1,0 +1,15 @@
+{
+  "id": "cultivation_system",
+  "name": "养成系统",
+  "version": "2.0.0",
+  "description": "点桌宠赚金币、商店买吃的、喂食涨饥饿/好感/经验；AI 回答也给经验（从旧 PyQt5 插件移植）",
+  "author": "ADPRemix",
+  "language": "python",
+  "entry": "main.py",
+  "order": 30,
+  "hooks": ["on_load", "on_unload", "on_command", "on_chat_reply", "on_event", "on_system_prompt"],
+  "settings": [
+    {"key": "click_coin", "label": "点一下最多给几枚金币", "type": "number", "default": 5},
+    {"key": "mood_prompt", "label": "饿了时提醒 AI", "type": "switch", "default": true}
+  ]
+}

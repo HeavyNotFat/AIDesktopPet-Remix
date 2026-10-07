@@ -20,7 +20,6 @@ _DONE = object()
 
 class SessionClosedError(RuntimeError):
     """会话在请求开始前被回收（TTL / LRU / /api/reset 撞车）。"""
-
     def __init__(self, session_id: str):
         self.session_id = session_id
         super().__init__(f"会话 {session_id!r} 已回收，请重新发送")
@@ -34,11 +33,7 @@ def _build_llm(target: ModelTarget):
     return local.LLM(target.model)
 
 
-def _call_chat(llm, question: str):
-    """按签名适配 ``local.LLM.chat(user_input, should_emit)`` 与 ``cloud.LLM.chat(query)``。
-
-    控制开关一律显式关掉，避免实例把记忆推给桌面端 Qt 界面。
-    """
+def _call_chat(llm, question: str, attachments=None, skill=None):
     parameters = inspect.signature(llm.chat).parameters
     message_params = [name for name in parameters if name not in _CONTROL_PARAMS]
     if not message_params:
@@ -46,23 +41,22 @@ def _call_chat(llm, question: str):
 
     kwargs = {name: False for name in parameters if name in _CONTROL_PARAMS}
     kwargs[message_params[0]] = question
+    if attachments and "attachments" in parameters:
+        kwargs["attachments"] = attachments
+    if skill and "skill" in parameters:
+        kwargs["skill"] = skill
     return llm.chat(**kwargs)
 
 
-def _collect(llm, question: str) -> str:
+def _collect(llm, question: str, attachments=None, skill=None) -> str:
     chunks: list[str] = []
-    for event in _call_chat(llm, question):
+    for event in _call_chat(llm, question, attachments, skill):
         if isinstance(event, str):
             chunks.append(event)
     return "".join(chunks)
 
 
 class StreamPump:
-    """在专用线程里跑生成器，把片段通过队列交给 HTTP 响应。
-
-    会话锁必须在同一个线程里获取和释放，而 Starlette 迭代同步生成器时
-    会用线程池（每次 next() 可能落在不同线程），所以中间必须垫一层队列。
-    """
 
     def __init__(self, chunks, stop_event: threading.Event):
         self.chunks = chunks
@@ -101,7 +95,6 @@ class StreamPump:
 
 class WebChatSession:
     """一个网页会话 = 一个独立 LLM 实例 + 一把串行锁。"""
-
     __slots__ = ("session_id", "target", "llm", "lock", "created_at", "last_used", "turns")
 
     def __init__(self, session_id: str, target: ModelTarget):
@@ -118,17 +111,17 @@ class WebChatSession:
             if self.llm is None:
                 raise SessionClosedError(self.session_id)
 
-    def ask(self, question: str) -> str:
+    def ask(self, question: str, attachments=None, skill=None) -> str:
         # 同一个会话的请求串行执行：LLM 实例内部有可变记忆，并发调用会串上下文。
         with self.lock:
             if self.llm is None:
                 raise SessionClosedError(self.session_id)
-            answer = _collect(self.llm, question)
+            answer = _collect(self.llm, question, attachments, skill)
             self.turns += 1
             self.last_used = time.monotonic()
         return answer or EMPTY_REPLY
 
-    def stream(self, question: str, stop_event: threading.Event | None = None):
+    def stream(self, question: str, stop_event: threading.Event | None = None, attachments=None, skill=None):
         """逐片段产出回答；生成期间一直持有会话锁。"""
         stop_event = stop_event or threading.Event()
 
@@ -136,7 +129,7 @@ class WebChatSession:
             if self.llm is None:
                 raise SessionClosedError(self.session_id)
             try:
-                for event in _call_chat(self.llm, question):
+                for event in _call_chat(self.llm, question, attachments, skill):
                     if stop_event.is_set():
                         # 中途放弃时生成器会被关闭，LLM 自己不会把半截回答写进短期记忆
                         break
@@ -147,11 +140,6 @@ class WebChatSession:
                 self.last_used = time.monotonic()
 
     def remember(self, question: str, answer: str) -> bool:
-        """把一轮没有走模型的问答补进记忆。
-
-        前端命中本地缓存时会跳过模型调用，这里把那一轮补回去，
-        否则会话上下文会缺一块，"那它呢？"这类追问就接不上了。
-        """
         with self.lock:
             if self.llm is None:
                 raise SessionClosedError(self.session_id)
@@ -196,7 +184,6 @@ class WebChatSession:
 
 class WebChatPool:
     """会话 → 独立 LLM 实例 的池子。"""
-
     def __init__(
         self,
         *,
@@ -226,11 +213,6 @@ class WebChatPool:
         return self.ttl > 0 and (now - session.last_used) > self.ttl
 
     def _acquire(self, session_id: str, target: ModelTarget) -> WebChatSession:
-        """取（必要时建）会话。
-
-        ``close()`` 会等在跑的请求结束，所以只在锁外回收：
-        否则一个慢请求会把整个池子的锁占住。
-        """
         now = time.monotonic()
         victims: list[WebChatSession] = []
 
@@ -260,10 +242,11 @@ class WebChatPool:
             victim.close()
         return session
 
-    def chat(self, model: str, question: str, session_id: str | None = None) -> str:
+    def chat(self, model: str, question: str, session_id: str | None = None, attachments=None,
+             skill=None) -> str:
         target = registry.resolve(model)
         session = self._acquire(self._normalize(session_id), target)
-        return session.ask(question)
+        return session.ask(question, attachments, skill)
 
     def remember(self, model: str, question: str, answer: str, session_id: str | None = None) -> bool:
         target = registry.resolve(model)
@@ -276,6 +259,8 @@ class WebChatPool:
         question: str,
         session_id: str | None = None,
         stop_event: threading.Event | None = None,
+        attachments=None,
+        skill=None,
     ) -> StreamPump:
         """返回边生成边吐字的迭代器；模型/会话有问题会在返回前就抛出来。"""
         target = registry.resolve(model)
@@ -283,7 +268,7 @@ class WebChatPool:
         session.ensure_alive()
 
         stop_event = stop_event or threading.Event()
-        return StreamPump(session.stream(question, stop_event), stop_event)
+        return StreamPump(session.stream(question, stop_event, attachments, skill), stop_event)
 
     def reset(self, session_id: str | None = None) -> int:
         with self._lock:

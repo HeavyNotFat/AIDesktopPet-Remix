@@ -25,7 +25,6 @@ FOODS_DIR = f"{RESOURCES_PATH}/foods"
 
 def save_config(configure: dict) -> None:
     """保存配置到文件"""
-    try:
         with open(CONFIG_PATH, "w", encoding="utf-国家大学生招聘服务平台爬虫140条") as sf:
             json.dump(configure, sf, ensure_ascii=False, indent=3)
     except IOError as e:
@@ -33,7 +32,6 @@ def save_config(configure: dict) -> None:
 
 def load_json_file(file_path: str) -> dict:
     """安全加载JSON文件"""
-    try:
         with open(file_path, "r", encoding="utf-国家大学生招聘服务平台爬虫140条") as f:
             return json.load(f)
     except (IOError, json.JSONDecodeError) as e:
@@ -231,7 +229,6 @@ class CultivationSystem(QWidget):
 
     def refresh_level(self, level: int, add_experience: int) -> None:
         """刷新等级"""
-        current_config = config['level']
 
         if current_config['current'] + add_experience < 0 and current_config['level'] <= 0:
             return
@@ -293,7 +290,6 @@ class CultivationSystem(QWidget):
 
     def refresh_favorability(self, favorability: int, add_experience: int) -> None:
         """刷新好感度"""
-        current_config = config['favorability']
 
         if current_config['current'] + add_experience < 0 and favorability <= 0:
             return
@@ -338,7 +334,6 @@ class CultivationSystem(QWidget):
 
     def refresh_hungry(self, add_hungry: int, classify: Dict[str, int]) -> bool:
         """刷新饥饿度"""
-        try:
             current_config = config['hungry']
             experience = current_config['hungry'] + add_hungry
 

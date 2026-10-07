@@ -1,5 +1,3 @@
-"""配置结构 / 资源 / 网页契约 / 卫生检查的行为验证。"""
-
 from __future__ import annotations
 
 import json
@@ -7,9 +5,7 @@ import json
 from conftest import findings_of, run_checks
 
 
-# --------------------------------------------------------------------------
 # config
-# --------------------------------------------------------------------------
 CONFIG_JSON = json.dumps(
     {
         "models": {},
@@ -29,8 +25,6 @@ CONFIG_JSON = json.dumps(
 
 CONFIG_DATACLASS = '''
 from dataclasses import dataclass
-
-
 @dataclass
 class _BaseModelConfig:
     models: dict
@@ -137,9 +131,7 @@ def test_prompts_missing_key(mini_repo):
     assert "general" in findings[0].message
 
 
-# --------------------------------------------------------------------------
 # resources
-# --------------------------------------------------------------------------
 def test_resource_missing(mini_repo):
     root = mini_repo({"pkg/mod.py": "P = './resources/icons/nope.png'\nQ = './resources/icons/'\n"})
     findings = findings_of(root, "resource/missing")
@@ -195,9 +187,7 @@ def test_json_resources_must_parse(mini_repo):
     assert findings[0].severity.value == "error"
 
 
-# --------------------------------------------------------------------------
 # web contract
-# --------------------------------------------------------------------------
 def test_web_api_route_missing(mini_repo):
     root = mini_repo(
         {
@@ -284,9 +274,7 @@ def test_web_script_not_loaded(mini_repo):
     assert "b.js" in findings[0].message
 
 
-# --------------------------------------------------------------------------
 # hygiene / imports
-# --------------------------------------------------------------------------
 def test_bare_except(mini_repo):
     root = mini_repo({"pkg/mod.py": "try:\n    pass\nexcept:\n    pass\n"})
     assert len(findings_of(root, "hygiene/bare-except")) == 1
@@ -339,8 +327,6 @@ def test_requirements_missing_declaration(mini_repo):
 
 
 def test_sibling_module_is_not_treated_as_third_party(mini_repo):
-    """``python mcp_servers/live2d_motion.py`` 里的 ``from sdk import client``
-    指的是同目录的 sdk 包，不是第三方依赖。"""
     root = mini_repo(
         {
             "requirements.txt": "userpath==1.0\n",
@@ -425,9 +411,7 @@ def test_deferred_import_is_not_a_cycle(mini_repo):
     assert findings_of(root, "import/cycle") == []
 
 
-# --------------------------------------------------------------------------
 # 真实仓库
-# --------------------------------------------------------------------------
 def test_config_resource_web_checks_clean_on_real_repo(repo_root):
     report = run_checks(repo_root, ["config/*", "resource/*", "web/*"])
     assert report.crashes == [], [r.crash for r in report.crashes]

@@ -302,6 +302,152 @@ python main.py          # 起桌宠 + 网页聊天线程
 > 如果 MCP 服务起不来（比如没网、没装 npx），现在只会打印
 > `[MCP] 启动 'xxx' 失败，跳过该工具`，聊天本身照常可用。
 
+### 5.4 设置页与协作
+
+设置页的交互（提示、模型列表刷新、协作表格）都在离屏 Qt 下真跑，
+不需要开窗口、也不需要显示器：
+
+```bash
+python -m pytest tests/test_coop_ui.py -q        # 提示/新增/删除/协作页
+python -m pytest tests/test_model_refresh.py -q  # 聊天窗重扫、网页注册表失效、协作实例重配
+python -m pytest tests/test_coop.py -q           # 协作编排（评审改稿 / 并行汇总 / 失败降级）
+python -m pytest tests/test_web_model_picker.py -q # node 跑 model-picker.js：展开即刷新
+```
+
+多模型协作要真模型才算数，单独跑这个（需要本地 Ollama）：
+
+```bash
+python tools/manual/probe_coop.py glm4:latest huihui_ai/gemma-4-abliterated:e4b
+```
+
+实测输出（12s 出稿、25s 评审、然后定稿）：
+
+```
+主模型：glm4:latest
+协作成员：huihui_ai/gemma-4-abliterated:e4b
+模式：评审改稿：主模型 + 1 个协作模型，1 轮
+
+[  0.00s] draft
+[ 12.06s] review_start
+[ 37.35s] huihui_ai/gemma-4-abliterated:e4b 的意见：'这是一个**非常优秀的回答**…'
+[ 37.35s] final
+
+定稿（151 字）：…
+```
+
+> 模型爱说恭维话就把该行的「角色提示词」改狠一点，
+> 默认提示词只说"列问题、不要评价好坏"。
+
+### 5.5 主题排版离屏出图
+
+改主题/设置页排版时不用真开窗口，离屏渲染成 PNG 直接看：
+
+```bash
+python tools/manual/shoot_ui.py            # 输出到 .tmp/ui-shots/
+```
+
+会出提示条（单条/多条堆叠）、「新增 LLM」页、「协作 设置」页、「技能 Skills」页、
+聊天窗（含复制/播放按钮与技能标签）几张图，
+并且顺手打印删除行、协作表、气泡按钮的实际尺寸——"被压扁了"这种问题一眼能看出来。
+离屏模式没有字体目录，中文会渲染成方块，看的是排版不是文案。
+
+### 5.6 插件系统
+
+```bash
+python -m pytest tests/test_plugins.py tests/test_plugins_panel.py tests/test_plugins_ui.py -q
+```
+
+* `test_plugins.py`：清单校验（坏 JSON、缺入口、语言不支持、`entry` 越界、id 重复、
+  点开头目录跳过）、Python 插件的加载/卸载/重载/异常隔离、hook 参数自适应、
+  `Plugin` 类写法、存储与设置持久化、启停写回配置、总开关、事件派发；
+  JavaScript 部分**跑真实 node 子进程**：加载、api 往返（storage/notify/menu/command）、
+  菜单点击、语法错误、hook 抛异常、超时、卸载杀进程、没有 node 时的降级；
+* `test_plugins_panel.py`：管理页的**逻辑层**（不依赖 Qt）——表格行、状态文案
+  （停用/加载失败/运行出错/已加载）、选中映射、启停、重载成功与仍失败、总开关、打开目录；
+* `test_plugins_ui.py`（离屏 Qt）：页面把数据画出来、按钮接对了没有、提示有没有发出去。
+
+真机联调（暗号判据：插件要求回答里必须带 `【插件生效】`）：
+
+```bash
+python tools/manual/probe_plugin.py glm4:latest
+```
+
+它会依次验证：发现与加载 → 真实聊天页里回复被两个插件加工 → 命令与菜单动作 →
+**系统提示词真的进了模型**（第 4 步换一个临时插件目录，跑完再切回来）。
+
+> JS 插件没有 node 就跳过（`ADP_NODE` 可指定路径）；这类测试在 CI 的 `tests` 任务里
+> 会因为缺 node 而自动跳过，本地跑才完整。
+
+#### 5.6.1 养成系统（移植过来的完整插件示例）
+
+```bash
+python -m pytest tests/test_cultivation.py tests/test_cultivation_hooks.py -q
+python tools/manual/probe_cultivation.py
+```
+
+* `test_cultivation.py`：纯数值逻辑 —— 初始值、买卖与金币不足、吃饱判定、升级（含连升多级）、
+  掉级、好感升级、点击/回复奖励、饥饿衰减与"喊饿"、存读档（三种 storage 形态都测）；
+* `test_cultivation_hooks.py`：hook 接线 —— 用假 `api` 跑，验证菜单/命令注册、`/状态` `/买` `/喂食`、
+  点击奖励（含金币上限设置）、聊天奖励、心情提示词（含开关）、无界面时打开面板不崩进程；
+* `probe_cultivation.py`：走**真实插件管理器 + 离屏 Qt**，把面板真的建出来，
+  检查标题、金币、三条进度条的数值与商店/背包格子数。
+
+### 5.7 聊天窗交互（技能 / 复制 / 语音 / 附件）
+
+```bash
+python -m pytest tests/test_skills.py tests/test_chat_ui.py -q
+python -m pytest tests/test_attachment.py tests/test_web_attach.py -q
+```
+
+* `test_skills.py`：`/技能名` 解析、技能提示词注入位置（system 段之后、用户消息不动）、
+  真实 `local.LLM.chat(skill=...)` 收到的消息；
+* `test_chat_ui.py`：复制按钮（含流式全文）、空回复的提示、**音频不自动播**、
+  点播放才调 `derfer.play_audio`、播放失败提示、技能菜单内容、
+  `/技能名 正文` 只把正文发出去、聊天页把技能透传给 worker、音频事件挂到当前气泡；
+* `test_attachment.py`：分类与限额、GBK 文档、docx 段落/表格、base64 往返、
+  去重与限量、两种后端的消息形状（ollama `images` / OpenAI `image_url`）、
+  记忆里不混提示词、展示用的 base64 压缩；
+* `test_web_attach.py`：node 跑 `attach.js`（大小格式化、粘贴/拖拽、上限、payload 与历史记录两种形状）。
+
+音频相关的断言都是"数调用次数"，不是听声音：自动播被删掉这件事就靠
+`played == []` 守着。
+
+**附件想真打一遍模型**（确定性判据：让模型读附件里的暗号）：
+
+```bash
+python tools/manual/probe_attachment.py glm4:latest --web
+```
+
+图片只校验消息形状（`images` 字段 + base64 逐字节一致），
+文档则要求模型把暗号原样读出来——本机 4B 级模型的视觉能力不稳
+（纯红图会被答成"深蓝/黑"，画了黑圆的图会被答成"没有"，原生 HTTP 直连结果一样），
+所以不拿"描述图片"当判据。
+
+### 5.8 SDK（外部控制通道）
+
+```bash
+python -m pytest tests/test_sdk.py -q
+```
+
+真的在回环端口上收发 UDP（`port=0` 让系统分端口），不 mock socket：
+
+* 协议：未知方法、缺必填参数、多余位置参数、不认识的参数名、非 JSON 报文、非对象报文、
+  `args` 类型不对、token 不对 —— 每种都要求返回明确的 `code` 与中文说明；
+* 方法：状态/外观/配置（含白名单与落盘）、通知、聊天（没有窗口时的行为）、
+  插件（列表与跑命令）、记忆、`ask` 没有可用模型时的报错，以及 `list_methods` 与 `METHOD_HELP` 一致；
+* 事件：订阅/退订、`'*'` 通配、回调抛异常不影响其它订阅者、`emit_event` 走 RPC 转一圈；
+* 健壮性：一次调用内部抛异常不会带崩服务端、客户端超时后不残留待处理请求、
+  6 个客户端并发调用不串包。
+
+真机看效果：开着程序在另一个终端里
+
+```python
+from stlibs.sdk.client import SDKClient
+with SDKClient("127.0.0.1", 9000) as c:
+    c.notify("来自 SDK")
+    c.play_live2d_motion("摸摸头", 0)
+```
+
 ---
 
 ## 6. CI/CD 流水线
@@ -313,7 +459,7 @@ python main.py          # 起桌宠 + 网页聊天线程
 | `quality` | `python -m tools.ci`，并把结果写成 Job Summary + SARIF（Code Scanning 里能行内标注） |
 | `lint` | ruff：`E9` 语法级问题阻断，完整规则先作为建议输出到 Job Summary |
 | `compile` | Ubuntu + Windows × Python 3.11/3.12 全量 `compileall` |
-| `tests` | pytest（门禁自身 + 网页聊天实例隔离 + 平台行为金丝雀） |
+| `tests` | pytest（门禁自身 + 网页聊天实例隔离 + 协作编排 + 平台行为金丝雀） |
 | `web` | `node --check` 所有 JS（JSON 资源由 `quality` 里的 `resource/json-valid` 负责） |
 | `package` | PyInstaller 打包冒烟：确认 `resources/` 被收进产物且关键文件齐全 |
 

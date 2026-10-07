@@ -34,28 +34,22 @@ const firstHit = cache.get('m1', '你好');
 out.hit = firstHit.answer;
 out.hits = firstHit.hits;
 out.perModel = cache.get('m2', '你好');
-
 cache.put('m1', '你好', '改过的回答');
 out.overwritten = cache.get('m1', '你好').answer;
-
 out.beforeClear = cache.stats().entries;
 out.cleared = cache.clear();
 out.afterClear = cache.stats().entries;
 out.getAfterClear = cache.get('m1', '你好');
-
 for (let i = 0; i < 10; i += 1) cache.put('m1', 'q' + i, 'a' + i);
 out.maxKept = cache.stats().entries;
 out.newestKept = cache.get('m1', 'q9') !== null;
 out.oldestEvicted = cache.get('m1', 'q0') === null;
-
 out.dropMissing = cache.drop('m1', '不存在');
 out.dropExisting = cache.drop('m1', 'q9');
 out.afterDrop = cache.stats().entries;
-
 out.emptyAnswerIgnored = cache.put('m1', '空回答', '');
 console.log(JSON.stringify(out));
 """
-
 EXPIRY_HARNESS = PRELUDE + r"""
 cache.put('m1', 'q', 'a');
 out.beforeExpiry = cache.get('m1', 'q') !== null;

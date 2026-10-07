@@ -1,16 +1,3 @@
-"""CI/CD 质量门禁框架。
-
-设计目标
---------
-* **零重依赖**：只依赖标准库（``ast``/``tomllib``/``json``），
-  所以 CI 里不需要装 PySide6、ollama、chromadb 就能跑，秒级出结果；
-* **可解释**：每条问题都带 ``check id`` + 位置 + 修复建议 + 内联忽略语法；
-* **可裁剪**：``pyproject.toml`` 的 ``[tool.adpci]`` 可以禁用检查、加白名单。
-
-一次检查 = 一个 ``@register(...)`` 装饰的函数，签名固定为
-``(Context) -> Iterable[Finding]``。
-"""
-
 from __future__ import annotations
 
 import enum
@@ -26,7 +13,6 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型
 
 class Severity(enum.StrEnum):
     """问题等级。``ERROR`` 会让 CI 失败，其余默认只提示。"""
-
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -49,12 +35,6 @@ _SEVERITY_RANK = {Severity.ERROR: 3, Severity.WARNING: 2, Severity.INFO: 1}
 
 @dataclass(frozen=True, slots=True)
 class Location:
-    """仓库相对位置。``path`` 一律用 ``/`` 分隔，方便跨平台比较。
-
-    字段顺序刻意是 ``(path, line, symbol, column)``：检查里最常用的是
-    ``Location(path, line, "符号名")``，把 ``symbol`` 放在第三位可以避免
-    "第三个位置参数被当成列号"这种坑（SARIF/GitHub 输出会直接算错）。
-    """
 
     path: str
     line: int = 1
@@ -80,7 +60,6 @@ class Location:
 @dataclass(frozen=True, slots=True)
 class Finding:
     """一条检查结果。"""
-
     check: str
     severity: Severity
     message: str
@@ -123,7 +102,6 @@ def finding(
 @dataclass(slots=True)
 class Context:
     """传给每个检查的上下文。"""
-
     root: Path
     settings: "Settings"
     sources: "SourceIndex"
@@ -175,7 +153,6 @@ _REGISTRY: dict[str, Check] = {}
 
 def register(id: str, title: str, category: str, docs: str = ""):
     """把一个检查函数登记进注册表。``id`` 必须全局唯一。"""
-
     def decorator(func: Callable[[Context], Iterable[Finding]]):
         if id in _REGISTRY:
             raise ValueError(f"检查 id 重复：{id}")
@@ -190,12 +167,6 @@ def registered_checks() -> list[Check]:
 
 
 def select(names: Sequence[str] | None) -> list[Check]:
-    """按 id / 分类 / 通配符挑选检查。
-
-    ``None`` 或空表示全选；``ui/*`` 选整个分类；``ui/*``、``theme`` 可混用。
-    **只认**全等 id、全等分类、以及 ``前缀*``，不做子串匹配 ——
-    否则 ``theme`` 会顺带选中所有 id 里含 theme 的检查，很难排查。
-    """
     checks = registered_checks()
     if not names:
         return checks

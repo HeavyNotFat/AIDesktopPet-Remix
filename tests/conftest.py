@@ -1,13 +1,3 @@
-"""pytest 公共夹具。
-
-两个关键动作：
-
-1. 把仓库根塞进 ``sys.path`` 并把工作目录切过去 —— ``stlibs`` 用相对路径读
-   ``./resources/*.json``，不在仓库根跑会直接 ImportError；
-2. 提供 :func:`write_mini_repo`，让每个检查都能在一个临时迷你仓库上验证，
-   不需要往真实代码里塞"故意写坏"的样例文件。
-"""
-
 from __future__ import annotations
 
 import os
@@ -32,6 +22,7 @@ from tools.ci.core import Severity  # noqa: E402
 WORK_ROOT = ROOT / ".ci-tmp"
 # pytest 的 --basetemp 指向 .ci-tmp/pytest，而它只创建最后一级目录，
 # 父目录得先有，否则单独跑某个用例会 FileNotFoundError
+WORK_ROOT.mkdir(parents=True, exist_ok=True)
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 # 迷你仓库里可用的最小主题契约（与 stlibs/__init__.py 的 Protocol 保持一致）
@@ -71,58 +62,39 @@ PROTOCOL_SRC = (
 
 BASE_SRC = '''\
 from abc import ABCMeta, abstractmethod
-
-
 class ModelChatABS(metaclass=ABCMeta):
     """模型聊天"""
-
     @staticmethod
     @abstractmethod
     def return_llm_class(model): pass
-
-
 class MainWindowABS(metaclass=ABCMeta):
     """UI主窗口"""
-
     @abstractmethod
     def addNavigation(self, text: str, widget, shortcut_keys=None, position: str = "top", category=None): pass
-
     @abstractmethod
     def removeNavigation(self, widget): pass
-
     @abstractmethod
     def create_category(self, category: str, position: str = "top"): pass
-
     @abstractmethod
     def setTitle(self, title: str): pass
-
-
 class IconListABS(metaclass=ABCMeta):
     @property
     @abstractmethod
     def SETTING(self): pass
-
     @property
     @abstractmethod
     def CHAT(self): pass
-
     @property
     @abstractmethod
     def SHUTDOWN(self): pass
-
-
 class MenuWidgetABS(metaclass=ABCMeta):
     @abstractmethod
     def addSeparator(self): pass
-
     @abstractmethod
     def addAction(self, action): pass
-
-
 class SwitchWidgetABS(metaclass=ABCMeta):
     @abstractmethod
     def setChecked(self, checked: bool): pass
-
     @abstractmethod
     def isChecked(self): pass
 '''

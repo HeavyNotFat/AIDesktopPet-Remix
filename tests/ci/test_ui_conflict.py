@@ -1,9 +1,3 @@
-"""UI 冲突检测的行为验证。
-
-每条检查都配一组「应该报」和「不该报」的样例——后者更重要，
-误报会让 CI 门禁失去信任。
-"""
-
 from __future__ import annotations
 
 from conftest import findings_of, run_checks

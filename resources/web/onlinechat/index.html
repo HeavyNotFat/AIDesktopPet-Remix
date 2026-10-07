@@ -69,7 +69,8 @@
 
       <div class="composer-wrap">
         <div class="composer">
-          <textarea id="input" rows="1" placeholder="提问"></textarea>
+          <div class="attach-bar" id="attachBar" hidden></div>
+          <textarea id="input" rows="1" placeholder="提问（可粘贴图片、拖入文件）"></textarea>
           <div class="composer-bar">
             <div class="model-wrap">
               <button class="model-btn" id="modelBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
@@ -78,10 +79,17 @@
               </button>
               <div class="model-menu" id="modelMenu" role="listbox" hidden></div>
             </div>
-            <button class="send" id="sendBtn" type="button" disabled aria-label="发送"></button>
+            <div class="composer-right">
+              <button class="icon-btn attach-btn" id="attachBtn" type="button" title="添加图片或文档（也可以直接粘贴或拖进来）" aria-label="添加图片或文档">
+                <svg class="i" viewBox="0 0 24 24"><path d="M16.5 7.5l-7 7a2.1 2.1 0 003 3l7.2-7.2a3.8 3.8 0 00-5.4-5.4L6 12.3a5.4 5.4 0 007.6 7.6l6.4-6.4"/></svg>
+              </button>
+              <input type="file" id="attachInput" multiple hidden
+                     accept="image/*,.txt,.md,.csv,.json,.log,.yaml,.yml,.toml,.py,.js,.ts,.docx">
+              <button class="send" id="sendBtn" type="button" disabled aria-label="发送"></button>
+            </div>
           </div>
         </div>
-        <div class="disclaimer">内容由 AI 生成，请仔细甄别</div>
+        <div class="disclaimer">内容由 AI 生成，请仔细甄别 · 支持粘贴图片、拖入或选择文档</div>
       </div>
     </section>
   </main>
@@ -92,6 +100,7 @@
 <script src="js/api.js"></script>
 <script src="js/store.js"></script>
 <script src="js/cache.js"></script>
+<script src="js/attach.js"></script>
 <script src="js/render.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/model-picker.js"></script>

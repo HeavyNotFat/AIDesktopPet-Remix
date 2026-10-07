@@ -70,6 +70,29 @@
     }
   }
 
+  function attachmentNode(item, live) {
+    if (item.kind === 'image') {
+      const figure = document.createElement('figure');
+      figure.className = 'att-img';
+      const img = document.createElement('img');
+      // 当前这轮有原图就显示原图，历史记录里只有缩略图
+      img.src = (live && item.preview) || item.thumb || item.preview || '';
+      img.alt = item.name || '图片';
+      img.loading = 'lazy';
+      figure.appendChild(img);
+      const caption = document.createElement('figcaption');
+      caption.textContent = (item.name || '图片') + ' · ' + QW.attach.human(item.size || 0);
+      figure.appendChild(caption);
+      return figure;
+    }
+
+    const chip = document.createElement('div');
+    chip.className = 'att-file';
+    chip.textContent = '📄 ' + (item.name || '文件') + ' · ' + QW.attach.human(item.size || 0);
+    chip.title = item.name || '';
+    return chip;
+  }
+
   function messages() {
     const chat = currentChat();
     const empty = !chat || chat.messages.length === 0;
@@ -82,6 +105,14 @@
       div.className = 'msg ' + m.role + (m.error ? ' error' : '') + (m.cached ? ' cached' : '');
       if (m.role === 'user') div.textContent = m.content;
       else div.innerHTML = formatText(m.content);
+
+      if (m.attachments && m.attachments.length) {
+        const box = document.createElement('div');
+        box.className = 'att-list';
+        for (const item of m.attachments) box.appendChild(attachmentNode(item, !!item.preview));
+        div.appendChild(box);
+      }
+
       dom.inner.appendChild(div);
     }
 
@@ -115,10 +146,65 @@
       dom.sendBtn.disabled = false;
       dom.sendBtn.setAttribute('aria-label', '停止');
     } else {
+      const hasContent = !!dom.input.value.trim() || (QW.attach.pending.length > 0);
       dom.sendBtn.innerHTML = ICON_SEND;
-      dom.sendBtn.disabled = !dom.input.value.trim() || !state.model;
+      dom.sendBtn.disabled = !hasContent || !state.model;
       dom.sendBtn.setAttribute('aria-label', '发送');
     }
+  }
+
+  function modelSeesImages() {
+    // 后端只在明确知道时给 vision；不知道（云端/查不到）就不拦
+    const current = state.models.find(m => m.value === state.model);
+    return !current || current.vision !== false;
+  }
+
+  function attachments() {
+    const pending = QW.attach.pending;
+    dom.attachBar.textContent = '';
+    dom.attachBar.hidden = pending.length === 0;
+
+    const hasImage = pending.some(item => item.kind === 'image');
+    if (hasImage && !modelSeesImages()) {
+      const warn = document.createElement('div');
+      warn.className = 'att-warn';
+      warn.textContent = '当前模型看不了图片（纯文本模型），换成带 vision 的模型再发。';
+      dom.attachBar.appendChild(warn);
+    }
+
+    pending.forEach((item, index) => {
+      const chip = document.createElement('div');
+      chip.className = 'att-chip';
+      chip.title = item.name;
+
+      if (item.kind === 'image' && item.thumb) {
+        const img = document.createElement('img');
+        img.src = item.thumb;
+        img.alt = item.name;
+        chip.appendChild(img);
+      } else {
+        const mark = document.createElement('span');
+        mark.className = 'mark';
+        mark.textContent = '📄';
+        chip.appendChild(mark);
+      }
+
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = item.name + ' · ' + QW.attach.human(item.size);
+      chip.appendChild(name);
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del';
+      del.textContent = '×';
+      del.title = '移除';
+      del.setAttribute('aria-label', '移除附件');
+      del.addEventListener('click', () => QW.attach.remove(index));
+      chip.appendChild(del);
+
+      dom.attachBar.appendChild(chip);
+    });
   }
 
   function greeting(name) {
@@ -131,5 +217,5 @@
     dom.input.style.height = Math.min(dom.input.scrollHeight, 200) + 'px';
   }
 
-  QW.render = { history, messages, sendButton, greeting, autosize, streamChunk };
+  QW.render = { history, messages, sendButton, greeting, autosize, streamChunk, attachments };
 })();

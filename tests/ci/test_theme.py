@@ -1,44 +1,26 @@
-"""UI 主题类映射检测的行为验证。
-
-契约来源：``stlibs/__init__.py::_ThemeTypingProtocol`` +
-``stlibs/themes/base.py`` 里的抽象基类。
-"""
-
 from __future__ import annotations
 
 from conftest import BASE_SRC, MAPPING_NAMES, PROTOCOL_SRC, THEME_SUBMODULES, findings_of, write_mini_repo, run_checks
 
 THEME_HEAD = '''\
 from . import general, llm, tts, settings, animation
-
-
 class HackerWindow:
     def addNavigation(self, text, widget, shortcut_keys=None, position="top", category=None): pass
     def removeNavigation(self, widget): pass
     def create_category(self, category, position="top"): pass
     def setTitle(self, title): pass
-
-
 class HackerButton:
     pass
-
-
 class HackerMenu:
     def addSeparator(self): pass
     def addAction(self, action): pass
-
-
 class HackerIconList:
     SETTING = None
     CHAT = None
     SHUTDOWN = None
-
     def init(self): pass
-
-
 class HackerChatWidget:
     userInputSignal = None
-
     def add_user_msg(self, text=""): pass
     def add_assistant_msg(self, text="", image=None): pass
     def disable_send_button(self): pass
@@ -46,13 +28,9 @@ class HackerChatWidget:
     def update_bubble_widths(self): pass
     def scroll_to_bottom(self): pass
     def clear_messages(self): pass
-
-
 class HackerChatBubble:
     def append_text(self, chunk): pass
     def updateBubbleWidth(self, width): pass
-
-
 class HackerModelChat:
     @staticmethod
     def return_llm_class(model): pass

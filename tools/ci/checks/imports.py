@@ -1,13 +1,3 @@
-"""导入图与依赖健康度。
-
-* ``import/cycle``        项目内模块在**模块级**互相 import 成环
-* ``import/requirements`` 用到的第三方库没写进 requirements.txt
-* ``import/unused-req``   requirements.txt 里躺着的依赖没人用
-
-函数体内的延迟导入（``def x(): from . import y``）是合法的破环手段，
-所以环检测只看顶层 import。
-"""
-
 from __future__ import annotations
 
 import ast
@@ -33,6 +23,7 @@ DISTRIBUTION_ALIASES: dict[str, str] = {
     "cv2": "opencv-python",
     "sklearn": "scikit-learn",
     "dotenv": "python-dotenv",
+    "docx": "python-docx",
     "qfluentwidgets": "PySide6-Fluent-Widgets",
 }
 
@@ -180,12 +171,6 @@ def _project_top_level(ctx) -> set[str]:
 
 
 def _is_local_sibling(sources, src, name: str) -> bool:
-    """``name`` 是不是导入方**同目录**下的模块/包。
-
-    覆盖"脚本式运行"：``python mcp_servers/live2d_motion.py`` 时 sys.path[0]
-    是 ``mcp_servers/``，所以 ``from sdk import client`` 指的是
-    ``mcp_servers/sdk``，不是第三方 sdk。
-    """
     directory = src.rel.rpartition("/")[0]
     candidates = [f"{name}/__init__.py", f"{name}.py"]
     if directory:

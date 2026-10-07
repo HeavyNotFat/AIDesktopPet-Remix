@@ -9,5 +9,8 @@ QW.config = {
   CACHE_KEY: 'adp-remix.onlinechat.cache',
   // 回答本地缓存：存活时间（秒，0 = 不过期）与条数上限
   CACHE_TTL: 7 * 24 * 3600,
-  CACHE_MAX: 200
+  CACHE_MAX: 200,
+  // 附件：一次最多几个、单个最大多少（后端还有一道同样的限制）
+  MAX_ATTACHMENTS: 6,
+  MAX_ATTACHMENT_BYTES: 8 * 1024 * 1024
 };

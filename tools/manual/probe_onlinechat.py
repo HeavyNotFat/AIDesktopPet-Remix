@@ -1,22 +1,3 @@
-"""手工联调：验证网页聊天的实例隔离与流式输出（不在 CI 里跑，需要真实 Ollama）。
-
-用法::
-
-    # 终端 A：单独启动网页聊天服务（不需要桌面端主程序、不需要 Qt）
-    python -m stlibs.mproc.onlinechat
-
-    # 终端 B：跑这个脚本
-    python tools/manual/probe_onlinechat.py glm4:latest
-
-预期结果：
-
-* 两个不同 session 各自让 ``instances_created`` 递增（= 新实例）；
-* 同一 session 再发消息时 ``instances_created`` 不变、该 session 的 ``turns`` 递增
-  （= 复用实例、记忆独立）；
-* ``/api/reset`` 只丢掉指定 session，其它 session 不受影响；
-* 流式接口先吐 ``start``，再连续吐 ``delta``（首字明显早于整句结束），最后 ``done``。
-"""
-
 import json
 import sys
 import time

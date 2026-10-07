@@ -1,25 +1,3 @@
-"""UI 冲突检测。
-
-PySide6 的很多「坑」是静默的：样式选择器写错类名不会抛异常、布局和
-``setGeometry`` 抢同一个控件只会让界面看着别扭、信号连到参数对不上的槽函数
-要等用户点下去才炸。这一组检查就是把这些静默冲突提前到 CI。
-
-* ``ui/duplicate-class``       同一模块里定义了两次同名类（后者覆盖前者）
-* ``ui/object-name-collision`` 同一 objectName 被两个类用，``#id`` 样式必然打架
-* ``ui/stylesheet-class``      样式里出现既不认识也不是 Qt 的类选择器（多半拼错）
-* ``ui/stylesheet-dead-id``    ``#objectName`` 选择器全项目没有对应的 setObjectName
-* ``ui/double-parent``         同一控件被加进两个布局
-* ``ui/layout-vs-geometry``    同一控件既被布局接管又手工 setGeometry
-* ``ui/duplicate-setlayout``   同一控件调用两次 setLayout
-* ``ui/size-constraint``       setFixed* 与 setMinimum*/setMaximum* 打架
-* ``ui/window-flags``          互斥的 window flag 同时出现
-* ``ui/signal-clash``          信号名与同类方法/已有信号重名
-* ``ui/signal-slot``           信号参数比槽函数必填参数少，触发就 TypeError
-* ``ui/style-overwrite``       同一分支里对同一控件重复 setStyleSheet
-* ``ui/dead-control``          下拉框填了数据却没有任何信号连接，点了没反应
-* ``ui/missing-super-init``    QWidget 子类收了 parent 却没交给 super().__init__
-"""
-
 from __future__ import annotations
 
 import ast
@@ -83,21 +61,12 @@ QT_SIGNAL_NAMES: frozenset[str] = frozenset(
 )
 
 
-# --------------------------------------------------------------------------
 # 通用小工具
-# --------------------------------------------------------------------------
 def _dotted(node: ast.AST) -> str:
     return ast.unparse(node)
 
 
 def _receiver(node: ast.Call) -> str | None:
-    """``self.x.foo()`` → ``self.x``；``HackerLabel('X', self).foo()`` → 那段调用文本。
-
-    链式创建的匿名控件（``HackerLabel("X", self).setGeometry(...)``）也要能被跟踪，
-    否则主题里那一片"随手 new 一个再绝对定位"的写法全在检查之外。
-    用整段表达式的文本做 key：只有**完全一样**的表达式才会被当成同一个控件，
-    所以不会因为同名不同实例而误报。
-    """
     value = node.func.value if isinstance(node.func, ast.Attribute) else None
     if isinstance(value, (ast.Name, ast.Attribute)):
         return _dotted(value)
@@ -121,9 +90,7 @@ def _class_owner_map(sources) -> dict[int, str]:
     return owners
 
 
-# --------------------------------------------------------------------------
 # ui/duplicate-class
-# --------------------------------------------------------------------------
 def check_duplicate_class(ctx) -> Iterator[Finding]:
     for src in ctx.sources.files:
         seen: dict[str, ast.ClassDef] = {}
@@ -144,19 +111,8 @@ def check_duplicate_class(ctx) -> Iterator[Finding]:
             seen[node.name] = node
 
 
-# --------------------------------------------------------------------------
 # 样式表相关
-# --------------------------------------------------------------------------
 def _stylesheet_literals(ctx) -> Iterator[tuple[SourceFile, ast.AST, str]]:
-    """产出 (文件, 节点, 样式文本)。
-
-    三条来源都要覆盖，否则会漏掉一大片样式：
-
-    1. ``setStyleSheet("...")`` 直接写字面量；
-    2. ``self.setStyleSheet(self.normal_style)`` 先存成属性再传（主题里按钮样式就这么写）；
-    3. ``normal_style = "..."`` 这类类属性/模块变量本身（可能被三元表达式挑着用，
-       光看第 2 条解析不出来）。
-    """
     constants: dict[str, str] = {}
     declared: list[tuple[SourceFile, ast.AST, str]] = []
 
@@ -207,11 +163,6 @@ def _string_of(node: ast.AST | None) -> str | None:
 
 
 def _strip_blocks(qss: str) -> str:
-    """只保留选择器部分。
-
-    ``{...}`` 里的属性丢掉（免得把颜色值当类名），``/* 注释 */`` 也丢掉
-    （注释里的大写单词会被误判成类选择器）。
-    """
     qss = _COMMENT_RE.sub(" ", qss)
     out: list[str] = []
     depth = 0
@@ -309,9 +260,7 @@ def check_stylesheet_dead_id(ctx) -> Iterator[Finding]:
             )
 
 
-# --------------------------------------------------------------------------
 # 布局 / 几何 / 尺寸
-# --------------------------------------------------------------------------
 def _scope_calls(func: ast.AST) -> dict[tuple[str, ...], dict[str, list[ast.Call]]]:
     """分支路径 → 接收者 → 该接收者上的调用。"""
     scopes: dict[tuple[str, ...], dict[str, list[ast.Call]]] = defaultdict(lambda: defaultdict(list))
@@ -453,9 +402,7 @@ def check_style_overwrite(ctx) -> Iterator[Finding]:
                 )
 
 
-# --------------------------------------------------------------------------
 # 控件接线
-# --------------------------------------------------------------------------
 def check_dead_control(ctx) -> Iterator[Finding]:
     """下拉框/列表填了数据却没有任何信号连接，用户点了不会有反应。"""
     for src, func in _iter_functions(ctx.sources):
@@ -497,9 +444,7 @@ def _connected_anywhere(ctx, attribute: str) -> bool:
     return False
 
 
-# --------------------------------------------------------------------------
 # 信号
-# --------------------------------------------------------------------------
 def _declared_signals(ctx) -> tuple[dict[str, int], dict[str, ast.AST], set[str]]:
     arity: dict[str, int] = {}
     nodes: dict[str, ast.AST] = {}
@@ -544,12 +489,6 @@ def check_signal_clash(ctx) -> Iterator[Finding]:
 
 
 def check_signal_slot(ctx) -> Iterator[Finding]:
-    """``sig.connect(slot)`` 时槽函数的必填参数不能多于信号参数。
-
-    信号参数个数优先按「接收者类型 + 信号名」查（``HackerSwitch.stateChanged``），
-    查不到再退回按信号名查——但 Qt 自带的同名信号（``clicked`` 等）一律放过，
-    否则 ``QToolButton.clicked(bool)`` 会被误判成项目的 ``clicked = Signal()``。
-    """
     arity_by_class: dict[str, dict[str, int]] = defaultdict(dict)
     bare_arity: dict[str, int] = {}
     for record in ctx.sources.classes:
@@ -607,10 +546,6 @@ def _signal_arity(
     local_types: dict[str, str],
     owner: str | None,
 ) -> int | None:
-    """``self.memory_switch.stateChanged`` → 先定位 memory_switch 的类型，再查信号。
-
-    接收者最后一段是信号名，前面才是"承载信号的对象"。
-    """
     object_part = receiver.rpartition(".")[0]
     receiver_type = _receiver_type(object_part, local_types, owner)
     if receiver_type:
@@ -663,9 +598,7 @@ def _required_positional(node: ast.AST) -> list[ast.arg]:
     return args
 
 
-# --------------------------------------------------------------------------
 # 父子关系
-# --------------------------------------------------------------------------
 def check_missing_super_init(ctx) -> Iterator[Finding]:
     """QWidget 子类把 parent 收下却没交给 super()，控件会脱离父子树。"""
     for record in ctx.sources.classes:

@@ -1,3 +1,4 @@
+import base64
 import math
 import random
 import json
@@ -7,19 +8,22 @@ from . import llm
 from . import tts
 from . import settings
 from . import animation
+from . import plugins
 
 from ..base import ModelChatABS, MainWindowABS, IconListABS, MenuWidgetABS, SwitchWidgetABS, CombinedMeta
 
 from ... import derfer
-from ... import SharingData
+from ... import Config, SharingData
 from ...ai import local
 from ...ai import cloud
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSizePolicy, QHBoxLayout, QStackedWidget, QPushButton, \
-    QScrollArea, QLineEdit, QTextEdit, QSlider, QComboBox, QTabWidget, QFrame, QToolButton, QTableWidget, QHeaderView, QAbstractItemView
-from PySide6.QtCore import Qt, Signal, QSize, QTimer, QPropertyAnimation, QEasingCurve, QRectF, Property
+    QScrollArea, QLineEdit, QTextEdit, QSlider, QComboBox, QTabWidget, QFrame, QToolButton, QTableWidget, QHeaderView, QAbstractItemView, \
+    QGraphicsDropShadowEffect
+from PySide6.QtCore import Qt, Signal, QSize, QTimer, QPropertyAnimation, QEasingCurve, QRectF, Property, QPoint
 from PySide6.QtGui import QAction, QCursor, QFontDatabase, QFont, QIcon, QPainter, QBrush, QColor, QPen, QPixmap, \
-    QFontMetrics, QKeySequence, QShortcut, QPainterPath
+    QFontMetrics, QKeySequence, QShortcut, QPainterPath, QImage
+from PySide6.QtCore import QByteArray
 
 cache_llm_class = {}
 MAPPING_ANIMATION = {
@@ -342,18 +346,77 @@ class Action(QAction):
 
 
 # Chat
+class HackerBubbleAction(QToolButton):
+    """气泡底下的小按钮（复制 / 播放）。"""
+
+    def __init__(self, text: str, tooltip: str = "", parent=None):
+        super().__init__(parent)
+        self.setText(text)
+        if tooltip:
+            self.setToolTip(tooltip)
+
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.setFixedHeight(22)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFont(QFont("Consolas", 10))
+        self.setStyleSheet("""
+            QToolButton {
+                color: rgba(0, 255, 0, 150);
+                background: rgba(0, 255, 0, 12);
+                border: 1px solid rgba(0, 255, 0, 60);
+                border-radius: 6px;
+                padding: 1px 8px;
+            }
+            QToolButton:hover {
+                color: #00FF00;
+                background: rgba(0, 255, 0, 40);
+                border: 1px solid #00FF00;
+            }
+            QToolButton:pressed {
+                background: rgba(0, 255, 0, 70);
+            }
+            QToolButton:disabled {
+                color: rgba(0, 255, 0, 60);
+                border: 1px solid rgba(0, 255, 0, 30);
+            }
+        """)
+
+    def set_busy(self, busy: bool, text: str = ""):
+        self.setEnabled(not busy)
+        if text:
+            self.setText(text)
+
+
 class HackerChatBubble(QFrame):
     MAX_WIDTH_RATIO = 0.60
 
     def __init__(self, text: str = "", image: str | QPixmap | None = None, is_user: bool = True, parent=None):
         super().__init__(parent)
         self.is_user = is_user
+        self.audio_data: str | None = None
+        self.skill_name: str = ""
+        self.image_labels: list = []
 
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(12, 8, 12, 8)
         self.layout.setSpacing(6)
+
+        self.skill_label = HackerLabel("")
+        self.skill_label.setStyleSheet("""
+            QLabel {
+                color: rgba(0, 255, 0, 180);
+                background: rgba(0, 255, 0, 20);
+                border: 1px solid rgba(0, 255, 0, 70);
+                border-radius: 6px;
+                padding: 1px 6px;
+                font-size: 11px;
+            }
+        """)
+        self.skill_label.setVisible(False)
+        self.layout.addWidget(self.skill_label, 0, Qt.AlignmentFlag.AlignLeft)
 
         self.text_label = HackerLabel(text)
         self.text_label.setWordWrap(True)
@@ -363,7 +426,66 @@ class HackerChatBubble(QFrame):
         self.layout.addWidget(self.text_label)
         if image is not None:
             self._add_image(image)
+
+        self._build_actions()
         self._update_style()
+
+    def _build_actions(self):
+        """回复底下的一条小动作栏：默认只有复制，有音频时多一个播放。"""
+        self.actions = QWidget(self)
+        self.actions_layout = QHBoxLayout(self.actions)
+        self.actions_layout.setContentsMargins(0, 0, 0, 0)
+        self.actions_layout.setSpacing(6)
+
+        self.copy_button = HackerBubbleAction("复制", "把这条回复复制到剪贴板")
+        self.copy_button.clicked.connect(self.copy_text)
+        self.actions_layout.addWidget(self.copy_button)
+
+        self.play_button = HackerBubbleAction("▶ 播放", "播放这条回复的语音")
+        self.play_button.clicked.connect(self.play_audio)
+        self.play_button.setVisible(False)
+        self.actions_layout.addWidget(self.play_button)
+        self.actions_layout.addStretch(1)
+
+        self.actions.setVisible(not self.is_user)
+        self.layout.addWidget(self.actions)
+
+    def text(self) -> str:
+        return self.text_label.text()
+
+    def copy_text(self):
+        content = self.text().strip()
+        if not content:
+            HackerNotify("这条回复还是空的", "warning", 1800)
+            return
+
+        QApplication.clipboard().setText(content)
+        HackerNotify("已复制这条回复", "success", 1600)
+
+    def attach_audio(self, data: str):
+        """挂上语音但**不自动播**，等用户点播放。"""
+        self.audio_data = data
+        self.play_button.setVisible(True)
+        self.actions.setVisible(True)
+
+    def play_audio(self):
+        if not self.audio_data:
+            return
+
+        self.play_button.set_busy(True)
+        try:
+            derfer.play_audio(self.audio_data)
+        except Exception as exc:  # noqa: BLE001 - 没声卡/解码失败都要给出提示
+            HackerNotify(f"播放失败：{type(exc).__name__}: {exc}", "error", 4000)
+        else:
+            HackerNotify("正在播放这条回复的语音", "info", 1800)
+        finally:
+            self.play_button.set_busy(False)
+
+    def set_skill(self, name: str):
+        self.skill_name = name or ""
+        self.skill_label.setText(f"技能 · {self.skill_name}")
+        self.skill_label.setVisible(bool(self.skill_name))
 
     @staticmethod
     def _set_font(widget, size=14):
@@ -385,20 +507,59 @@ class HackerChatBubble(QFrame):
 
         self.layout.addWidget(self.image_label)
 
-    def append_text(self, chunk: str):
-        if not chunk:
-            return
-        self.text_label.setText(self.text_label.text() + chunk)
+    def add_attachments(self, attachments):
+        """图片放缩略图，文档放一个小标签（名字 + 大小 + 读取情况）。"""
+        from ...ai import human_size
+
+        for item in attachments or []:
+            if item.get("kind") == "image" and item.get("data"):
+                pixmap = QPixmap()
+                pixmap.loadFromData(QByteArray(base64.b64decode(item["data"])))
+                if pixmap.isNull():
+                    continue
+
+                label = QLabel()
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                label.setStyleSheet("QLabel { background: transparent; border: none; }")
+                label.setToolTip(item.get("name", ""))
+                self.image_labels.append((label, pixmap))
+                self.layout.addWidget(label)
+            else:
+                chip = QLabel(f"📄 {item.get('name')}（{human_size(item.get('size'))}）· {item.get('note', '')}")
+                chip.setWordWrap(True)
+                chip.setStyleSheet("""
+                    QLabel {
+                        color: #00FF88;
+                        background: rgba(0, 255, 0, 16);
+                        border: 1px solid rgba(0, 255, 0, 70);
+                        border-radius: 6px;
+                        padding: 3px 8px;
+                    }
+                """)
+                self.layout.addWidget(chip)
+
         self.updateGeometry()
 
     def updateBubbleWidth(self, available_width: int):
         max_width = int(available_width * self.MAX_WIDTH_RATIO)
         self.setMaximumWidth(max_width)
-        if hasattr(self, "image_label"):
-            content_width = max_width - 24
-            if content_width > 0:
-                scaled = self.image_pixmap.scaled(QSize(content_width, 320), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.image_label.setPixmap(scaled)
+        content_width = max_width - 24
+        if hasattr(self, "image_label") and content_width > 0:
+            scaled = self.image_pixmap.scaled(QSize(content_width, 320), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.image_label.setPixmap(scaled)
+        if content_width > 0:
+            for label, pixmap in self.image_labels:
+                label.setPixmap(pixmap.scaled(
+                    QSize(content_width, 320),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                ))
+        self.updateGeometry()
+
+    def append_text(self, chunk: str):
+        if not chunk:
+            return
+        self.text_label.setText(self.text_label.text() + chunk)
         self.updateGeometry()
 
     def _update_style(self):
@@ -428,11 +589,16 @@ class HackerChatBubble(QFrame):
 
 
 class HackerChatWidget(QWidget):
-    userInputSignal = Signal(str)
+    # (正文, 附件列表)：附件跟着信号走，避免发送方清空后接收方拿到空列表
+    userInputSignal = Signal(str, list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.bubbles = []
+        self.active_skill: dict | None = None
+        self.attachments: list = []
+
+        self.setAcceptDrops(True)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -454,16 +620,33 @@ class HackerChatWidget(QWidget):
         self.scroll.setWidget(self.container)
         main_layout.addWidget(self.scroll)
 
+        main_layout.addWidget(self._build_skill_bar())
+        main_layout.addWidget(self._build_attachment_bar())
+
         input_layout = QHBoxLayout()
         input_layout.setContentsMargins(12, 8, 12, 12)
         input_layout.setSpacing(8)
 
+        self.attach_button = HackerButton("附件")
+        self.attach_button.setFixedSize(70, 45)
+        self.attach_button.set_border()
+        self.attach_button.setToolTip("选图片或文档；也可以直接 Ctrl+V 粘贴、把文件拖进来")
+        self.attach_button.clicked.connect(self.pick_attachments)
+
+        self.skill_button = HackerButton("技能")
+        self.skill_button.setFixedSize(70, 45)
+        self.skill_button.set_border()
+        self.skill_button.setToolTip("选一个技能，或者直接在输入框打 /技能名")
+        self.skill_button.clicked.connect(self.show_skills)
+
         self.input_edit = _ChatInputEdit(self)
-        self.input_edit.setPlaceholderText("输入消息...")
+        self.input_edit.setPlaceholderText("输入消息...（/技能名 用技能，Ctrl+V 粘图片，可拖文件进来）")
         self.input_edit.setFixedHeight(45)
         self.send_button = HackerButton("发送")
         self.send_button.setFixedSize(70, 45)
 
+        input_layout.addWidget(self.attach_button)
+        input_layout.addWidget(self.skill_button)
         input_layout.addWidget(self.input_edit, 1)
         input_layout.addWidget(self.send_button)
         main_layout.addLayout(input_layout)
@@ -471,14 +654,247 @@ class HackerChatWidget(QWidget):
         self.send_button.set_border()
         self.send_button.clicked.connect(self._send_message)
 
+    def dragEnterEvent(self, event, /):
+        if event.mimeData().hasImage() or event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event, /):
+        if self.attach_from_mime(event.mimeData()):
+            event.acceptProposedAction()
+
+    def _build_skill_bar(self):
+        self.skill_bar = QWidget()
+        layout = QHBoxLayout(self.skill_bar)
+        layout.setContentsMargins(12, 4, 12, 0)
+        layout.setSpacing(6)
+
+        self.skill_bar_label = HackerLabel("")
+        self.skill_bar_label.setStyleSheet("QLabel { color: #00FF00; background: transparent; }")
+        self.clear_skill_button = HackerBubbleAction("×", "取消当前技能")
+        self.clear_skill_button.clicked.connect(lambda: self.set_skill(None))
+
+        layout.addWidget(self.skill_bar_label)
+        layout.addWidget(self.clear_skill_button)
+        layout.addStretch(1)
+        self.skill_bar.setVisible(False)
+        return self.skill_bar
+
+    def skills(self) -> list:
+        return [skill for skill in (Config.skills or []) if isinstance(skill, dict) and skill.get("name")]
+
+    def set_skill(self, skill: dict | None):
+        self.active_skill = dict(skill) if skill else None
+        if self.active_skill:
+            name = self.active_skill.get("name", "")
+            description = self.active_skill.get("description", "")
+            self.skill_bar_label.setText(f"当前技能：{name}" + (f" —— {description}" if description else ""))
+            self.skill_bar.setVisible(True)
+            self.skill_button.setText("技能 ✓")
+            HackerNotify(f"已启用技能「{name}」", "success", 2000)
+        else:
+            self.skill_bar.setVisible(False)
+            self.skill_button.setText("技能")
+
+    def build_skill_menu(self):
+        """菜单每次重建：设置页里刚加的技能不用重启就能选到。"""
+        from ... import get_translation
+
+        menu = HackerMenu(self)
+
+        def add(text, callback, enabled=True):
+            action = QAction(text, menu)
+            action.setEnabled(enabled)
+            if enabled:
+                action.triggered.connect(callback)
+            menu.addAction(action)
+            return action
+
+        skills = self.skills()
+        if not skills:
+            add(get_translation("graphics.chat.no_skill"), None, enabled=False)
+        else:
+            for skill in skills:
+                description = skill.get("description", "")
+                add(f"{skill['name']}　{description}".strip(),
+                    lambda _checked=False, item=skill: self.set_skill(item))
+
+        if self.active_skill:
+            menu.addSeparator()
+            add("取消技能", lambda: self.set_skill(None))
+        return menu
+
+    def show_skills(self):
+        menu = self.build_skill_menu()
+        menu.exec(self.skill_button.mapToGlobal(QPoint(0, -menu.sizeHint().height() - 6)))
+
+    def _build_attachment_bar(self):
+        self.attachment_bar = QWidget()
+        layout = QHBoxLayout(self.attachment_bar)
+        layout.setContentsMargins(12, 4, 12, 0)
+        layout.setSpacing(6)
+        self.attachment_layout = layout
+        self.attachment_bar.setVisible(False)
+        return self.attachment_bar
+
+    def add_attachment(self, attachment: dict):
+        from ...ai import MAX_ATTACHMENTS
+
+        if not attachment:
+            return False
+        if len(self.attachments) >= MAX_ATTACHMENTS:
+            HackerNotify(f"最多一次带 {MAX_ATTACHMENTS} 个附件", "warning", 2200)
+            return False
+
+        self.attachments.append(attachment)
+        chip = HackerAttachmentChip(attachment, on_remove=self.remove_attachment)
+        self.attachment_layout.addWidget(chip)
+        self.attachment_bar.setVisible(True)
+        return True
+
+    def remove_attachment(self, attachment: dict):
+        self.attachments = [item for item in self.attachments if item is not attachment]
+        for index in range(self.attachment_layout.count()):
+            widget = self.attachment_layout.itemAt(index).widget()
+            if isinstance(widget, HackerAttachmentChip) and widget.property("attachment") is attachment:
+                widget.setParent(None)
+                widget.deleteLater()
+                break
+        self.attachment_bar.setVisible(bool(self.attachments))
+
+    def clear_attachments(self):
+        while self.attachment_layout.count():
+            item = self.attachment_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        self.attachments = []
+        self.attachment_bar.setVisible(False)
+
+    def attach_paths(self, paths) -> int:
+        from ...ai import from_path
+
+        added = 0
+        for path in paths or []:
+            try:
+                if self.add_attachment(from_path(path)):
+                    added += 1
+            except OSError as exc:
+                HackerNotify(f"读不了这个文件：{exc}", "error", 3000)
+        return added
+
+    def can_attach_mime(self, source) -> bool:
+        """这份剪切板/拖拽内容能不能当附件（不产生副作用，Qt 会先问这个）。"""
+        if source is None:
+            return False
+        if source.hasImage():
+            return True
+        return bool(self._local_files(source))
+
+    @staticmethod
+    def _local_files(source) -> list:
+        if not source.hasUrls():
+            return []
+        return [url.toLocalFile() for url in source.urls() if url.isLocalFile() and url.toLocalFile()]
+
+    def _clipboard_pixmap(self, source):
+        """剪切板里的图片可能是 QImage 也可能是 QPixmap，统一成 QPixmap。
+
+        （实测：系统剪切板给的是 QImage，只有代码里 setImageData(QPixmap) 才是 QPixmap——
+        以前只判 QPixmap，所以真实 Ctrl+V 一张图都加不进来。）
+        """
+        if source is None or not source.hasImage():
+            return None
+
+        data = source.imageData()
+        if isinstance(data, QImage):
+            data = QPixmap.fromImage(data)
+        elif isinstance(data, QPixmap):
+            pass
+        elif isinstance(data, str):
+            data = QPixmap(data)
+        else:
+            return None
+
+        return data if isinstance(data, QPixmap) and not data.isNull() else None
+
+    def attach_from_mime(self, source) -> bool:
+        """剪切板/拖拽进来的东西：图片优先，其次是文件路径。"""
+        if source is None:
+            return False
+
+        added = 0
+        pixmap = self._clipboard_pixmap(source)
+        if pixmap is not None:
+            added += self._attach_pixmap(pixmap)
+        added += self.attach_paths(self._local_files(source))
+
+        if added:
+            HackerNotify(f"已加入 {added} 个附件", "success", 2000)
+        return added > 0
+
+    def _attach_pixmap(self, pixmap: QPixmap) -> int:
+        from PySide6.QtCore import QBuffer, QByteArray
+
+        from ...ai import from_bytes
+
+        buffer = QBuffer()
+        buffer.open(QBuffer.OpenModeFlag.ReadWrite)
+        pixmap.save(buffer, "PNG")
+        data = bytes(buffer.data())
+        buffer.close()
+
+        name = f"剪切板图片-{len(self.attachments) + 1}.png"
+        return 1 if self.add_attachment(from_bytes(data, name, "image/png")) else 0
+
+    def pick_attachments(self):
+        from PySide6.QtWidgets import QFileDialog
+
+        paths, _selected = QFileDialog.getOpenFileNames(
+            self,
+            "选择图片或文档",
+            "",
+            "图片与文档 (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.txt *.md *.csv *.json *.log *.yaml *.yml *.toml *.py *.js *.ts *.docx);;所有文件 (*)",
+        )
+        if paths:
+            self.attach_paths(paths)
+
     def _send_message(self):
         text = self.input_edit.toPlainText().strip()
-        if not text:
+        if not text and not self.attachments:
             return
-        self.add_user_msg(text)
-        self.userInputSignal.emit(text)
+
+        from ... import run_plugin_command
+        from ...ai import parse_skill
+
+        # 插件命令：/名字 参数（技能优先，认不出来再看插件有没有注册这个命令）
+        handled, result = run_plugin_command(text)
+        if handled:
+            self.input_edit.clear()
+            if result:
+                self.add_user_msg(text)
+                self.add_assistant_msg(result)
+            return
+
+        skill, text = parse_skill(text, self.skills())
+        if skill:
+            self.set_skill(skill)
+        if not text and not self.attachments:
+            # 只打了 /技能名：当成切换技能，不发送
+            self.input_edit.clear()
+            return
+
+        pending = self.take_attachments()
+        self.add_user_msg(text, skill=self.active_skill, attachments=pending)
+        # 附件要跟着信号一起走：ModelChat 那边再取一次的话已经被这里清空了
+        self.userInputSignal.emit(text, pending)
         self.input_edit.clear()
         self.input_edit.setFocus()
+
+    def take_attachments(self) -> list:
+        pending = list(self.attachments)
+        self.clear_attachments()
+        return pending
 
     def add_assistant_msg(self, text: str = "", image: str | QPixmap | None = None):
         bubble = HackerChatBubble(text=text, image=image, is_user=False)
@@ -501,8 +917,13 @@ class HackerChatWidget(QWidget):
         self.update_bubble_widths()
         self.scroll_to_bottom()
 
-    def add_user_msg(self, text: str = "", image: str | QPixmap | None = None):
+    def add_user_msg(self, text: str = "", image: str | QPixmap | None = None, skill: dict | None = None,
+                     attachments=None):
         bubble = HackerChatBubble(text=text, image=image, is_user=True)
+        if skill:
+            bubble.set_skill(skill.get("name", ""))
+        if attachments:
+            bubble.add_attachments(attachments)
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
@@ -622,6 +1043,200 @@ class HackerScrollArea(QScrollArea):
         """)
 
 
+class HackerNotify(QFrame):
+    """操作反馈条：优先贴在当前窗口顶部（醒目、居中、带图标），没有窗口时才浮到屏幕右下角。"""
+
+    LEVELS = {
+        "info": ("#0e1c0e", "#00FF00", "i"),
+        "success": ("#0b2416", "#3ddc84", "✓"),
+        "warning": ("#2a2306", "#ffcc00", "!"),
+        "error": ("#2e1013", "#ff6b6b", "×"),
+    }
+    MARGIN = 18
+    GAP = 8
+    TOP = 58
+    MIN_WIDTH = 360
+    MAX_WIDTH = 620
+    _stack = []
+
+    def __init__(self, text, level="info", timeout=3200, parent=None):
+        if QApplication.instance() is None:
+            raise RuntimeError("没有 QApplication，无法显示提示")
+
+        # parent 传什么都行：这里统一解析成"要贴进去的窗口"，解析不到才当浮层
+        parent = self._resolve_host(parent)
+        super().__init__(parent)
+
+        background, color, glyph = self.LEVELS.get(level, self.LEVELS["info"])
+        self._host = parent
+        self._window_mode = parent is None
+
+        if self._window_mode:
+            self.setWindowFlags(
+                Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+            )
+            self.setAttribute(Qt.WA_ShowWithoutActivating)
+        else:
+            self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 10, 12, 12)
+        outer.setSpacing(0)
+
+        inner = QFrame(self)
+        outer.addWidget(inner)
+
+        shadow = QGraphicsDropShadowEffect(inner)
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 210))
+        inner.setGraphicsEffect(shadow)
+
+        inner.setStyleSheet(f"""
+            QFrame {{
+                background: {background};
+                border: 2px solid {color};
+                border-left: 7px solid {color};
+                border-radius: 10px;
+            }}
+        """)
+
+        row = QHBoxLayout(inner)
+        row.setContentsMargins(14, 12, 16, 12)
+        row.setSpacing(12)
+
+        badge = QLabel(glyph)
+        badge.setFixedSize(24, 24)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setStyleSheet(f"""
+            QLabel {{
+                color: {background};
+                background: {color};
+                border: none;
+                border-radius: 12px;
+                font-family: Consolas, "JetBrains Mono", monospace;
+                font-size: 15px;
+                font-weight: bold;
+            }}
+        """)
+
+        label = QLabel(str(text))
+        label.setWordWrap(True)
+        label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background: transparent;
+                border: none;
+                font-family: Consolas, "JetBrains Mono", monospace;
+                font-size: 14px;
+                font-weight: 600;
+            }}
+        """)
+
+        row.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+        row.addWidget(label, 1)
+
+        self.setMinimumWidth(self.MIN_WIDTH)
+        self.setMaximumWidth(self._max_width())
+        self.adjustSize()
+
+        type(self)._stack.append(self)
+        self._place()
+        self.show()
+        self.raise_()
+        self._animate_in()
+        QTimer.singleShot(max(600, int(timeout)), self.dismiss)
+
+    @staticmethod
+    def _resolve_host(parent):
+        """能贴窗口就贴窗口，贴不上才用浮层。"""
+        if parent is not None:
+            return parent.window() if hasattr(parent, "window") else parent
+
+        app = QApplication.instance()
+        active = app.activeWindow() if app is not None else None
+        if active is not None and active.isVisible():
+            return active
+
+        for candidate in (
+            SharingData.setting_window,
+            SharingData.chat_window,
+            SharingData.mainloop_ui,
+        ):
+            if candidate is not None and getattr(candidate, "isVisible", lambda: False)():
+                return candidate
+        return None
+
+    def _max_width(self):
+        if self._host is None:
+            return self.MAX_WIDTH
+        return max(self.MIN_WIDTH, min(self.MAX_WIDTH, self._host.width() - 2 * self.MARGIN))
+
+    def _siblings(self):
+        return [
+            item for item in type(self)._stack
+            if item is not self and item._host is self._host and item.isVisible()
+        ]
+
+    def _place(self):
+        if self._window_mode:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return
+            area = screen.availableGeometry()
+            offset = self.MARGIN + sum(item.height() + self.GAP for item in self._siblings())
+            self.move(area.right() - self.width() - self.MARGIN, area.bottom() - self.height() - offset)
+            return
+
+        offset = self.TOP + sum(item.height() + self.GAP for item in self._siblings())
+        self.move(max(self.MARGIN, (self._host.width() - self.width()) // 2), offset)
+
+    def _animate_in(self):
+        if self._window_mode:
+            self.setWindowOpacity(0.0)
+            self._fade_in = QPropertyAnimation(self, b"windowOpacity", self)
+            self._fade_in.setDuration(180)
+            self._fade_in.setStartValue(0.0)
+            self._fade_in.setEndValue(1.0)
+            self._fade_in.start()
+            return
+
+        # 子控件没有 windowOpacity，改成从上方滑进来
+        target = self.pos()
+        self._slide_in = QPropertyAnimation(self, b"pos", self)
+        self._slide_in.setDuration(220)
+        self._slide_in.setEasingCurve(QEasingCurve.Type.OutBack)
+        self._slide_in.setStartValue(target - QPoint(0, 18))
+        self._slide_in.setEndValue(target)
+        self._slide_in.start()
+
+    def dismiss(self):
+        if self._window_mode:
+            self._fade_out = QPropertyAnimation(self, b"windowOpacity", self)
+            self._fade_out.setDuration(320)
+            self._fade_out.setStartValue(self.windowOpacity())
+            self._fade_out.setEndValue(0.0)
+            self._fade_out.finished.connect(self._drop)
+            self._fade_out.start()
+            return
+
+        self._slide_out = QPropertyAnimation(self, b"pos", self)
+        self._slide_out.setDuration(240)
+        self._slide_out.setEasingCurve(QEasingCurve.Type.InCubic)
+        self._slide_out.setStartValue(self.pos())
+        self._slide_out.setEndValue(self.pos() - QPoint(0, 18))
+        self._slide_out.finished.connect(self._drop)
+        self._slide_out.start()
+
+    def _drop(self):
+        if self in type(self)._stack:
+            type(self)._stack.remove(self)
+        self.hide()
+        self.close()
+        self.deleteLater()
+
+
 class HackerCard(QFrame):
     def __init__(
         self,
@@ -629,18 +1244,9 @@ class HackerCard(QFrame):
         widget: QWidget,
         description: str = "",
         parent=None,
+        stacked: bool = False,
     ):
         super().__init__(parent)
-
-        self.setFixedHeight(62)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 8, 14, 8)
-        layout.setSpacing(20)
-
-        text_layout = QVBoxLayout()
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(0)
 
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet("""
@@ -655,22 +1261,43 @@ class HackerCard(QFrame):
         description_label.setStyleSheet("""
             QLabel {
                 background: transparent;
-                color: rgba(0, 255, 0, 130);
+                color: rgba(0, 255, 0, 150);
                 border: none;
             }
         """)
 
-        text_layout.addWidget(self.title_label)
-        text_layout.addWidget(description_label)
+        if stacked:
+            # 上下排：控件独占一整行，适合下拉框、表格这类需要宽度的东西
+            self.setFixedHeight(104)
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(14, 10, 14, 12)
+            layout.setSpacing(8)
 
-        layout.addLayout(text_layout, 1)
-        widget.setFixedHeight(30)
+            head = QHBoxLayout()
+            head.setContentsMargins(0, 0, 0, 0)
+            head.setSpacing(12)
+            head.addWidget(self.title_label)
+            head.addWidget(description_label)
+            head.addStretch(1)
+            layout.addLayout(head)
 
-        layout.addWidget(
-            widget,
-            0,
-            Qt.AlignmentFlag.AlignVCenter
-        )
+            layout.addWidget(widget)
+        else:
+            self.setFixedHeight(62)
+            layout = QHBoxLayout(self)
+            layout.setContentsMargins(14, 8, 14, 8)
+            layout.setSpacing(20)
+
+            text_layout = QVBoxLayout()
+            text_layout.setContentsMargins(0, 0, 0, 0)
+            text_layout.setSpacing(0)
+            text_layout.addWidget(self.title_label)
+            text_layout.addWidget(description_label)
+
+            layout.addLayout(text_layout, 1)
+            # 别把控件压扁：按它自己的建议高度来（开关 30、按钮 38 都能放下）
+            widget.setFixedHeight(max(30, widget.sizeHint().height()))
+            layout.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.setStyleSheet("""
             HackerCard {
@@ -987,6 +1614,8 @@ class HackerSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
         super().mousePressEvent(event)
 
     def setChecked(self, checked):
+        checked = bool(checked)
+        changed = checked != self._checked
         self._checked = checked
 
         start = self._offset
@@ -996,6 +1625,10 @@ class HackerSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
         self.animation.setStartValue(start)
         self.animation.setEndValue(end)
         self.animation.start()
+
+        # 代码里改状态也要通知出去（以前只有鼠标点击才发信号）
+        if changed:
+            self.stateChanged.emit(checked)
 
     def isChecked(self):
         return self._checked
@@ -1497,6 +2130,10 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
         self.adjustSize()
 
+    def menu_actions(self):
+        """已经加进来的 QAction（条目是自己画的，Qt 的 actions() 拿不到）。"""
+        return list(self._actions)
+
     def _emit(self, action):
         self.triggered.emit(action)
         if hasattr(action, 'trigger'):
@@ -1750,9 +2387,23 @@ class HackerWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
             btn = self.nav_buttons.pop(widget)
             btn.setParent(None)
 
-        if widget in self.nav_widgets.values():
+        for text in [key for key, value in self.nav_widgets.items() if value is widget]:
+            self.nav_widgets.pop(text, None)
+
+        if widget.parent() is self.pages:
             self.pages.removeWidget(widget)
-            widget.setParent(None)
+        widget.setParent(None)
+
+    def remove_category(self, category: str):
+        """移除一个分类头（里面的条目要用 removeNavigation 先摘掉）。"""
+        widget = self.categories.pop(category, None)
+        if widget is None:
+            return False
+
+        self.nav_layout.removeWidget(widget)
+        widget.setParent(None)
+        widget.deleteLater()
+        return True
 
     def setEnableBorder(self, enabled):
         if enabled:
@@ -1827,7 +2478,74 @@ class _ChatInputEdit(HackerTextEdit):
             self.parent_._send_message()
             return
 
+        # Ctrl+V / Shift+Insert 得在这里拦：QTextEdit 的 paste() 不会走 insertFromMimeData
+        # 那个虚函数（实测 Qt 6.11 里图片会被当成富文本资源塞进文档，界面上什么也看不到）
+        if self._is_paste_key(event) and self._paste_as_attachment():
+            return
+
         super().keyPressEvent(event)
+
+    @staticmethod
+    def _is_paste_key(event) -> bool:
+        modifiers = event.modifiers()
+        if event.key() == Qt.Key.Key_Insert and modifiers & Qt.KeyboardModifier.ShiftModifier:
+            return True
+        # Ctrl+Shift+V 是"粘贴为纯文本"，别抢
+        return (
+            event.key() == Qt.Key.Key_V
+            and bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+            and not modifiers & Qt.KeyboardModifier.ShiftModifier
+        )
+
+    def _paste_as_attachment(self) -> bool:
+        clipboard = QApplication.clipboard()
+        source = clipboard.mimeData() if clipboard is not None else None
+        if not hasattr(self.parent_, "can_attach_mime") or not self.parent_.can_attach_mime(source):
+            return False
+        return bool(self.parent_.attach_from_mime(source))
+
+    def canInsertFromMimeData(self, source):
+        """图片/文件交给聊天窗当附件：这里一律拒绝，免得被插成看不见的文档资源。"""
+        if hasattr(self.parent_, "can_attach_mime") and self.parent_.can_attach_mime(source):
+            return False
+        return super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):
+        """兜底：有调用方直接调这个函数时也当附件处理。"""
+        if hasattr(self.parent_, "attach_from_mime") and self.parent_.attach_from_mime(source):
+            return
+        super().insertFromMimeData(source)
+
+
+class HackerAttachmentChip(QFrame):
+    """待发送附件的小标签（名字 + 大小 + 移除）。"""
+
+    def __init__(self, attachment: dict, on_remove=None, parent=None):
+        from ...ai import attachment as attachment_api
+
+        super().__init__(parent)
+        self.setProperty("attachment", attachment)
+        self.setStyleSheet("""
+            HackerAttachmentChip {
+                background: rgba(0, 255, 0, 16);
+                border: 1px solid rgba(0, 255, 0, 70);
+                border-radius: 6px;
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 2, 4, 2)
+        layout.setSpacing(6)
+
+        mark = "🖼" if attachment.get("kind") == "image" else "📄"
+        label = HackerLabel(f"{mark} {attachment.get('name')}（{attachment_api.human_size(attachment.get('size'))}）")
+        label.setStyleSheet("QLabel { color: #00FF88; background: transparent; border: none; }")
+        layout.addWidget(label)
+
+        if on_remove is not None:
+            close = HackerBubbleAction("×", "移除这个附件")
+            close.clicked.connect(lambda: on_remove(attachment))
+            layout.addWidget(close)
 
 
 # BASE
@@ -1841,6 +2559,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         parent=None,
     ):
         super().__init__(parent)
+        self.is_local = is_local
         if is_local:
             if model in cache_llm_class.keys():
                 self.ai_llm = cache_llm_class[model]
@@ -1854,8 +2573,17 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
                 # noinspection PyTypeChecker
                 self.ai_llm = cloud.LLM(model, api_key, base_url)
                 cache_llm_class[model] = self.ai_llm
-        # noinspection PyTypeChecker
-        self.ai_llm.memory_signal.connect(SharingData.add_memory_to_ui[model])
+
+        # 记忆面板可能还没建过（比如设置页没打开就先聊天），取不到回调就跳过
+        memory_callback = SharingData.add_memory_to_ui.get(model)
+        if memory_callback is not None:
+            self.ai_llm.memory_signal.connect(memory_callback)
+
+        # 同一个实例会被多个聊天页共用，协作提示只接一次
+        coop_signal = getattr(self.ai_llm, "coop_signal", None)
+        if coop_signal is not None and not getattr(self.ai_llm, "_coop_notify_bound", False):
+            coop_signal.connect(self.on_coop_event)
+            self.ai_llm._coop_notify_bound = True
 
         self.setWindowTitle(ai_name)
 
@@ -1881,14 +2609,127 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
     def chat_finished(self, all_message):
         self.chat.enable_send_button()
 
-    def add_user_msg(self, msg: str):
+        # 插件可以改最终回复（流式已经把原文写进气泡了，这里按需重写）
+        final = self._plugin_text(all_message or "", "assistant")
+        bubble = self.current_assistant_bubble
+        if bubble is not None and final and final != (all_message or ""):
+            bubble.text_label.setText(final)
+            self.chat.update_bubble_widths()
+            self.chat.scroll_to_bottom()
+
+        from ... import emit_sdk_event, plugin_manager
+
+        try:
+            plugin_manager().emit_event("chat_finished", {"reply": final})
+        except Exception:  # noqa: BLE001
+            pass
+        emit_sdk_event("chat_finished", {"reply": final})
+
+    def add_user_msg(self, msg: str, attachments=None):
         self.current_assistant_bubble = self.chat.add_assistant_msg()
         self.chat.disable_send_button()
 
-        t = derfer.LLMAICallback(self.ai_llm, msg, self)
+        attachments = list(attachments or [])
+        self._warn_if_blind(attachments)
+
+        skill = getattr(self.chat, "active_skill", None)
+        prompt = self._combined_prompt(skill)
+        msg = self._plugin_text(msg, "user")
+
+        t = derfer.LLMAICallback(self.ai_llm, msg, self, skill=prompt, attachments=attachments)
+        self.worker = t
         t.finished.connect(self.chat_finished)
         t.text_chunk.connect(self.add_assistant_msg)
+        t.tool_event.connect(self.on_tool_event)
         t.start()
+
+    @staticmethod
+    def _plugin_text(text: str, role: str) -> str:
+        """让插件改用户输入（chat_send）或回复（chat_reply）。"""
+        from ... import plugin_manager
+
+        try:
+            return plugin_manager().chat_text(text, role)
+        except Exception:  # noqa: BLE001 - 插件坏了不能挡住聊天
+            return text
+
+    @staticmethod
+    def _combined_prompt(skill) -> str | None:
+        """技能提示词 + 插件要求的系统提示词，一起当成 system 段注入。
+
+        都没有就返回 None —— 别给 LLM 传一个没意义的空串。
+        """
+        from ... import plugin_prompts
+
+        parts = []
+        prompt = (skill or {}).get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            parts.append(prompt.strip())
+        parts.extend(item for item in plugin_prompts() if str(item).strip())
+        return "\n\n".join(parts) if parts else None
+
+    def _warn_if_blind(self, attachments):
+        """带了图片但模型看不见图时直说 —— 否则用户只会以为"AI 没收到图片"。
+
+        提示只是锦上添花，任何异常都不能挡住发送。
+        """
+        from ...ai import attachment as attachment_api
+
+        try:
+            if not attachment_api.images(attachments) or not getattr(self, "is_local", False):
+                return
+            model = getattr(self.ai_llm, "model", "")
+            if attachment_api.can_see_images(model):
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+        HackerNotify(
+            f"{model} 是纯文本模型，看不了图片（换成带 vision 的模型，"
+            "或用文字描述图片内容）",
+            "warning",
+            5000,
+        )
+
+    def on_tool_event(self, event: dict):
+        """音频挂到当前气泡上等用户点播放；其它事件先忽略（MCP 工具的结果还是走文本）。"""
+        if event.get("type") != "audio":
+            return
+        data = event.get("data")
+        if not data or self.current_assistant_bubble is None:
+            return
+
+        self.current_assistant_bubble.attach_audio(data)
+        transcript = event.get("transcript")
+        if transcript and not self.current_assistant_bubble.text().strip():
+            self.current_assistant_bubble.append_text(transcript)
+        self.chat.scroll_to_bottom()
+
+    @staticmethod
+    def on_coop_event(event: dict):
+        stage = event.get("stage")
+        agent = event.get("agent") or "协作模型"
+
+        if stage == "draft":
+            HackerNotify("多模型协作：主模型正在出初稿…", "info", 2000)
+        elif stage == "review_start":
+            HackerNotify(f"多模型协作：{agent} 正在评审…", "info", 2000)
+        elif stage == "review_done":
+            HackerNotify(f"{agent} 评审完成", "info", 1500)
+        elif stage == "agent_start":
+            HackerNotify(f"多模型协作：{agent} 正在回答…", "info", 2000)
+        elif stage == "agent_done":
+            HackerNotify(f"{agent} 回答完成", "info", 1500)
+        elif stage == "final":
+            HackerNotify("多模型协作：主模型正在定稿…", "info", 2000)
+        elif stage == "agent_error":
+            HackerNotify(f"{agent} 协作失败：{event.get('detail', '未知错误')}", "error", 4000)
+        elif stage == "empty":
+            HackerNotify(
+                f"{event.get('detail', '协作没有生效')}（协作设置里检查模型与开关）",
+                "warning",
+                3500,
+            )
 
     def add_assistant_msg(self, msg: str):
         if not msg:
@@ -1903,6 +2744,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
 IconList = IconList()
 Window = HackerWindow
 Menu = HackerMenu
+Notify = HackerNotify
 TextEdit = HackerTextEdit
 LineEdit = HackerLineEdit
 Button = HackerButton

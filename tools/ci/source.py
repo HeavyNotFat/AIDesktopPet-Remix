@@ -1,13 +1,3 @@
-"""源码索引：扫描 / 解析 / 建符号表 / 解析 import。
-
-所有检查都从这里拿数据，好处是：
-
-* AST 只解析一次（缓存），几十个检查也很快；
-* 语法错误的文件不会让整个 CI 崩掉，而是作为一条 ERROR 报出来；
-* 相对 import（``from ...base import X``）能解析成真正的模块，
-  抽象类继承链才追得下去。
-"""
-
 from __future__ import annotations
 
 import ast
@@ -40,7 +30,6 @@ class SourceFile:
 @dataclass(slots=True)
 class ClassRecord:
     """类定义索引条目。"""
-
     name: str
     file: SourceFile
     node: ast.ClassDef
@@ -68,7 +57,6 @@ class ClassRecord:
 @dataclass(slots=True)
 class ImportRef:
     """一条 import 语句解析后的结果。"""
-
     module: str | None          # 被导入的模块全限定名（相对 import 已展开）
     name: str | None            # from X import name 里的 name
     local: str                  # 在本模块里绑定的名字
@@ -78,7 +66,6 @@ class ImportRef:
 
 class ImportTable:
     """单个模块的 import 别名表。"""
-
     def __init__(self, refs: Iterable[ImportRef]):
         self.refs = list(refs)
         self.aliases: dict[str, ImportRef] = {}
@@ -127,11 +114,6 @@ def build_import_table(tree: ast.Module, package: str, is_package: bool) -> Impo
 
 
 def _resolve_relative(level: int, module: str | None, package: str, is_package: bool) -> str | None:
-    """把 ``from ..base import X`` 展开成 ``stlibs.themes.base``。
-
-    ``package`` 已经是"本模块所在的包"（``__init__.py`` 就是它自己），
-    所以 level=1 直接用 package，level=2 再往上剥一层。
-    """
     if level == 0:
         return module
 
@@ -146,7 +128,6 @@ def _resolve_relative(level: int, module: str | None, package: str, is_package: 
 
 class SourceIndex:
     """整个仓库的 Python 源码索引。"""
-
     def __init__(self, root: Path, settings: Settings):
         self.root = root
         self.settings = settings
@@ -433,11 +414,6 @@ def call_qualname(node: ast.Call) -> tuple[str, str]:
 
 @dataclass(slots=True)
 class BranchStatement:
-    """带「分支路径」的语句。
-
-    同一个函数里，``if``/``else`` 两个分支各自出现一次 ``setStyleSheet``
-    是正常的；只有**同一分支路径**里重复才算冲突。
-    """
 
     path: tuple[str, ...]
     node: ast.AST
@@ -445,7 +421,6 @@ class BranchStatement:
 
 def iter_branch_statements(func: ast.AST) -> Iterator[BranchStatement]:
     """按分支路径展开函数体（只下钻一层控制流，足够覆盖 UI 代码）。"""
-
     def walk(body: Sequence[ast.stmt], path: tuple[str, ...]) -> Iterator[BranchStatement]:
         for stmt in body:
             yield BranchStatement(path, stmt)
@@ -469,12 +444,6 @@ def iter_branch_statements(func: ast.AST) -> Iterator[BranchStatement]:
 
 
 def iter_calls(func: ast.AST) -> Iterator[tuple[tuple[str, ...], ast.Call]]:
-    """函数内所有调用，附带分支路径。
-
-    复合语句的**头部表达式**（``if cond:`` 的 cond、``for x in it:`` 的 it）
-    归属于外层路径，语句体则交给 ``iter_branch_statements`` 单独展开，
-    这样同一个调用不会被数两次。嵌套函数体内自成作用域，这里不再下钻。
-    """
     for item in iter_branch_statements(func):
         for target in _call_roots(item.node):
             for node in _walk_pruned(target, _SCOPE_BOUNDARIES, skip_root=True):

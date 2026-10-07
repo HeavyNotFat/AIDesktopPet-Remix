@@ -421,11 +421,41 @@ class PublicShader(QWidget):
 
         context_menu.addSeparator()
 
+        self.add_plugin_actions(context_menu)
+
         shut_program_action = stlibs.SharingData.theme.Action("关闭", self, stlibs.SharingData.theme.IconList.SHUTDOWN)
         shut_program_action.triggered.connect(self.exit_program)
         context_menu.addAction(shut_program_action)
 
         context_menu.exec(self.mapToGlobal(position))
+
+    def add_plugin_actions(self, context_menu):
+        """把插件注册的菜单项挂到右键菜单上（UI Hook）。"""
+        try:
+            items = stlibs.plugin_manager().menu_items()
+        except Exception as exc:  # noqa: BLE001 - 插件坏了不能挡住菜单
+            print(f"[plugin] 菜单项读取失败：{exc}")
+            return
+
+        if not items:
+            return
+
+        context_menu.addSeparator()
+        for item in items:
+            action = stlibs.SharingData.theme.Action(item.label, self, stlibs.SharingData.theme.IconList.SETTING)
+            action.triggered.connect(lambda _checked=False, name=item.action: self.run_plugin_action(name))
+            context_menu.addAction(action)
+
+    def run_plugin_action(self, action: str):
+        try:
+            manager = stlibs.plugin_manager()
+            result = manager.trigger_menu(action) or manager.trigger_menu(action.split(":")[-1])
+        except Exception as exc:  # noqa: BLE001
+            stlibs.notify(f"插件菜单执行失败：{exc}", "error", 4000)
+            return
+
+        if result:
+            stlibs.notify(str(result)[:120], "info", 3000)
 
     def mousePressEvent(self, event):
         global_x = event.globalPosition().x()
@@ -462,6 +492,7 @@ class PublicShader(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        was_click = event.button() == Qt.MouseButton.LeftButton and not self.is_dragging
         self.set_mouse_transparent(True)
         if event.button() == Qt.LeftButton:
             self.drag_position = None
@@ -469,6 +500,23 @@ class PublicShader(QWidget):
             self.is_dragging = False
 
         event.accept()
+
+        if was_click:
+            self.notify_clicked(event)
+
+    def notify_clicked(self, event):
+        """点一下桌宠：通知插件与 SDK 订阅者。"""
+        self.emit_sdk_event("pet_click", {
+            "x": event.globalPosition().x(), "y": event.globalPosition().y(), "source": "static",
+        })
+        try:
+            stlibs.plugin_manager().emit_event("pet_click", {"source": "static"})
+        except Exception:  # noqa: BLE001 - 插件系统的问题不该影响点击
+            pass
+
+    @staticmethod
+    def emit_sdk_event(name: str, data=None):
+        stlibs.emit_sdk_event(name, data)
 
     def wheelEvent(self, event):
         if event.modifiers() == Qt.ControlModifier and self.is_in_animation_area():

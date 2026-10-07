@@ -1,8 +1,3 @@
-"""仓库基线：真实代码必须能过门禁。
-
-这是 CI 里真正卡合并的那个测试；单条规则的行为验证在别的文件里。
-"""
-
 from __future__ import annotations
 
 from tools.ci import run

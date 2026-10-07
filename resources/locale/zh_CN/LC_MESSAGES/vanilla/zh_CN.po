@@ -20,6 +20,14 @@ msgstr "本地模型"
 msgid "graphics.chat.api"
 msgstr "API模型"
 
+#: stlibs/themes/hacker/__init__.py
+msgid "graphics.chat.no_skill"
+msgstr "还没有技能，去 设置 → 技能 里加一个"
+
+#: stlibs/themes/hacker/__init__.py
+msgid "graphics.chat.skill"
+msgstr "技能"
+
 #: shader/*.py
 msgid "shader.menu.settings"
 msgstr "设置"

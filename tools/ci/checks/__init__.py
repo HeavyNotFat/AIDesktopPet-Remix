@@ -1,9 +1,3 @@
-"""检查包注册表。
-
-每个模块里的 ``check_*`` 函数在这里统一 ``@register`` 成 CI 检查项。
-新增检查只要在本文件加一行 import + 装饰器即可，CLI 会自动发现。
-"""
-
 from __future__ import annotations
 
 from ..core import register

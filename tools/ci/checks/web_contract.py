@@ -1,18 +1,3 @@
-"""网页聊天前后端契约检测。
-
-网页端是一堆手写的 JS（没有构建步骤、没有类型），后端是 FastAPI。
-两边靠字符串约定连在一起：``post('/chat')`` ↔ ``@api.post('/chat')``、
-``QW.config.API_BASE`` ↔ ``config.PORT``、``$('sendBtn')`` ↔ ``id="sendBtn"``。
-任何一边改名，另一边都不会报错，只会在浏览器控制台里静默失败。
-
-* ``web/api-route``       JS 调用的接口在后端不存在
-* ``web/api-port``        前端写死的端口／前缀和后端不一致
-* ``web/config-key``      ``QW.config`` 里取用的键没定义（localStorage 会写成 "undefined"）
-* ``web/dom-id``          JS 取的 DOM id 在 HTML 里不存在
-* ``web/namespace``       调用了 ``QW.xxx.yyy`` 但没人导出 yyy
-* ``web/script-loaded``   js 文件没被 index.html 引入（写了但没生效）
-"""
-
 from __future__ import annotations
 
 import ast
@@ -133,6 +118,8 @@ def _exports(ctx) -> tuple[dict[str, set[str]], dict[str, str]]:
 def _object_keys(body: str) -> set[str]:
     keys = set(re.findall(r"([A-Za-z_$][\w$]*)\s*:", body))
     keys |= set(re.findall(r"(?:^|[,{\s])([A-Za-z_$][\w$]*)\s*(?=[,}]|$)", body))
+    # 取值器/设值器也是导出：{ get pending() {...} } 一样能被 QW.x.pending 取到
+    keys |= set(re.findall(r"\b(?:get|set)\s+([A-Za-z_$][\w$]*)\s*\(", body))
     return {key for key in keys if key}
 
 

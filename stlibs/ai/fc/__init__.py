@@ -6,7 +6,6 @@ from ... import Config
 
 class FunctionCall:
     """支持流式输出的函数调用引擎"""
-
     def __init__(self, model: str = "qwen3.5:4b", max_rounds: int = 10, host: Optional[str] = None):
         import ollama
 
@@ -33,13 +32,6 @@ class FunctionCall:
         })
 
     def run(self, messages: List[Dict]) -> Generator[Union[str, Dict], None, None]:
-        """
-        执行带工具调用的流式对话循环
-        :yields:
-            str: 模型生成的文本片段（实时流式）
-            dict: 工具调用事件 {"type": "tool_call", "name": ..., "args": ...}
-            dict: 工具执行结果 {"type": "tool_result", "name": ..., "result": ...}
-        """
         for _ in range(self.max_rounds):
             content_parts: List[str] = []
             tool_calls_map: Dict[int, Dict[str, Any]] = {}
@@ -106,9 +98,6 @@ class FunctionCall:
 
     @staticmethod
     def _build_tool_calls(tool_calls_map: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        把拼接完成的分片，转换为可直接使用的完整 tool_call 结构
-        """
         full_tool_calls = []
         for idx in sorted(tool_calls_map):
             data = tool_calls_map[idx]
@@ -131,9 +120,6 @@ class FunctionCall:
     def _execute_tools(
         self, full_tool_calls: List[Dict[str, Any]], messages: List[Dict]
     ) -> Generator[Dict, None, None]:
-        """
-        依次执行工具，yield 结果事件，并把结果写回消息历史
-        """
         for tc in full_tool_calls:
             name = tc["function"]["name"]
             args = tc["function"]["arguments"]

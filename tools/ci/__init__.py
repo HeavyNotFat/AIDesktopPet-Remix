@@ -1,13 +1,3 @@
-"""ADPRemix CI/CD 质量门禁。
-
-    from tools.ci import run, Severity
-
-    report = run()
-    assert report.exit_code() == 0
-
-对外只需要记三样东西：:func:`run`、:class:`Report`、:class:`Severity`。
-"""
-
 from .core import (
     Check,
     CheckResult,

@@ -131,6 +131,37 @@ svg.i{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke
 }
 .composer textarea::placeholder{color:#a0a5b0}
 .composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.composer-right{display:flex;align-items:center;gap:8px;flex:none}
+.attach-btn{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;color:var(--sub);background:#f4f5f8}
+.attach-btn:hover{background:#eceef4;color:var(--text)}
+.attach-btn svg{width:17px;height:17px}
+
+.attach-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.att-warn{
+  flex-basis:100%;font-size:12px;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;
+  border-radius:10px;padding:6px 10px;
+}
+.att-chip{
+  display:flex;align-items:center;gap:8px;max-width:260px;
+  padding:4px 6px 4px 8px;border:1px solid var(--line);border-radius:12px;background:#fafbfd;
+}
+.att-chip img{width:26px;height:26px;object-fit:cover;border-radius:6px;flex:none}
+.att-chip .mark{font-size:16px;line-height:1}
+.att-chip .name{font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-chip .del{
+  width:20px;height:20px;flex:none;border-radius:50%;border:0;background:#eceef3;color:#6b7280;
+  font-size:14px;line-height:1;cursor:pointer;
+}
+.att-chip .del:hover{background:#e2e5ec;color:#111}
+
+.att-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.att-img{margin:0;max-width:240px}
+.att-img img{display:block;width:100%;border-radius:12px;border:1px solid var(--line)}
+.att-img figcaption{margin-top:4px;font-size:11px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-file{
+  font-size:12px;color:var(--sub);background:#f6f7fa;border:1px solid var(--line);
+  border-radius:10px;padding:6px 10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 
 .model-wrap{position:relative;min-width:0}
 .model-btn{

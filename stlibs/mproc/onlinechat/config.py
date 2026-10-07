@@ -1,8 +1,3 @@
-"""网页聊天（onlinechat）服务配置。
-
-所有可调参数都可以用环境变量覆盖，方便 CI/CD 与打包后的现场排障。
-"""
-
 import os
 from pathlib import Path
 
@@ -30,3 +25,7 @@ MAX_SESSIONS = int(os.getenv('WEBCHAT_MAX_SESSIONS', '8'))
 MODEL_LIST_TTL = float(os.getenv('WEBCHAT_MODEL_TTL', '30'))
 # 单个请求最长处理时间（秒），用于反向代理/前端提示
 REQUEST_TIMEOUT = float(os.getenv('WEBCHAT_REQUEST_TIMEOUT', str(LLM_TIMEOUT)))
+
+# 附件：前端按 base64 上传，所以这里限的是 base64 字符数（约等于原始大小的 4/3）
+MAX_ATTACHMENTS = int(os.getenv('WEBCHAT_MAX_ATTACHMENTS', '6'))
+MAX_ATTACHMENT_CHARS = int(os.getenv('WEBCHAT_MAX_ATTACHMENT_CHARS', str(12 * 1024 * 1024)))

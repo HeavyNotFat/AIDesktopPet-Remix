@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
-from ... import Config, get_model_lists
+from ... import Config, CONFIG_PATH, get_model_lists
 from .config import MODEL_LIST_TTL
 
 # 云端模型 id 前缀
@@ -18,7 +19,6 @@ BACKEND_CLOUD = "cloud"
 
 class UnknownModelError(KeyError):
     """请求的模型不在注册表里。"""
-
     def __init__(self, value: str, known: Iterable[str] = ()):
         self.value = value
         self.known = list(known)
@@ -32,13 +32,14 @@ class UnknownModelError(KeyError):
 @dataclass(frozen=True, slots=True)
 class ModelTarget:
     """一次网页请求要用到的后端调用描述。"""
-
     value: str
     label: str
     backend: str
     model: str
     api_key: str | None = None
     base_url: str | None = None
+    # 本地模型能不能看图（True/False）；云端或查不到是 None
+    vision: bool | None = None
 
     @property
     def is_cloud(self) -> bool:
@@ -46,7 +47,21 @@ class ModelTarget:
 
     def public(self) -> dict[str, str]:
         """返回给前端的结构（``api.js`` 的 ``normalizeModel`` 认 label/value）。"""
-        return {"value": self.value, "label": self.label, "backend": self.backend}
+        data = {"value": self.value, "label": self.label, "backend": self.backend}
+        if self.vision is not None:
+            data["vision"] = self.vision
+        return data
+
+
+def cloud_models() -> dict:
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return dict(Config.models or {})
+
+    models = data.get("models")
+    return models if isinstance(models, dict) else dict(Config.models or {})
 
 
 def load_targets() -> "OrderedDict[str, ModelTarget]":
@@ -56,14 +71,18 @@ def load_targets() -> "OrderedDict[str, ModelTarget]":
     for name in get_model_lists():
         if not name:
             continue
+
+        from ...ai import attachment
+
         targets[name] = ModelTarget(
             value=name,
             label=name,
             backend=BACKEND_LOCAL,
             model=name,
+            vision=attachment.vision_capability(name),
         )
 
-    for alias, parameters in (Config.models or {}).items():
+    for alias, parameters in cloud_models().items():
         if not isinstance(parameters, dict):
             continue
         parameters = dict(parameters)
@@ -83,7 +102,6 @@ def load_targets() -> "OrderedDict[str, ModelTarget]":
 
 class ModelRegistry:
     """带 TTL 的模型注册表，线程安全。"""
-
     def __init__(self, ttl: float = 5.0, provider: Callable[[], dict] | None = None):
         self._ttl = max(0.0, float(ttl))
         self._provider = provider or load_targets
@@ -111,6 +129,11 @@ class ModelRegistry:
                 pass
         with self._lock:
             return OrderedDict(self._targets)
+
+    def invalidate(self) -> None:
+        """让下一次 snapshot() 重新扫描（配置刚改过，不想等 TTL）。"""
+        with self._lock:
+            self._loaded_at = 0.0
 
     def get(self, value: str) -> ModelTarget | None:
         return self.snapshot().get(value)

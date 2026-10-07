@@ -1,16 +1,27 @@
 import base64
+import inspect
 import json
 import os
 import threading
 import time
 import uuid
 
-
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        data = base64.b64encode(image_file.read()).decode("utf-8")
-        image_file.close()
-    return data
+from .attachment import (  # noqa: F401 - encode_image 是老接口，从这里继续对外暴露
+    MAX_ATTACHMENTS,
+    compact_for_display,
+    data_url,
+    encode_image,
+    from_base64,
+    from_bytes,
+    from_path,
+    human_size,
+    images,
+    normalize,
+    ollama_message,
+    openai_message,
+    summarize,
+    with_document_context,
+)
 
 
 def _one_line(text, limit):
@@ -28,10 +39,6 @@ def _bigrams(text):
 
 
 def summarize_turns(turns, max_chars=800):
-    """把若干轮对话压成一段摘要（默认抽取式，不依赖模型）。
-
-    需要更"像人写"的摘要时，给 LTMemory 传一个 summarizer 覆盖即可。
-    """
     lines = []
     for turn in turns:
         user = _one_line(turn.get("user"), 120)
@@ -49,7 +56,6 @@ def summarize_turns(turns, max_chars=800):
 
 class LTMemory:
     """长期记忆：把对话按轮次攒起来压缩成摘要落盘，下次按相关性召回。"""
-
     STORE_PATH = "./resources/memory/lt_memory.json"
     _path_locks = {}
     _locks_guard = threading.Lock()
@@ -172,11 +178,6 @@ class LTMemory:
 
     @staticmethod
     def _score(query, query_grams, text):
-        """字符二元组 Dice 相似度 + 完整命中加权。
-
-        刻意不引第三方检索库：长期记忆量级小（几百条），
-        这样它在没装 rank_bm25 / 向量库的环境下也能工作。
-        """
         grams = _bigrams(text)
         if not grams or not query_grams:
             return 0.0
@@ -244,19 +245,297 @@ def inject_memory_context(messages, context):
     return [*messages[:index], {"role": "system", "content": context}, *messages[index:]]
 
 
+def _skill_list(skills=None) -> list:
+    if skills is not None:
+        return [skill for skill in skills if isinstance(skill, dict)]
+
+    from .. import Config
+
+    return [skill for skill in (getattr(Config, "skills", None) or []) if isinstance(skill, dict)]
+
+
+def find_skill(name, skills=None):
+    """按名字找技能（忽略大小写，允许带前导 ``/``）。"""
+    wanted = str(name or "").strip().lstrip("/").strip().casefold()
+    if not wanted:
+        return None
+
+    for skill in _skill_list(skills):
+        if str(skill.get("name") or "").strip().casefold() == wanted:
+            return dict(skill)
+    return None
+
+
+def parse_skill(text, skills=None):
+    """把 ``/名字 正文`` 拆成 ``(技能, 正文)``；没匹配上就原样返回。"""
+    text = text or ""
+    if not text.startswith("/"):
+        return None, text
+
+    head, _sep, rest = text[1:].partition(" ")
+    skill = find_skill(head, skills)
+    if skill is None:
+        return None, text
+    return skill, rest.strip()
+
+
+def inject_skill(messages, prompt):
+    """技能提示词插在 system 段之后，用户消息保持原样（记忆面板里不会出现一大段提示词）。"""
+    if not isinstance(prompt, str) or not prompt.strip():
+        return messages
+
+    index = 0
+    while index < len(messages) and isinstance(messages[index], dict) and messages[index].get("role") == "system":
+        index += 1
+
+    return [*messages[:index], {"role": "system", "content": str(prompt)}, *messages[index:]]
+
+
+def skill_prompt(skill) -> str:
+    if not isinstance(skill, dict):
+        return ""
+    return str(skill.get("prompt") or "").strip()
+
+
+def _coop_config() -> dict:
+    # Config 只能在运行期取：stlibs/__init__.py 里还没有 ai，模块级导入会成环
+    from .. import Config
+
+    return getattr(Config, "coop", None) or {}
+
+
+def build_llm(model_key, system_prompt="", coop=False):
+    from .. import Config
+    from . import cloud, local
+
+    parameters = (Config.models or {}).get(model_key)
+    if parameters:
+        return cloud.LLM(
+            parameters.get("name") or model_key,
+            parameters.get("apikey"),
+            parameters.get("baseurl"),
+            system_prompt,
+            coop=coop,
+        )
+    return local.LLM(model_key, system_prompt, coop=coop)
+
+
+def chat_prompt(llm, question):
+    """按签名适配 ``local.LLM.chat(user_input, should_emit)`` 与 ``cloud.LLM.chat(query)``。"""
+    parameters = inspect.signature(llm.chat).parameters
+    message_params = [name for name in parameters if name not in {"should_emit", "emit"}]
+    if not message_params:
+        raise TypeError(f"{type(llm).__name__}.chat 没有可识别的消息参数：{list(parameters)}")
+
+    kwargs = {name: False for name in parameters if name in {"should_emit", "emit"}}
+    kwargs[message_params[0]] = question
+    return llm.chat(**kwargs)
+
+
+class MultiAgentCoop:
+    """多模型协作：主模型出稿，其它模型按角色评审，主模型再据此定稿。"""
+    MODES = {"review": "评审改稿", "parallel": "并行汇总"}
+
+    REVIEW_PROMPT = (
+        "你是评审专家。请针对收到的回答逐条指出事实错误、遗漏和表达不清之处，"
+        "只列问题、不要评价好坏、也不要重写答案。"
+    )
+    FINAL_PROMPT = (
+        "下面是你自己的初稿，以及其它模型对它的评审意见。请综合这些意见，"
+        "输出一份更准确、更完整的最终回答，只输出答案本身。\n\n"
+        "【初稿】\n{draft}\n\n【评审意见】\n{notes}"
+    )
+    SYNTHESIZE_PROMPT = (
+        "下面是多个模型对同一个问题的回答。请综合它们，去重、纠错、补全，"
+        "输出一份最完整的最终回答，只输出答案本身。\n\n{answers}"
+    )
+
+    def __init__(self, config=None, builder=None):
+        self._config = config if config is not None else _coop_config()
+        self._builder = builder or build_llm
+        self._lock = threading.RLock()
+        self._instances = {}
+
+    def reconfigure(self, config=None):
+        with self._lock:
+            self._config = config if config is not None else _coop_config()
+            self._instances.clear()
+
+    @property
+    def enable(self):
+        return bool(self._config.get("enable"))
+
+    @property
+    def mode(self):
+        mode = str(self._config.get("mode") or "review")
+        return mode if mode in self.MODES else "review"
+
+    @property
+    def rounds(self):
+        try:
+            return max(1, min(3, int(self._config.get("rounds") or 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    @property
+    def agents(self):
+        agents = []
+        for item in self._config.get("agents") or []:
+            if not isinstance(item, dict):
+                continue
+            model = str(item.get("model") or "").strip()
+            if not model:
+                continue
+            agents.append({
+                "model": model,
+                "name": str(item.get("name") or model).strip() or model,
+                "prompt": str(item.get("prompt") or "").strip(),
+            })
+        return agents
+
+    def instance(self, model_key, system_prompt=""):
+        """协作成员的实例按 (模型, 角色提示词) 缓存，不必每轮重建。"""
+        key = (model_key, system_prompt)
+        with self._lock:
+            llm = self._instances.get(key)
+            if llm is None:
+                llm = self._builder(model_key, system_prompt=system_prompt)
+                self._instances[key] = llm
+            return llm
+
+    def describe(self):
+        agents = self.agents
+        if not self.enable:
+            return "协作已关闭"
+        if not agents:
+            return "协作已开启，但没有配置可用的模型"
+        return f"{self.MODES[self.mode]}：主模型 + {len(agents)} 个协作模型，{self.rounds} 轮"
+
+    def run(self, query, lead_llm, base_messages=None):
+        """产出协作过程：先若干 dict 事件，最后把定稿当文本片段吐出来。"""
+        base_messages = list(base_messages or [])
+        agents = self.agents
+
+        if not agents:
+            yield {"type": "coop", "stage": "empty", "detail": "没有可用的协作模型，按普通模式回答"}
+            yield from self._reply(lead_llm, query, base_messages)
+            return
+
+        if self.mode == "parallel":
+            yield from self._run_parallel(query, lead_llm, base_messages, agents)
+            return
+
+        yield from self._run_review(query, lead_llm, base_messages, agents)
+
+    def _run_parallel(self, query, lead_llm, base_messages, agents):
+        answers = []
+        for agent in agents:
+            yield {"type": "coop", "stage": "agent_start", "agent": agent["name"], "model": agent["model"]}
+            text, error = self._ask(agent, query)
+            if error:
+                yield {"type": "coop", "stage": "agent_error", "agent": agent["name"], "detail": error}
+                continue
+            answers.append((agent["name"], text))
+            yield {"type": "coop", "stage": "agent_done", "agent": agent["name"], "text": text}
+
+        if not answers:
+            yield {"type": "coop", "stage": "empty", "detail": "所有协作模型都失败了，按普通模式回答"}
+            yield from self._reply(lead_llm, query, base_messages)
+            return
+
+        prompt = self.SYNTHESIZE_PROMPT.format(
+            answers="\n\n".join(f"【{name}】\n{text}" for name, text in answers)
+        )
+        yield {"type": "coop", "stage": "final", "agents": len(answers)}
+        yield from self._reply(lead_llm, prompt, base_messages)
+
+    def _run_review(self, query, lead_llm, base_messages, agents):
+        yield {"type": "coop", "stage": "draft", "agents": len(agents)}
+        draft = self._lead_text(lead_llm, base_messages)
+        if not draft:
+            yield {"type": "coop", "stage": "empty", "detail": "主模型没有给出初稿"}
+            return
+
+        request = f"用户的问题：\n{query}\n\n需要评审的回答：\n{draft}"
+        notes = []
+        for round_index in range(1, self.rounds + 1):
+            for agent in agents:
+                yield {
+                    "type": "coop",
+                    "stage": "review_start",
+                    "agent": agent["name"],
+                    "round": round_index,
+                }
+                text, error = self._ask(agent, request)
+                if error:
+                    yield {"type": "coop", "stage": "agent_error", "agent": agent["name"], "detail": error}
+                    continue
+                notes.append((agent["name"], text))
+                yield {"type": "coop", "stage": "review_done", "agent": agent["name"], "text": text}
+
+        if not notes:
+            yield {"type": "coop", "stage": "empty", "detail": "没有拿到任何评审意见，直接输出初稿"}
+            yield draft
+            return
+
+        prompt = self.FINAL_PROMPT.format(
+            draft=draft,
+            notes="\n\n".join(f"【{name}】\n{text}" for name, text in notes),
+        )
+        yield {"type": "coop", "stage": "final", "reviews": len(notes)}
+        yield from self._reply(lead_llm, prompt, base_messages)
+
+    @staticmethod
+    def _invoke(llm, messages):
+        complete = getattr(llm, "complete", None)
+        if callable(complete):
+            yield from complete(messages)
+            return
+        prompt = messages[-1].get("content", "") if messages else ""
+        yield from chat_prompt(llm, prompt)
+
+    def _lead_text(self, llm, base_messages):
+        try:
+            return "".join(
+                chunk for chunk in self._invoke(llm, base_messages) if isinstance(chunk, str)
+            ).strip()
+        except Exception:  # noqa: BLE001 - 初稿失败就走普通回答
+            return ""
+
+    def _reply(self, llm, prompt, base_messages):
+        yield from self._invoke(llm, [*base_messages, {"role": "user", "content": prompt}])
+
+    def _ask(self, agent, prompt):
+        """让一个协作成员回答；失败只报告，不中断整轮协作。"""
+        try:
+            llm = self.instance(agent["model"], agent["prompt"] or self.REVIEW_PROMPT)
+        except Exception as exc:  # noqa: BLE001
+            return "", f"{type(exc).__name__}: {exc}"
+
+        try:
+            text = "".join(
+                chunk for chunk in self._invoke(llm, [{"role": "user", "content": prompt}])
+                if isinstance(chunk, str)
+            ).strip()
+        except Exception as exc:  # noqa: BLE001
+            return "", f"{type(exc).__name__}: {exc}"
+
+        return text, "" if text else "模型返回了空内容"
+
+
 class Memory:
-    """
-    实时对话记忆
-    """
     def __init__(self):
         self.messages = []
 
-    def add_user_msg(self, msg: str):
-        self.messages.append({"role": "user", "content": msg})
+    def add_user_msg(self, msg: str, attachments=None, target: str = "ollama"):
+        """attachments: 附件列表（见 ``stlibs.ai.attachment``）；target 决定消息形状。"""
+        items = normalize(attachments) if attachments else []
+        text = with_document_context(msg, items)
+        builder = openai_message if target == "openai" else ollama_message
+        self.messages.append(builder(text, items))
 
     def add_user_image(self, path: str):
-        self.messages.append({"role": "user", "content": {"type": "image_url", "image_url": {
-            "url": f"data:image/png;base64,{encode_image(path)}"}}})
+        self.add_user_msg("", [from_path(path)], target="ollama")
 
     def add_assistant_msg(self, msg: str):
         self.messages.append({"role": "assistant", "content": msg})
@@ -268,17 +547,6 @@ class Memory:
         self.messages.clear()
 
 
-class MultiAgentCoop:
-    """
-    多Agent合作
-    """
-    # TODO: MultiAgentCoop
-    pass
-
-
 class TTSEmotion:
-    """
-    语音情感
-    """
     # TODO: TTSEmotion
     pass

@@ -3,10 +3,10 @@ import os
 
 from ...ai.rag.engine import SUPPORTED_ENGINES
 from ... import Config, ConfigLoader, SharingData
-from ... import get_model_lists
+from ... import get_model_lists, notify, refresh_coop, refresh_models
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QTableWidgetItem, QHeaderView
-from PySide6.QtCore import QRect
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTableWidgetItem, QHeaderView
+from PySide6.QtCore import QRect, Qt
 
 
 class MemoryShowItem(QWidget):
@@ -27,7 +27,7 @@ class MemoryShowItem(QWidget):
 class BasicWidgetScroll(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerLineEdit, HackerButton, HackerCard
+        from . import HackerLineEdit, HackerButton, HackerCard, HackerComboBox
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -89,20 +89,105 @@ class BasicWidgetScroll(QWidget):
         layout.addWidget(button_card)
         layout.addStretch()
 
+        # 删除已有配置
+        self.existing = HackerComboBox(self)
+        self.existing.setMinimumWidth(320)
+        self.existing.currentIndexChanged.connect(self.sync_remove_button)
+        self.remove_button = HackerButton("删除", parent=self)
+        self.remove_button.set_border()
+        self.remove_button.setMinimumWidth(110)
+        self.remove_button.clicked.connect(self.remove_llm)
+        remove_card = HackerCard(
+            "删除配置",
+            self._build_remove_row(),
+            "选中后删除，密钥一并移除",
+            stacked=True,
+        )
+        layout.addWidget(remove_card)
+        layout.addStretch()
+
+        self.reload_existing()
         self.setLayout(layout)
 
+    def _build_remove_row(self):
+        # 上下排的卡片里独占一行：下拉框自己撑开，按钮固定宽
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        layout.addWidget(self.existing, 1)
+        layout.addWidget(self.remove_button, 0)
+        return row
+
+    def reload_existing(self):
+        self.existing.clear()
+        for alias, parameters in Config.models.items():
+            name = (parameters or {}).get("name") or ""
+            self.existing.addItem(f"{alias}   ·   {name}" if name else alias, alias)
+        self.sync_remove_button()
+
+    def select_existing(self, alias: str) -> bool:
+        index = self.existing.findData(alias)
+        if index < 0:
+            return False
+        self.existing.setCurrentIndex(index)
+        return True
+
+    def sync_remove_button(self):
+        self.remove_button.setEnabled(bool(self.selected_alias()))
+
+    def selected_alias(self) -> str:
+        data = self.existing.currentData()
+        return str(data).strip() if data else ""
+
     def add_llm(self):
-        if self.ai_name.text() in Config.models.keys():
+        from . import HackerLineEdit
+
+        name = self.ai_name.text().strip()
+        model = self.ai_model.text().strip()
+        base_url = self.api_url.text().strip()
+        api_key = self.api_key.text().strip()
+
+        if not name:
+            notify("请先填写 AI 的名字（配置里的别名）", "error")
             return
-        Config.models.update({self.ai_name.text(): {}})
-        Config.models[self.ai_name.text()].update(
-            {
-                "name": self.ai_model.text(),
-                "apikey": self.api_key.text(),
-                "baseurl": self.api_url.text(),
-            }
-        )
+        if name in Config.models:
+            notify(f"别名「{name}」已经存在，换个名字或先删除旧配置", "error")
+            return
+        if not model:
+            notify("请填写 AI 模型名（服务商要求的 model 名）", "error")
+            return
+        if not base_url:
+            notify("请填写 Base URL（例如 https://api.deepseek.com）", "error")
+            return
+
+        Config.models[name] = {
+            "name": model,
+            "apikey": api_key or "not-needed",
+            "baseurl": base_url,
+        }
         ConfigLoader.save_config()
+
+        for field in (self.ai_name, self.ai_model, self.api_key, self.api_url):
+            if isinstance(field, HackerLineEdit):
+                field.setText("")
+
+        self.reload_existing()
+        refresh_models(name)
+        notes = "，未填 Key 已按 not-needed 处理" if not api_key else ""
+        notify(f"已添加 API 模型「{name}」，聊天列表已刷新{notes}", "success", 3500)
+
+    def remove_llm(self):
+        name = self.selected_alias()
+        if not name or name not in Config.models:
+            notify("先在下拉里选择要删除的配置", "warning")
+            return
+
+        Config.models.pop(name, None)
+        ConfigLoader.save_config()
+        self.reload_existing()
+        refresh_models()
+        notify(f"已删除 API 模型「{name}」，密钥已从配置里移除", "success", 3500)
 
 
 class Basic(QWidget):
@@ -419,12 +504,16 @@ class MCP(QWidget):
 
     @staticmethod
     def change_data(item: QTableWidgetItem):
+        servers = Config.mcp.setdefault('mcp', [])
+        while len(servers) <= item.row():
+            servers.append({'server': "", 'args': [], 'command': ""})
+
         if item.column() == 0:
-            Config.mcp['mcp'][item.row()]['server'] = item.text()
+            servers[item.row()]['server'] = item.text()
         elif item.column() == 1:
-            Config.mcp['mcp'][item.row()]['args'] = item.text().split(' ')
+            servers[item.row()]['args'] = item.text().split(' ')
         else:
-            Config.mcp['mcp'][item.row()]['command'] = item.text()
+            servers[item.row()]['command'] = item.text()
         ConfigLoader.save_config()
 
     @staticmethod
@@ -440,10 +529,16 @@ class MCP(QWidget):
         self.mcp_table.setItem(row, 2, QTableWidgetItem(command))
 
     def add_mcp(self):
-        # 增加表格
+        # 空行也得建出单元格，否则那一行是点不进去编辑的
         row = self.mcp_table.rowCount()
+        self.mcp_table.blockSignals(True)
         self.mcp_table.insertRow(row)
+        for column in range(3):
+            self.mcp_table.setItem(row, column, QTableWidgetItem(""))
+        self.mcp_table.blockSignals(False)
+
         Config.mcp['mcp'].append({'server': "", 'args': [], 'command': ""})
+        notify(f"已添加一行（第 {row + 1} 行），填写后自动保存", "info", 3000)
 
     def remove_mcp(self):
         # 删除表格
@@ -456,8 +551,314 @@ class MCP(QWidget):
 
 
 class Cooperation(QWidget):
+    """多模型协作：主模型出稿/定稿，配在表里的模型按角色给意见。"""
+    MODES = (("review", "评审改稿"), ("parallel", "并行汇总"))
+
     def __init__(self, parent):
         super().__init__(parent)
+        from . import HackerSwitch, HackerTable, HackerLabel, HackerButton, HackerComboBox, HackerSlider
+
+        HackerLabel("开启多模型协作", self).setGeometry(20, 10, 200, 30)
+        self.enable_switch = HackerSwitch(parent=self)
+        self.enable_switch.setChecked(bool(Config.coop["enable"]))
+        self.enable_switch.setGeometry(220, 5, 80, 30)
+        self.enable_switch.stateChanged.connect(self.check_enable)
+
+        HackerLabel("协作模式", self).setGeometry(20, 50, 160, 30)
+        self.mode_combo = HackerComboBox(self)
+        self.mode_combo.addItems([label for _, label in self.MODES])
+        self.mode_combo.setCurrentIndex(max(0, [key for key, _ in self.MODES].index(self._mode())))
+        self.mode_combo.setGeometry(180, 45, 200, 30)
+        self.mode_combo.currentIndexChanged.connect(self.check_mode)
+
+        HackerLabel("评审轮数", self).setGeometry(20, 90, 160, 30)
+        self.rounds_slider = HackerSlider(Qt.Orientation.Horizontal, self)
+        self.rounds_slider.setMinimum(1)
+        self.rounds_slider.setMaximum(3)
+        self.rounds_slider.setValue(int(Config.coop.get("rounds") or 1))
+        self.rounds_slider.setGeometry(180, 95, 200, 30)
+        self.rounds_slider.valueChanged.connect(self.check_rounds)
+
+        self.available_label = HackerLabel("", self)
+        self.available_label.setWordWrap(True)
+        self.available_label.setGeometry(20, 124, 600, 46)
+
+        self.agent_table = HackerTable(parent=self)
+        self.agent_table.setGeometry(20, 178, 600, 205)
+        self.agent_table.setHorizontalHeaderLabels(["模型", "角色名", "角色提示词"])
+        self.agent_table.setColumnWidth(0, 150)
+        self.agent_table.setColumnWidth(1, 110)
+        self.agent_table.setColumnWidth(2, 330)
+        self.agent_table.itemChanged.connect(self.change_data)
+
+        add_button = HackerButton("添加模型", parent=self)
+        add_button.set_border()
+        add_button.setGeometry(20, 395, 100, 30)
+        add_button.clicked.connect(self.add_agent)
+
+        remove_button = HackerButton("删除选中", parent=self)
+        remove_button.set_border()
+        remove_button.setGeometry(130, 395, 100, 30)
+        remove_button.clicked.connect(self.remove_agent)
+
+        save_button = HackerButton("保存协作", parent=self)
+        save_button.set_border()
+        save_button.setGeometry(240, 395, 100, 30)
+        save_button.clicked.connect(self.save_agents)
+
+        self.refresh()
+
+    def _mode(self):
+        mode = str(Config.coop.get("mode") or "review")
+        return mode if mode in dict(self.MODES) else "review"
+
+    def showEvent(self, event, /):
+        super().showEvent(event)
+        self.refresh()
+
+    def refresh(self):
+        """切到这个页签时重新读配置：刚添加的模型立刻能选。"""
+        self.agent_table.blockSignals(True)
+        self.agent_table.setRowCount(0)
+        for agent in Config.coop.get("agents") or []:
+            self.add_row(agent.get("model", ""), agent.get("name", ""), agent.get("prompt", ""))
+        self.agent_table.blockSignals(False)
+
+        keys = [*Config.models.keys(), *get_model_lists()]
+        hint = "、".join(keys) if keys else "（还没有可用模型，先去「新增 LLM」加一个）"
+        self.available_label.setText(f"可用模型（{len(keys)}）：{hint}")
+
+    def add_row(self, model, name, prompt):
+        row = self.agent_table.rowCount()
+        self.agent_table.insertRow(row)
+        self.agent_table.setItem(row, 0, QTableWidgetItem(model))
+        self.agent_table.setItem(row, 1, QTableWidgetItem(name))
+        self.agent_table.setItem(row, 2, QTableWidgetItem(prompt))
+
+    def _collect(self):
+        agents = []
+        for row in range(self.agent_table.rowCount()):
+            model = self._cell(row, 0)
+            name = self._cell(row, 1)
+            prompt = self._cell(row, 2)
+            if not model and not name and not prompt:
+                continue
+            if not model:
+                notify(f"第 {row + 1} 行没有填模型名，已跳过", "warning")
+                continue
+            agents.append({"model": model, "name": name or model, "prompt": prompt})
+        return agents
+
+    def _cell(self, row, column):
+        item = self.agent_table.item(row, column)
+        return item.text().strip() if item is not None else ""
+
+    @staticmethod
+    def check_enable(boo: bool):
+        Config.coop["enable"] = boo
+        ConfigLoader.save_config()
+        refresh_coop()
+        notify(f"多模型协作已{'开启' if boo else '关闭'}", "success" if boo else "info")
+
+    @staticmethod
+    def check_mode(index: int):
+        mode = Cooperation.MODES[max(0, min(index, len(Cooperation.MODES) - 1))][0]
+        Config.coop["mode"] = mode
+        ConfigLoader.save_config()
+        refresh_coop()
+        notify(f"协作模式：{dict(Cooperation.MODES)[mode]}", "info")
+
+    @staticmethod
+    def check_rounds(value: int):
+        Config.coop["rounds"] = int(value)
+        ConfigLoader.save_config()
+        refresh_coop()
+
+    @staticmethod
+    def change_data(item: QTableWidgetItem):
+        agents = Config.coop.setdefault("agents", [])
+        while len(agents) <= item.row():
+            agents.append({"model": "", "name": "", "prompt": ""})
+
+        key = {0: "model", 1: "name", 2: "prompt"}.get(item.column())
+        if key is None:
+            return
+        agents[item.row()][key] = item.text().strip()
+        ConfigLoader.save_config()
+        refresh_coop()
+
+    def add_agent(self):
+        row = self.agent_table.rowCount()
+        # 建行时 setItem 会触发 itemChanged，先静音免得重复追加一条
+        self.agent_table.blockSignals(True)
+        self.add_row("", "", "")
+        self.agent_table.blockSignals(False)
+
+        Config.coop.setdefault("agents", []).append({"model": "", "name": "", "prompt": ""})
+        ConfigLoader.save_config()
+        notify(f"已添加一行（第 {row + 1} 行），填好模型后点「保存协作」", "info", 3000)
+
+    def remove_agent(self):
+        row = self.agent_table.currentRow()
+        if row < 0:
+            notify("先在表里选中一行", "warning")
+            return
+
+        self.agent_table.blockSignals(True)
+        self.agent_table.removeRow(row)
+        self.agent_table.blockSignals(False)
+
+        agents = Config.coop.setdefault("agents", [])
+        if row < len(agents):
+            agents.pop(row)
+        ConfigLoader.save_config()
+        refresh_coop()
+        notify("已删除该协作模型", "success", 2000)
+
+    def save_agents(self):
+        agents = self._collect()
+        known = set(Config.models) | set(get_model_lists())
+        unknown = [agent["model"] for agent in agents if agent["model"] not in known]
+
+        Config.coop["agents"] = agents
+        ConfigLoader.save_config()
+        refresh_coop()
+
+        if not agents:
+            notify("协作配置已保存，但还没有配置任何模型", "warning")
+        elif unknown:
+            notify(f"已保存，但这些模型现在不存在：{'、'.join(unknown)}", "warning", 4000)
+        else:
+            notify(f"协作配置已保存：主模型 + {len(agents)} 个协作模型", "success", 3000)
+
+
+class Skills(QWidget):
+    """技能：一段可以随时套在提问外面的提示词，聊天窗里按 /名字 或点「技能」使用。"""
+    def __init__(self, parent):
+        super().__init__(parent)
+        from . import HackerTable, HackerLabel, HackerButton
+
+        HackerLabel("技能列表（聊天时打 /名字，或点聊天窗的「技能」按钮）", self).setGeometry(20, 10, 560, 30)
+
+        self.skill_table = HackerTable(parent=self)
+        self.skill_table.setGeometry(20, 46, 600, 300)
+        self.skill_table.setHorizontalHeaderLabels(["技能名", "说明", "提示词"])
+        self.skill_table.setColumnWidth(0, 110)
+        self.skill_table.setColumnWidth(1, 140)
+        self.skill_table.setColumnWidth(2, 330)
+        self.skill_table.itemChanged.connect(self.change_data)
+
+        add_button = HackerButton("添加技能", parent=self)
+        add_button.set_border()
+        add_button.setGeometry(20, 358, 100, 30)
+        add_button.clicked.connect(self.add_skill)
+
+        remove_button = HackerButton("删除选中", parent=self)
+        remove_button.set_border()
+        remove_button.setGeometry(130, 358, 100, 30)
+        remove_button.clicked.connect(self.remove_skill)
+
+        save_button = HackerButton("保存技能", parent=self)
+        save_button.set_border()
+        save_button.setGeometry(240, 358, 100, 30)
+        save_button.clicked.connect(self.save_skills)
+
+        self.refresh()
+
+    def showEvent(self, event, /):
+        super().showEvent(event)
+        self.refresh()
+
+    def refresh(self):
+        self.skill_table.blockSignals(True)
+        self.skill_table.setRowCount(0)
+        for skill in Config.skills or []:
+            if not isinstance(skill, dict):
+                continue
+            self.add_row(skill.get("name", ""), skill.get("description", ""), skill.get("prompt", ""))
+        self.skill_table.blockSignals(False)
+
+    def add_row(self, name, description, prompt):
+        row = self.skill_table.rowCount()
+        self.skill_table.insertRow(row)
+        self.skill_table.setItem(row, 0, QTableWidgetItem(name))
+        self.skill_table.setItem(row, 1, QTableWidgetItem(description))
+        self.skill_table.setItem(row, 2, QTableWidgetItem(prompt))
+
+    def _cell(self, row, column):
+        item = self.skill_table.item(row, column)
+        return item.text().strip() if item is not None else ""
+
+    def _collect(self):
+        skills = []
+        names = set()
+        for row in range(self.skill_table.rowCount()):
+            name = self._cell(row, 0)
+            description = self._cell(row, 1)
+            prompt = self._cell(row, 2)
+            if not name and not prompt:
+                continue
+            if not name:
+                notify(f"第 {row + 1} 行没有技能名，已跳过", "warning")
+                continue
+            if name in names:
+                notify(f"技能名「{name}」重复了，后面的那条已跳过", "warning")
+                continue
+            names.add(name)
+            skills.append({"name": name, "description": description, "prompt": prompt})
+        return skills
+
+    @staticmethod
+    def change_data(item: QTableWidgetItem):
+        skills = Config.skills if isinstance(Config.skills, list) else []
+        Config.skills = skills
+        while len(skills) <= item.row():
+            skills.append({"name": "", "description": "", "prompt": ""})
+
+        key = {0: "name", 1: "description", 2: "prompt"}.get(item.column())
+        if key is None:
+            return
+        skills[item.row()][key] = item.text().strip()
+        ConfigLoader.save_config()
+
+    def add_skill(self):
+        row = self.skill_table.rowCount()
+        self.skill_table.blockSignals(True)
+        self.add_row("", "", "")
+        self.skill_table.blockSignals(False)
+
+        if not isinstance(Config.skills, list):
+            Config.skills = []
+        Config.skills.append({"name": "", "description": "", "prompt": ""})
+        ConfigLoader.save_config()
+        notify(f"已添加一行（第 {row + 1} 行），填好后点「保存技能」", "info", 3000)
+
+    def remove_skill(self):
+        row = self.skill_table.currentRow()
+        if row < 0:
+            notify("先在表里选中一行", "warning")
+            return
+
+        self.skill_table.blockSignals(True)
+        self.skill_table.removeRow(row)
+        self.skill_table.blockSignals(False)
+
+        skills = Config.skills if isinstance(Config.skills, list) else []
+        Config.skills = skills
+        if row < len(skills):
+            skills.pop(row)
+        ConfigLoader.save_config()
+        notify("已删除该技能", "success", 2000)
+
+    def save_skills(self):
+        skills = self._collect()
+        Config.skills = skills
+        ConfigLoader.save_config()
+
+        if not skills:
+            notify("技能列表已清空", "warning")
+        else:
+            notify(f"已保存 {len(skills)} 个技能：{'、'.join(item['name'] for item in skills)}", "success", 3000)
 
 
 class LLMPage(QWidget):
@@ -479,6 +880,7 @@ class LLMPage(QWidget):
         self.tab_widget.addTab(RAG(self), "RAG 配置")
         self.tab_widget.addTab(MCP(self), "MCP 设置")
         self.tab_widget.addTab(Cooperation(self), "协作 设置")
+        self.tab_widget.addTab(Skills(self), "技能 Skills")
         layout.addWidget(self.tab_widget)
         self.setLayout(layout)
 

@@ -1,31 +1,42 @@
 import abc
-import socket
-import json
-import threading
 import concurrent.futures
+import json
+import os
+import socket
+import threading
+import time
+
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 9000
+MAX_DATAGRAM = 1 << 16
+PROTOCOL_VERSION = 2
 
 
-class SDK(abc.ABC):
-    @abc.abstractmethod
-    def play_live2d_motion(self, motion: str, index: int): pass
-    @abc.abstractmethod
-    def play_live2d_expression(self, name: str): pass
-    @abc.abstractmethod
-    def get_live2d_motion(self) -> list: pass
-    @abc.abstractmethod
-    def get_live2d_expression(self) -> list: pass
+class SDKError(Exception):
+    """SDK 相关错误的基类。"""
+    code = "sdk_error"
 
 
-class SDKTimeoutError(Exception):
-    pass
+class SDKTimeoutError(SDKError):
+    code = "timeout"
 
 
-class SDKRemoteError(Exception):
-    pass
+class SDKRemoteError(SDKError):
+    """对端返回了错误。``code`` 是机器可读的原因。"""
+    code = "remote_error"
+
+    def __init__(self, message, code="remote_error"):
+        super().__init__(message)
+        self.code = code
 
 
-class UDPBase:
-    def __init__(self, host, port, buffer_size=65536, max_workers=16):
+class SDKMethodError(SDKError):
+    """方法内部拒绝了这个请求（参数不对、界面没起来等）。"""
+    code = "method_error"
+
+
+class UDPBase(abc.ABC):
+    def __init__(self, host, port, buffer_size=MAX_DATAGRAM, max_workers=16, token=None):
         self._host = host
         self._port = port
         self._buffer_size = buffer_size
@@ -34,18 +45,24 @@ class UDPBase:
         self._running = False
         self._recv_thread = None
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.token = token if token is not None else os.getenv("ADP_SDK_TOKEN") or None
 
     @property
     def local_address(self):
         return self._sock.getsockname()
 
+    @property
+    def running(self) -> bool:
+        return self._running
+
     def start(self):
         if self._running:
             return self
+
         self._sock.bind((self._host, self._port))
         self._sock.settimeout(0.5)
         self._running = True
-        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True, name="sdk-recv")
         self._recv_thread.start()
         return self
 
@@ -60,8 +77,7 @@ class UDPBase:
         self._executor.shutdown(wait=False)
 
     def __enter__(self):
-        self.start()
-        return self
+        return self.start()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
@@ -76,9 +92,27 @@ class UDPBase:
                 break
             self._executor.submit(self._on_data, data, addr)
 
+    @abc.abstractmethod
     def _on_data(self, data, addr):
         raise NotImplementedError
 
     def _send(self, obj, addr):
-        payload = json.dumps(obj).encode("utf-8")
-        self._sock.sendto(payload, addr)
+        try:
+            self._sock.sendto(json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8"), addr)
+        except OSError:
+            return False
+        return True
+
+
+__all__ = [
+    "DEFAULT_HOST",
+    "DEFAULT_PORT",
+    "MAX_DATAGRAM",
+    "PROTOCOL_VERSION",
+    "SDKError",
+    "SDKMethodError",
+    "SDKRemoteError",
+    "SDKTimeoutError",
+    "UDPBase",
+    "time",
+]

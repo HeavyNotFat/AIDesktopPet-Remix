@@ -3,7 +3,7 @@ import json
 
 import ollama
 
-from .. import Config
+from .. import Config, SharingData
 from . import mcp as mcp_server
 
 from PySide6.QtCore import Signal, QObject
@@ -30,10 +30,11 @@ with open("./resources/prompts.json", "r", encoding="utf-8") as f:
 
 class LLM(QObject):
     memory_signal = Signal(list)
+    coop_signal = Signal(dict)
 
-    def __init__(self, model: str = "glm4", system_prompt: str = ""):
+    def __init__(self, model: str = "glm4", system_prompt: str = "", coop: bool | None = None):
         super().__init__()
-        from . import LTMemory, Memory, fc, rag
+        from . import LTMemory, Memory, MultiAgentCoop, fc, rag
 
         self.memory = Memory()
         self.function_call = fc.FunctionCall(model)
@@ -41,6 +42,9 @@ class LLM(QObject):
         self._closed = False
         self.rag = None
         self.lt_memory = LTMemory(scope=f"local:{model}") if Config.memory["longterm"] else None
+        self.coop_disabled = coop is False
+        self.coop = None if self.coop_disabled else (MultiAgentCoop() if (coop or Config.coop.get("enable")) else None)
+        SharingData.llm_instances[f"local:{model}"] = self
 
         if Config.mcp["enable"] and mcp is not None:
             try:
@@ -60,25 +64,37 @@ class LLM(QObject):
         # else:
         #     self.memory.add_system_msg(prompts['general'])
 
-    def chat(self, user_input: str, should_emit: bool = True):
+    def chat(self, user_input: str, should_emit: bool = True, skill=None, attachments=None):
         if not Config.memory["shortterm"]:
             self.memory.clear()
-        self.memory.add_user_msg(user_input)
-        messages = self.memory.messages
-        if self.rag and self._need_rag(user_input):
-            messages = self._inject_rag(user_input, messages)
-        if self.lt_memory is not None:
-            messages = self._inject_memory(user_input, messages)
-        print("[RAG MSG]", messages)
+        self.memory.add_user_msg(user_input, attachments, target="ollama")
+
+        if self.coop is not None and self.coop.enable:
+            stream = self.coop.run(user_input, self, base_messages=self.memory.messages)
+        else:
+            messages = self.memory.messages
+            if skill:
+                from . import inject_skill
+
+                messages = inject_skill(messages, skill)
+            if self.rag and self._need_rag(user_input):
+                messages = self._inject_rag(user_input, messages)
+            if self.lt_memory is not None:
+                messages = self._inject_memory(user_input, messages)
+            print("[RAG MSG]", messages)
+            stream = self.function_call.run(messages)
 
         reply_parts = []
-        for event in self.function_call.run(messages):
+        for event in stream:
             if isinstance(event, str):
                 reply_parts.append(event)
                 yield event
                 continue
 
-            self._handle_event(event)
+            if isinstance(event, dict) and event.get("type") == "coop":
+                self.coop_signal.emit(event)
+            else:
+                self._handle_event(event)
             yield event
 
         reply = "".join(reply_parts)
@@ -87,6 +103,16 @@ class LLM(QObject):
             if self.lt_memory is not None:
                 self.lt_memory.remember_turn(user_input, reply)
         if should_emit: self.memory_signal.emit([self.model, self.memory.messages])
+
+    def complete(self, messages: list):
+        """按给定消息跑一轮，不读写短期记忆（协作成员与初稿走这里）。"""
+        for event in self._call_chat(messages, should_emit=False):
+            if isinstance(event, str):
+                yield event
+                continue
+
+            self._handle_event(event)
+            yield event
 
     def _inject_memory(self, user_input: str, messages: list):
         from . import inject_memory_context

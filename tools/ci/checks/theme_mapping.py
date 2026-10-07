@@ -1,24 +1,3 @@
-"""UI 主题类映射检测。
-
-主题（``stlibs/themes/<name>/``）是可插拔的 UI 实现：``SharingData.theme`` 指向
-哪个主题包，整个界面就用谁的控件。所以「映射缺一个」在运行时的表现是
-``AttributeError: module 'stlibs.themes.xxx' has no attribute 'ChatWidget'``，
-而且往往要等用户点开某个页面才炸。
-
-检查清单
---------
-* ``theme/mapping-missing``   主题缺少契约要求的映射（``Window``/``Button``/…）
-* ``theme/submodule-missing`` 主题缺少必需子模块（``general``/``llm``/``tts``/…）
-* ``theme/member-missing``    映射类没有实现契约要求的成员（``Window.addNavigation``…）
-* ``theme/member-kind``       抽象声明是 property，实现却是方法之类的不匹配
-* ``theme/usage-unsupported`` 代码里用到的 ``theme.xxx`` 有主题提供不了
-* ``theme/module-member``     ``theme.<子模块>.<页面>`` 在主题里不存在
-* ``theme/kind-mismatch``     同一个映射名在不同主题里类型不一致（类 / 实例 / 模块）
-* ``theme/protocol-drift``    代码用到的映射没写进 ``_ThemeTypingProtocol``（契约漂移）
-* ``theme/alias-duplicate``   两个映射名绑到同一个对象，多半是复制粘贴写错了
-* ``theme/import-failed``     主题包 ``__init__`` 里报错/找不到
-"""
-
 from __future__ import annotations
 
 import ast
@@ -43,11 +22,6 @@ def _theme_packages(ctx) -> dict[str, SourceFile]:
 
 
 def _exports(src: SourceFile) -> dict[str, tuple[str, ast.AST]]:
-    """主题包顶层对外提供的名字 → (种类, 节点)。
-
-    种类：``class`` / ``function`` / ``instance``（``IconList = IconList()``）
-    / ``module`` / ``value``。
-    """
     exports: dict[str, tuple[str, ast.AST]] = {}
     class_names = {node.name for node in src.tree.body if isinstance(node, ast.ClassDef)}
 
@@ -108,10 +82,6 @@ NON_APP_PREFIXES = ("tools/", "tests/", "docs/", "resources/")
 
 
 def _usage_sites(ctx) -> tuple[dict[str, list[Location]], list[tuple[str, str, Location]]]:
-    """扫描应用代码对 ``SharingData.theme`` 的用法。
-
-    返回 ``(映射名 → 位置, [(子模块, 成员, 位置)])``。
-    """
     attributes: dict[str, list[Location]] = defaultdict(list)
     module_members: list[tuple[str, str, Location]] = []
 
@@ -149,7 +119,6 @@ def _chain(node: ast.AST) -> list[str] | None:
     return list(reversed(parts))
 
 
-# --------------------------------------------------------------------------
 def check_mapping_missing(ctx) -> Iterator[Finding]:
     contract: ThemeContract = ctx.contract
     for theme, src in sorted(_theme_packages(ctx).items()):

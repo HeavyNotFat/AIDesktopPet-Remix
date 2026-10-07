@@ -1,17 +1,7 @@
-"""网页聊天专用 LLM 实例层。
-
-重点验证「网页聊天不再复用桌面端实例」这件事，包括：
-
-* 每个会话拿到独立实例，会话之间互不串记忆；
-* 换了模型一定重建实例；
-* LRU / 空闲超时能回收；
-* 调用 LLM 时显式关掉 ``should_emit``，不往桌面端 UI 发信号；
-* 模块里不再出现 ``return_llm_class`` / ``cache_llm_class`` 这类旧入口。
-"""
-
 from __future__ import annotations
 
 import ast
+import base64
 import json
 import threading
 import time
@@ -22,17 +12,14 @@ import pytest
 from stlibs.mproc.onlinechat import config as oc_config
 from stlibs.mproc.onlinechat import llm as oc_llm
 from stlibs.mproc.onlinechat import registry as registry_api
-from stlibs.mproc.onlinechat.registry import ModelRegistry, ModelTarget, UnknownModelError
+from stlibs.mproc.onlinechat.registry import ModelRegistry, UnknownModelError
 
 ONLINECHAT_DIR = Path(oc_llm.__file__).parent
 
 
-# --------------------------------------------------------------------------
 # 测试替身
-# --------------------------------------------------------------------------
 class FakeLocalLLM:
     """模仿 local.LLM.chat(user_input, should_emit=True)。"""
-
     def __init__(self, model):
         self.model = model
         self.seen = []
@@ -47,7 +34,6 @@ class FakeLocalLLM:
 
 class FakeCloudLLM:
     """模仿 cloud.LLM.chat(query)（没有 should_emit 参数）。"""
-
     def __init__(self, model, api_key, base_url):
         self.model = model
         self.api_key = api_key
@@ -114,9 +100,7 @@ def patched_registry(monkeypatch):
     return reg
 
 
-# --------------------------------------------------------------------------
 # 会话隔离
-# --------------------------------------------------------------------------
 def test_each_session_gets_its_own_instance(patched_registry):
     pool = _pool(patched_registry)
     assert pool.chat("alpha", "你好", "s1") == "local:你好"
@@ -164,9 +148,7 @@ def test_unknown_model_is_rejected(patched_registry):
     assert pool.stats()["sessions"] == 0
 
 
-# --------------------------------------------------------------------------
 # 回收
-# --------------------------------------------------------------------------
 def test_lru_eviction(patched_registry):
     pool = _pool(patched_registry, max_sessions=2)
     for name in ("s1", "s2", "s3"):
@@ -214,7 +196,7 @@ def test_same_session_requests_are_serialised(patched_registry):
     order: list[str] = []
     original = oc_llm._collect
 
-    def slow(llm, question):
+    def slow(llm, question, attachments=None, skill=None):
         order.append(f"start:{question}")
         time.sleep(0.05)
         order.append(f"end:{question}")
@@ -238,11 +220,6 @@ def test_same_session_requests_are_serialised(patched_registry):
 
 
 def test_eviction_does_not_hold_the_pool_lock(patched_registry):
-    """淘汰一个会话时不能占着池锁等它的慢请求结束。
-
-    ``WebChatSession.close()`` 会等在跑的请求收尾，如果回收是在持有池锁时做的，
-    一个卡住的会话会把所有其它会话一起拖死。
-    """
     close_started = threading.Event()
     release_close = threading.Event()
 
@@ -310,9 +287,7 @@ def test_empty_reply_falls_back(patched_registry):
     assert pool.chat("alpha", "hi", "s1") == oc_llm.EMPTY_REPLY
 
 
-# --------------------------------------------------------------------------
 # 调用适配
-# --------------------------------------------------------------------------
 def test_call_chat_adapts_to_both_signatures():
     local = FakeLocalLLM("m")
     assert "".join(oc_llm._call_chat(local, "q")) == "local:q"
@@ -332,7 +307,6 @@ def test_call_chat_rejects_unknown_signature():
 
 def test_call_chat_accepts_kwargs_only_signature():
     """``chat(**kwargs)`` 之类能吞任意关键字的实现也要能用。"""
-
     class KwargsOnly:
         def __init__(self):
             self.got = None
@@ -356,22 +330,73 @@ def test_collect_ignores_event_dicts():
     assert oc_llm._collect(Eventful(), "q") == "ab"
 
 
-# --------------------------------------------------------------------------
 # 注册表
-# --------------------------------------------------------------------------
-def test_registry_builds_local_and_cloud_targets(monkeypatch):
+def test_registry_builds_local_and_cloud_targets(monkeypatch, tmp_path):
     monkeypatch.setattr(registry_api, "get_model_lists", lambda: ["llama3:latest"])
     monkeypatch.setattr(
         registry_api,
         "Config",
-        type("C", (), {"models": {"我的模型": {"name": "glm-4", "apikey": "k", "baseurl": "u"}}}),
+        type("C", (), {"models": {"内存里的": {"name": "x", "apikey": "k", "baseurl": "u"}}}),
     )
+    config = tmp_path / "configure.json"
+    config.write_text(
+        json.dumps({"models": {"我的模型": {"name": "glm-4", "apikey": "k", "baseurl": "u"}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(registry_api, "CONFIG_PATH", str(config))
+
     targets = registry_api.load_targets()
+
     assert list(targets) == ["llama3:latest", "api::我的模型"]
     cloud = targets["api::我的模型"]
     assert cloud.is_cloud
     assert (cloud.model, cloud.api_key, cloud.base_url) == ("glm-4", "k", "u")
     assert cloud.public() == {"value": "api::我的模型", "label": "我的模型 (API)", "backend": "cloud"}
+
+
+def test_registry_reads_new_model_from_disk(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry_api, "get_model_lists", lambda: [])
+    config = tmp_path / "configure.json"
+    config.write_text(json.dumps({"models": {}}), encoding="utf-8")
+    monkeypatch.setattr(registry_api, "CONFIG_PATH", str(config))
+    registry = registry_api.ModelRegistry(ttl=3600)
+
+    assert list(registry.snapshot()) == []
+
+    # 模拟另一个进程（桌面端）往配置文件里加了模型
+    config.write_text(
+        json.dumps({"models": {"刚加的": {"name": "m", "apikey": "k", "baseurl": "u"}}}),
+        encoding="utf-8",
+    )
+    registry.invalidate()
+
+    assert list(registry.snapshot()) == ["api::刚加的"]
+
+
+def test_registry_falls_back_to_config_when_file_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry_api, "get_model_lists", lambda: [])
+    monkeypatch.setattr(registry_api, "CONFIG_PATH", str(tmp_path / "没有这个文件.json"))
+    monkeypatch.setattr(
+        registry_api,
+        "Config",
+        type("C", (), {"models": {"兜底": {"name": "m", "apikey": "k", "baseurl": "u"}}}),
+    )
+
+    assert list(registry_api.load_targets()) == ["api::兜底"]
+
+
+def test_registry_ignores_broken_config_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry_api, "get_model_lists", lambda: [])
+    config = tmp_path / "configure.json"
+    config.write_text("{ 这不是 JSON", encoding="utf-8")
+    monkeypatch.setattr(registry_api, "CONFIG_PATH", str(config))
+    monkeypatch.setattr(
+        registry_api,
+        "Config",
+        type("C", (), {"models": {"兜底": {"name": "m", "apikey": "k", "baseurl": "u"}}}),
+    )
+
+    assert list(registry_api.load_targets()) == ["api::兜底"]
 
 
 def test_registry_resolve_and_error():
@@ -392,9 +417,7 @@ def test_registry_survives_provider_failure():
         reg.resolve("anything")
 
 
-# --------------------------------------------------------------------------
 # 不再复用桌面端实例（回归防线）
-# --------------------------------------------------------------------------
 def test_onlinechat_never_touches_desktop_llm_cache():
     """用 AST 而不是字符串匹配：文档里可以提旧写法，代码里不许出现。"""
     forbidden = {"cache_llm_class", "return_llm_class", "SharingData"}
@@ -420,9 +443,7 @@ def test_desktop_sharing_data_is_untouched(patched_registry, monkeypatch):
     assert stlibs.SharingData.theme is sentinel
 
 
-# --------------------------------------------------------------------------
 # HTTP 接口
-# --------------------------------------------------------------------------
 @pytest.fixture
 def client(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
@@ -436,7 +457,7 @@ def client(monkeypatch):
     monkeypatch.setattr(
         pool,
         "chat",
-        lambda model, question, session_id=None: f"echo:{model}:{question}:{session_id}",
+        lambda model, question, session_id=None, attachments=None, skill=None: f"echo:{model}:{question}:{session_id}",
     )
     monkeypatch.setattr(pool, "stats", lambda: {"sessions": 1, "instances_created": 1, "live": []})
     monkeypatch.setattr(pool, "reset", lambda session_id=None: 1 if session_id else 0)
@@ -492,7 +513,7 @@ def test_api_chat_unknown_model(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
     from stlibs.mproc.onlinechat import app, pool
 
-    def boom(model, question, session_id=None):
+    def boom(model, question, session_id=None, attachments=None, skill=None):
         raise registry_api.UnknownModelError(model, ["alpha"])
 
     monkeypatch.setattr(pool, "chat", boom)
@@ -505,7 +526,7 @@ def test_api_chat_backend_error_becomes_502(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
     from stlibs.mproc.onlinechat import app, pool
 
-    def boom(model, question, session_id=None):
+    def boom(model, question, session_id=None, attachments=None, skill=None):
         raise RuntimeError("模型炸了")
 
     monkeypatch.setattr(pool, "chat", boom)
@@ -515,11 +536,6 @@ def test_api_chat_backend_error_becomes_502(monkeypatch):
 
 
 def test_build_llm_constructs_real_classes(monkeypatch):
-    """真·构造路径：确认 local / cloud 两个分支都按 target 建实例。
-
-    这里用假的 ``stlibs.ai.local`` / ``cloud`` 模块替身（不需要 PySide6 / ollama），
-    但走的是 ``_build_llm`` 的真实分支逻辑。
-    """
     import sys
     import types
 
@@ -570,7 +586,7 @@ def test_closed_session_maps_to_409(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
     from stlibs.mproc.onlinechat import app, pool
 
-    def closed(model, question, session_id=None):
+    def closed(model, question, session_id=None, attachments=None, skill=None):
         raise oc_llm.SessionClosedError(session_id or "default")
 
     monkeypatch.setattr(pool, "chat", closed)
@@ -784,6 +800,159 @@ def test_recall_endpoint_rejects_empty(sse_client, monkeypatch):
     assert client.post("/api/chat/recall", json={"model": "alpha", "question": "q", "answer": " "}).status_code == 400
 
 
+# 附件
+def _png_payload(name="cat.png"):
+    return {
+        "name": name,
+        "mime": "image/png",
+        "data": base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32).decode("ascii"),
+    }
+
+
+def test_chat_accepts_attachment_only_request(sse_client, monkeypatch):
+    client, pool = sse_client
+    seen = {}
+
+    def fake_chat(model, question, session_id=None, attachments=None, skill=None):
+        seen["question"] = question
+        seen["attachments"] = attachments
+        return "看到了"
+
+    monkeypatch.setattr(pool, "chat", fake_chat)
+
+    response = client.post("/api/chat", json={
+        "model": "alpha", "question": "", "session_id": "s1", "attachments": [_png_payload()],
+    })
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "看到了"
+    assert seen["question"] == ""
+    assert [item["name"] for item in seen["attachments"]] == ["cat.png"]
+    assert seen["attachments"][0]["kind"] == "image"
+
+
+def test_chat_expands_text_attachment(sse_client, monkeypatch):
+    client, pool = sse_client
+    seen = {}
+
+    def fake_chat(model, question, session_id=None, attachments=None, skill=None):
+        seen["attachments"] = attachments
+        return "ok"
+
+    monkeypatch.setattr(pool, "chat", fake_chat)
+
+    response = client.post("/api/chat", json={
+        "model": "alpha",
+        "question": "看看",
+        "attachments": [{
+            "name": "说明.md",
+            "mime": "text/markdown",
+            "data": base64.b64encode("正文在此".encode("utf-8")).decode("ascii"),
+        }],
+    })
+
+    assert response.status_code == 200
+    assert seen["attachments"][0]["text"] == "正文在此"
+
+
+def test_chat_rejects_empty_question_without_attachment(sse_client):
+    client, _pool = sse_client
+    assert client.post("/api/chat", json={"model": "alpha", "question": "   "}).status_code == 400
+
+
+def test_chat_rejects_unreadable_attachment(sse_client):
+    client, _pool = sse_client
+    response = client.post("/api/chat", json={
+        "model": "alpha", "question": "hi",
+        "attachments": [{"name": "空.txt", "mime": "text/plain", "data": ""}],
+    })
+
+    assert response.status_code == 400
+    assert "附件" in response.json()["detail"]
+
+
+def test_chat_rejects_too_many_attachments(sse_client):
+    client, _pool = sse_client
+    from stlibs.mproc.onlinechat import config
+
+    response = client.post("/api/chat", json={
+        "model": "alpha", "question": "hi",
+        "attachments": [_png_payload(f"{index}.png") for index in range(config.MAX_ATTACHMENTS + 2)],
+    })
+
+    assert response.status_code == 422, "超量应该在 pydantic 那层就被挡下来"
+
+
+def test_stream_passes_attachments(sse_client, monkeypatch):
+    client, pool = sse_client
+    seen = {}
+
+    def fake_stream(model, question, session_id=None, stop_event=None, attachments=None, skill=None):
+        seen["attachments"] = attachments
+        return iter(["好", "的"])
+
+    monkeypatch.setattr(pool, "stream", fake_stream)
+
+    response = client.post("/api/chat/stream", json={
+        "model": "alpha", "question": "看图", "session_id": "s1", "attachments": [_png_payload()],
+    })
+
+    assert response.status_code == 200
+    assert "".join(frame["text"] for frame in _frames(response) if frame["type"] == "delta") == "好的"
+    assert seen["attachments"][0]["name"] == "cat.png"
+
+
+def test_call_chat_only_passes_supported_kwargs():
+    """老实现（只认一个参数）不能被 attachments/skill 带崩。"""
+    calls = {}
+
+    class OldLLM:
+        def chat(self, question):
+            calls["question"] = question
+            return iter(["ok"])
+
+    class NewLLM:
+        def chat(self, question, should_emit=True, attachments=None, skill=None):
+            calls["new"] = (question, attachments, skill)
+            return iter(["ok"])
+
+    assert "".join(oc_llm._call_chat(OldLLM(), "问题", [{"name": "x"}])) == "ok"
+    assert calls["question"] == "问题"
+
+    assert "".join(oc_llm._call_chat(NewLLM(), "问题", [{"name": "x"}], "技能")) == "ok"
+    assert calls["new"] == ("问题", [{"name": "x"}], "技能")
+
+
+def test_pool_chat_forwards_attachments(monkeypatch):
+    seen = {}
+
+    class FakeSession:
+        session_id = "s1"
+
+        def ask(self, question, attachments=None, skill=None):
+            seen["attachments"] = attachments
+            return "ok"
+
+    monkeypatch.setattr(oc_llm, "registry", _registry())
+    pool = oc_llm.WebChatPool()
+    pool._acquire = lambda *args, **kwargs: FakeSession()
+    assert pool.chat("alpha", "问题", "s1", [{"name": "x"}]) == "ok"
+    assert seen["attachments"] == [{"name": "x"}]
+def test_session_ask_forwards_attachments(patched_registry):
+    seen = {}
+    class FakeSession:
+        session_id = "s1"
+        def ask(self, question, attachments=None, skill=None):
+            seen["attachments"] = attachments
+            return "ok"
+    pool = oc_llm.WebChatPool()
+    monkeypatch_acquire = lambda *args, **kwargs: FakeSession()
+    pool._acquire = monkeypatch_acquire
+
+    assert pool.chat("alpha", "问题", "s1", [{"name": "x"}]) == "ok"
+    assert seen["attachments"] == [{"name": "x"}]
+
+
 @pytest.fixture
 def sse_client(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
@@ -803,7 +972,7 @@ def _frames(response):
 
 def test_api_stream_emits_start_delta_done(sse_client, monkeypatch):
     client, pool = sse_client
-    monkeypatch.setattr(pool, "stream", lambda model, question, session_id=None, stop_event=None: ["你", "好"])
+    monkeypatch.setattr(pool, "stream", lambda model, question, session_id=None, stop_event=None, attachments=None, skill=None: ["你", "好"])
 
     response = client.post("/api/chat/stream", json={"model": "alpha", "question": "hi", "session_id": "s1"})
     assert response.status_code == 200
@@ -818,7 +987,7 @@ def test_api_stream_emits_start_delta_done(sse_client, monkeypatch):
 def test_api_stream_reports_backend_error_as_event(sse_client, monkeypatch):
     client, pool = sse_client
 
-    def broken(model, question, session_id=None, stop_event=None):
+    def broken(model, question, session_id=None, stop_event=None, attachments=None, skill=None):
         yield "半句"
         raise RuntimeError("模型炸了")
 
@@ -836,7 +1005,7 @@ def test_api_stream_reports_backend_error_as_event(sse_client, monkeypatch):
 def test_api_stream_maps_closed_session_to_event(sse_client, monkeypatch):
     client, pool = sse_client
 
-    def closed(model, question, session_id=None, stop_event=None):
+    def closed(model, question, session_id=None, stop_event=None, attachments=None, skill=None):
         raise oc_llm.SessionClosedError(session_id or "default")
         yield
 
@@ -864,7 +1033,7 @@ def test_api_stream_ends_when_consumer_disconnects(sse_client, monkeypatch):
     client, pool = sse_client
     stopped = threading.Event()
 
-    def chunks(model, question, session_id=None, stop_event=None):
+    def chunks(model, question, session_id=None, stop_event=None, attachments=None, skill=None):
         for index in range(50):
             if stop_event is not None and stop_event.is_set():
                 stopped.set()

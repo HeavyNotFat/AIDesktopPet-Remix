@@ -195,11 +195,45 @@ class PublicShader(ADPOpenGLCanvas):
 
         context_menu.addSeparator()
 
+        self.add_plugin_actions(context_menu)
+
         shut_program_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.shut"), self, stlibs.SharingData.theme.IconList.SHUTDOWN)
         shut_program_action.triggered.connect(self.exit_program)
         context_menu.addAction(shut_program_action)
 
         context_menu.exec(self.mapToGlobal(position))
+
+    def add_plugin_actions(self, context_menu):
+        """把插件注册的菜单项挂到右键菜单上（UI Hook）。"""
+        try:
+            items = stlibs.plugin_manager().menu_items()
+        except Exception as exc:  # noqa: BLE001 - 插件坏了不能挡住菜单
+            print(f"[plugin] 菜单项读取失败：{exc}")
+            return
+
+        if not items:
+            return
+
+        context_menu.addSeparator()
+        for item in items:
+            action = stlibs.SharingData.theme.Action(item.label, self, stlibs.SharingData.theme.IconList.SETTING)
+            action.triggered.connect(lambda _checked=False, name=item.action: self.run_plugin_action(name))
+            context_menu.addAction(action)
+
+    def run_plugin_action(self, action: str):
+        try:
+            manager = stlibs.plugin_manager()
+            result = manager.trigger_menu(action) or manager.trigger_menu(action.split(":")[-1])
+        except Exception as exc:  # noqa: BLE001
+            stlibs.notify(f"插件菜单执行失败：{exc}", "error", 4000)
+            return
+
+        if result:
+            stlibs.notify(str(result)[:120], "info", 3000)
+
+    @staticmethod
+    def emit_sdk_event(name: str, data=None):
+        """把桌宠上的动作告诉订阅了 SDK 事件的外部程序（统一走 stlibs）。"""
 
     def mousePressEvent(self, event):
         """鼠标拖动时间及按下事件"""
@@ -232,6 +266,24 @@ class PublicShader(ADPOpenGLCanvas):
                 new_pos = event.globalPosition() - self.drag_position
                 self.move(int(new_pos.x()), int(new_pos.y()))
             event.accept()
+
+    def mouseReleaseEvent(self, event):
+        """松手：没拖动就是在点桌宠 —— 通知插件与 SDK 订阅者。"""
+        was_click = (
+            event.button() == Qt.MouseButton.LeftButton
+            and not self.is_dragging
+            and self.is_in_live2d_area(QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y())
+        )
+        super().mouseReleaseEvent(event)
+
+        if not was_click:
+            return
+
+        self.emit_sdk_event("pet_click", {"x": event.globalPosition().x(), "y": event.globalPosition().y()})
+        try:
+            stlibs.plugin_manager().emit_event("pet_click", {"source": "live2d"})
+        except Exception:  # noqa: BLE001 - 插件系统的问题不该影响点击
+            pass
 
     # Ctrl + 滚轮a啊调整大小
     def wheelEvent(self, event):

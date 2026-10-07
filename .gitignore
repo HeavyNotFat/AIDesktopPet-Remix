@@ -63,7 +63,6 @@ coverage.xml
 cover/
 
 # Translations
-*.mo
 *.pot
 
 # Django stuff:
@@ -224,6 +223,9 @@ pytest-of-*/
 tmp*/
 pip-install-*/
 pip-build-tracker-*/
+
+# 插件私有存储（每个插件自己的数据，不该提交）
+plugins/.data/
 
 # PyPI configuration file
 .pypirc
