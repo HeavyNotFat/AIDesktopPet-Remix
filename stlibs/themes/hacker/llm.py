@@ -204,7 +204,7 @@ class Basic(QWidget):
 class Memory(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerSwitch, HackerLabel, HackerTabWidget
+        from . import HackerSwitch, HackerLabel, HackerComboBox, HackerTextEdit
 
         HackerLabel("短期即时记忆", self).setGeometry(20, 20, 200, 30)
         self.memory_switch = HackerSwitch(parent=self)
@@ -218,21 +218,76 @@ class Memory(QWidget):
         self.longterm_memory_switch.setChecked(Config.memory['longterm'])
         self.longterm_memory_switch.stateChanged.connect(self.check_long)
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 40, 20, 20)
-        self.tab_widget = HackerTabWidget(self)
-        # 添加模型
-        for model in get_model_lists():
-            m = MemoryShowItem(model, self)
-            SharingData.add_memory_to_ui.update({model: m.add})
-            self.tab_widget.addTab(m, model)
-        for parameters in Config.models.values():
-            m = MemoryShowItem(parameters['name'],  self)
-            SharingData.add_memory_to_ui.update({parameters['name']: m.add})
-            self.tab_widget.addTab(m, parameters['name'])
+        # 模型多的时候不能一个模型一个页签（几十个页签会挤成一团），改成下拉选择 + 一块展示区
+        HackerLabel("看哪个模型的记忆", self).setGeometry(20, 100, 200, 30)
+        self.model_selector = HackerComboBox(self)
+        self.model_selector.setGeometry(220, 95, 380, 32)
+        self.model_selector.currentTextChanged.connect(self.show_model)
 
-        layout.addWidget(self.tab_widget)
-        layout.setGeometry(QRect(10, 75, 600, 360))
+        self.memory_json = HackerTextEdit("", parent=self)
+        self.memory_json.setGeometry(QRect(20, 140, 580, 280))
+
+        self._items: dict = {}
+        self.models: list = []
+        self.reload_models()
+
+    def showEvent(self, event, /):
+        """每次切到这一页都重新扫一遍模型：刚在「新增 LLM」里加的模型立刻能选。"""
+        super().showEvent(event)
+        self.reload_models()
+
+    def model_names(self) -> list:
+        names = [*get_model_lists(), *(values['name'] for values in Config.models.values())]
+        seen = []
+        for name in names:
+            if name and name not in seen:
+                seen.append(name)
+        return seen
+
+    def reload_models(self):
+        """重新扫描模型：新加的模型立刻出现在下拉里（选中项尽量保留）。"""
+        selected = self.model_selector.currentText()
+        self.models = self.model_names()
+
+        self.model_selector.blockSignals(True)
+        self.model_selector.clear()
+        self.model_selector.addItems(self.models)
+        if selected in self.models:
+            self.model_selector.setCurrentText(selected)
+        self.model_selector.blockSignals(False)
+
+        if not self.models:
+            self.memory_json.setPlainText("还没有可用模型（先去「新增 LLM」加一个，或 ollama pull 一个）")
+            return
+        self.show_model(self.model_selector.currentText())
+
+    def show_model(self, model: str):
+        """按需创建该模型的展示项（几十个模型也不会一次性建一堆控件）。"""
+        if not model:
+            return
+
+        item = self._items.get(model)
+        if item is None:
+            item = MemoryShowItem(model, self)
+            self.memory_json.setText(json.dumps(self._history(model), ensure_ascii=False, indent=3))
+            self._items[model] = item
+            SharingData.add_memory_to_ui[model] = self._receive
+        self.current_model = model
+
+    @staticmethod
+    def _history(model: str) -> list:
+        for llm in list(SharingData.llm_instances.values()):
+            if getattr(llm, 'model', None) == model:
+                return getattr(getattr(llm, 'memory', None), 'messages', [])
+        return []
+
+    def _receive(self, data: list):
+        """聊天那边推过来的记忆更新：只认当前选中的模型。"""
+        if not isinstance(data, (list, tuple)) or len(data) < 2:
+            return
+        model, messages = data[0], data[1]
+        if model == getattr(self, 'current_model', None):
+            self.memory_json.setText(json.dumps(messages, ensure_ascii=False, indent=3))
 
     @staticmethod
     def check_short(boo: bool):

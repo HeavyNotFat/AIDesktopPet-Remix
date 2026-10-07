@@ -2013,6 +2013,8 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._actions = []
         self._items = []  # Track all items including separators
+        self._action_items = []  # 每条 item 的绘制数据（用来统一宽度）
+        self._max_width = 0
 
         font_id = QFontDatabase.addApplicationFont("./resources/fonts/jetbrains.ttf")
         if font_id != -1:
@@ -2059,63 +2061,77 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         text = action.text()
         pixmap = action.icon().pixmap(24, 24) if not action.icon().isNull() else None
 
-        font_metrics = QFontMetrics(self.hacker_font)
-        text_width = font_metrics.horizontalAdvance(text)
-        arrow_width = font_metrics.horizontalAdvance(" > ")
-        icon_width = pixmap.width() + 6 if pixmap else 0
-        total_width = text_width + icon_width + 24 + arrow_width + 10
-
         label_height = 36
-        label_pixmap = QPixmap(total_width, label_height)
-        label_pixmap.fill(Qt.transparent)
-
         label = QLabel()
         label.setFixedHeight(label_height)
-        label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        label.setPixmap(label_pixmap)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        if not hasattr(self, '_max_width'):
-            self._max_width = total_width
-        else:
-            self._max_width = max(self._max_width, total_width)
+        # 每一条都按「最宽的那条」来画：早先按自己文字宽度画，短条目右边留空、
+        # 悬停高亮也只亮一半，看着很难受。
+        entry = {'label': label, 'text': text, 'pixmap': pixmap, 'width': 0}
+        entry['width'] = self._measure(text, pixmap)
 
-        def redraw(hovered=False):
-            combined = QPixmap(total_width, label_height)
+        def redraw(hovered=False, entry=entry):
+            width = max(entry['width'], self._max_width)
+            label_height = entry['label'].height() or 36
+            combined = QPixmap(width, label_height)
             combined.fill(Qt.transparent)
             painter = QPainter(combined)
             painter.setRenderHint(QPainter.Antialiasing)
             painter.setFont(self.hacker_font)
             painter.setPen(QColor("#00FF88" if hovered else "#00FF00"))
 
+            metrics = QFontMetrics(self.hacker_font)
+            arrow_width = metrics.horizontalAdvance(" > ")
             text_x = 6
             if hovered:
                 painter.drawText(text_x, 0, arrow_width, label_height, Qt.AlignVCenter, ">")
-                text_x += arrow_width
+            text_x += arrow_width
+            if entry['pixmap']:
+                painter.drawPixmap(text_x, (label_height - entry['pixmap'].height()) // 2, entry['pixmap'])
+                text_x += entry['pixmap'].width() + 6
 
-            if pixmap:
-                painter.drawPixmap(text_x, (label_height - pixmap.height()) // 2, pixmap)
-                text_x += pixmap.width() + 6
-
-            painter.drawText(text_x, 0, total_width - text_x, label_height, Qt.AlignVCenter, text)
+            painter.drawText(text_x, 0, width - text_x, label_height, Qt.AlignVCenter, entry['text'])
             painter.end()
-            label.setPixmap(combined)
+            entry['label'].setPixmap(combined)
 
+        entry['redraw'] = redraw
         redraw(False)
 
-        def enter_event(e):
+        def enter_event(_event, redraw=redraw):
             redraw(True)
 
-        def leave_event(e):
+        def leave_event(_event, redraw=redraw):
             redraw(False)
 
-        def mouse_press_event(e):
+        def mouse_press_event(_event, action=action):
             self._emit(action)
 
         label.enterEvent = enter_event
         label.leaveEvent = leave_event
         label.mousePressEvent = mouse_press_event
+        label.setCursor(Qt.PointingHandCursor)
 
+        self._action_items.append(entry)
         self.layout.addWidget(label)
+        self._apply_width()
+
+    def _measure(self, text: str, pixmap) -> int:
+        metrics = QFontMetrics(self.hacker_font)
+        width = 6 + metrics.horizontalAdvance(" > ") + metrics.horizontalAdvance(text) + 16
+        if pixmap:
+            width += pixmap.width() + 6
+        return width
+
+    def _apply_width(self):
+        """把每条 item 拉到同一宽度（= 最宽那条），保证一行铺满、高亮不留空。"""
+        for entry in self._action_items:
+            entry['width'] = self._measure(entry['text'], entry['pixmap'])
+            self._max_width = max(self._max_width, entry['width'])
+
+        for entry in self._action_items:
+            entry['label'].setFixedWidth(self._max_width)
+            entry['redraw'](False)
 
         self.box.setFixedWidth(self._max_width + 20)
         self.adjustSize()
@@ -2124,10 +2140,13 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet("background-color: rgba(0, 255, 0, 100); margin: 5px 0px;")
+        separator.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.layout.addWidget(separator)
         self._items.append(('separator', separator))
 
+        if self._max_width:
+            separator.setFixedWidth(self._max_width)
         self.adjustSize()
 
     def menu_actions(self):

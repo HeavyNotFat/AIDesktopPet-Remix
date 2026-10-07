@@ -31,6 +31,7 @@ with open(stlibs.CONFIG_PATH, "w", encoding="utf-8") as handle:
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QApplication, QFrame
 
 app = QApplication([])
@@ -75,11 +76,32 @@ def shoot_cultivation():
         id = "cultivation_system"
 
     panel = CultivationWindow(Api(), state)
-    panel.resize(560, 580)
+    panel.resize(620, 560)
     panel.show()
     panel.refresh()
     shot("cultivation-panel.png", panel)
     return panel
+
+
+def shoot_menu():
+    """右键菜单：条目必须一行铺满（宽度参差不齐 + 高亮只亮一半是回归信号）。"""
+    menu = hacker.HackerMenu(None)
+    for text, tip in (("打开养成面板", "看看桌宠的状态"),
+                      ("示例：打个招呼", "很长的菜单项文字用来撑宽度"),
+                      ("设置", "打开设置窗口"),
+                      ("关闭", "退出程序")):
+        action = hacker.Action(text, menu, hacker.IconList.SETTING)
+        action.setToolTip(tip)
+        menu.addAction(action)
+        print(f"   菜单项 {text!r} -> 宽 {menu._action_items[-1]['label'].width()}")
+
+    menu.addSeparator()
+    menu.exec(QPoint(20, 20))
+    shot("menu.png", menu)
+    widths = {item['label'].width() for item in menu._action_items}
+    assert len(widths) == 1, f"菜单项宽度不一致：{widths}"
+    menu.close()
+    return menu
 
 
 # 假窗口：模拟主题窗口的深色底，让提示条有地方贴
@@ -119,6 +141,15 @@ skills.show()
 shot("skills-page.png", skills)
 print(f"  技能表 -> {skills.skill_table.rowCount()} 行")
 
+# 记忆页：故意塞 30 个模型，确认不会堆出 30 个页签
+settings_module.get_model_lists = lambda: [f"model-{index:02d}:latest" for index in range(30)]
+memory = settings_module.Memory(None)
+memory.resize(660, 460)
+memory.show()
+shot("memory-page.png", memory)
+print(f"  记忆页 -> 下拉 {memory.model_selector.count()} 个模型，"
+      f"当前 {memory.model_selector.currentText()!r}")
+
 plugins = hacker.plugins.PluginsPage(None)
 plugins.resize(660, 500)
 plugins.show()
@@ -126,8 +157,11 @@ plugins.refresh()
 shot("plugins-page.png", plugins)
 print(f"  插件表 -> {plugins.card.table.rowCount()} 行")
 
+print("右键菜单：")
+shoot_menu()
+
 cultivation = shoot_cultivation()
-print(f"  养成面板 -> 商店 {cultivation.shop_grid.count()} 格 / 背包 {cultivation.bag_grid.count()} 格")
+print(f"  养成面板 -> 商店 {cultivation.shop_holder.grid.count()} 格 / 背包 {cultivation.bag_holder.grid.count()} 格")
 
 print("聊天窗：")
 chat = hacker.HackerChatWidget()
