@@ -35,7 +35,7 @@ ADPRemix/
 ├── requirements.txt           运行依赖（PySide6 / live2d-py / ollama / fastapi / chromadb …）
 ├── pyproject.toml             打包元数据 + ruff + pytest + 自研门禁 [tool.adpci] 配置
 ├── .github/workflows/         ci.yml（门禁/ruff/编译/测试矩阵）、release.yml（发布前门禁 + Windows 打包）
-├── README.md / CI.md          功能说明 / 质量门禁与「怎么测」
+├── README.md / CI.md          功能总览与部署 / 质量门禁与「怎么测」
 ├── PROMPT.md                  猫娘人设提示词草稿（与 resources/prompts.json 的 general 同源）
 │
 ├── shader/                    桌宠本体（窗口 + 渲染）

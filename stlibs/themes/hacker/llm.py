@@ -9,21 +9,6 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTab
 from PySide6.QtCore import QRect, Qt
 
 
-class MemoryShowItem(QWidget):
-    def __init__(self, model: str, parent):
-        super().__init__(parent)
-        from . import HackerTextEdit
-
-        self.model = model
-
-        self.memory_json = HackerTextEdit("", parent=self)
-        self.memory_json.setGeometry(QRect(0, 0, 600, 260))
-
-    def add(self, data: list):
-        if data[0] == self.model:
-            self.memory_json.setText(json.dumps(data[1], ensure_ascii=False, indent=3))
-
-
 class BasicWidgetScroll(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -218,7 +203,6 @@ class Memory(QWidget):
         self.longterm_memory_switch.setChecked(Config.memory['longterm'])
         self.longterm_memory_switch.stateChanged.connect(self.check_long)
 
-        # 模型多的时候不能一个模型一个页签（几十个页签会挤成一团），改成下拉选择 + 一块展示区
         HackerLabel("看哪个模型的记忆", self).setGeometry(20, 100, 200, 30)
         self.model_selector = HackerComboBox(self)
         self.model_selector.setGeometry(220, 95, 380, 32)
@@ -227,7 +211,6 @@ class Memory(QWidget):
         self.memory_json = HackerTextEdit("", parent=self)
         self.memory_json.setGeometry(QRect(20, 140, 580, 280))
 
-        self._items: dict = {}
         self.models: list = []
         self.reload_models()
 
@@ -236,7 +219,8 @@ class Memory(QWidget):
         super().showEvent(event)
         self.reload_models()
 
-    def model_names(self) -> list:
+    @staticmethod
+    def model_names() -> list:
         names = [*get_model_lists(), *(values['name'] for values in Config.models.values())]
         seen = []
         for name in names:
@@ -262,17 +246,17 @@ class Memory(QWidget):
         self.show_model(self.model_selector.currentText())
 
     def show_model(self, model: str):
-        """按需创建该模型的展示项（几十个模型也不会一次性建一堆控件）。"""
+        """切到某个模型：只刷新展示区，不再给每个模型建控件。
+
+        以前这里是 "每个模型建一个 MemoryShowItem 塞进页签"，改成下拉之后那些控件
+        已经没用了；继续创建它们会盖在整页上（看得见两个输入框、控件点不动）。
+        """
         if not model:
             return
 
-        item = self._items.get(model)
-        if item is None:
-            item = MemoryShowItem(model, self)
-            self.memory_json.setText(json.dumps(self._history(model), ensure_ascii=False, indent=3))
-            self._items[model] = item
-            SharingData.add_memory_to_ui[model] = self._receive
         self.current_model = model
+        self.memory_json.setPlainText(json.dumps(self._history(model), ensure_ascii=False, indent=3))
+        SharingData.add_memory_to_ui[model] = self._receive
 
     @staticmethod
     def _history(model: str) -> list:

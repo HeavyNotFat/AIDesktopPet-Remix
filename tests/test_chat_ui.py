@@ -302,6 +302,74 @@ def test_skill_menu_when_no_skills(qapp, monkeypatch, isolated_config):
 
 
 # 设置页
+def _memory_page(qapp, isolated_config, monkeypatch, models=("model-a", "model-b")):
+    """记忆页：模型列表用假数据，免得依赖本机 Ollama（用 monkeypatch 免得泄漏到别的用例）。"""
+    import stlibs.themes.hacker.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "get_model_lists", lambda: list(models))
+    page = llm_module.Memory(None)
+    page.resize(660, 460)
+    page.show()
+    for _ in range(3):
+        qapp.processEvents()
+    return page
+
+
+def test_memory_page_has_single_viewer_and_interactive_selector(qapp, isolated_config, monkeypatch):
+    """回归：重建展示项会盖在整页上 —— 表现为两个输入框、控件点不动。"""
+    page = _memory_page(qapp, isolated_config, monkeypatch)
+
+    texts = [item for item in page.findChildren(QtWidgets.QTextEdit) if item.isVisible()]
+    assert len(texts) == 1, f"记忆页只该有一个展示框，实际 {len(texts)} 个"
+
+    center = page.model_selector.geometry().center()
+    top = page.childAt(center)
+    assert top is not None
+    assert top is page.model_selector or page.model_selector.isAncestorOf(top), \
+        f"下拉被 {type(top).__name__} 盖住了，点不到"
+
+    # 切走再切回（设置页切页签就是这个效果）后依然如此
+    page.hide()
+    page.show()
+    for _ in range(3):
+        qapp.processEvents()
+
+    texts = [item for item in page.findChildren(QtWidgets.QTextEdit) if item.isVisible()]
+    assert len(texts) == 1
+    top = page.childAt(center)
+    assert top is page.model_selector or page.model_selector.isAncestorOf(top)
+    page.hide()
+
+
+def test_memory_page_switches_model_and_receives_updates(qapp, isolated_config, monkeypatch):
+    page = _memory_page(qapp, isolated_config, monkeypatch)
+
+    assert page.model_selector.count() == 2
+    assert page.current_model == "model-a"
+    assert page.memory_json.toPlainText() == "[]", "没有活着的实例时展示空记忆"
+
+    receive = stlibs.SharingData.add_memory_to_ui["model-a"]
+    receive(["model-a", [{"role": "user", "content": "你好"}]])
+    assert "你好" in page.memory_json.toPlainText()
+
+    receive(["model-b", [{"role": "user", "content": "别的模型"}]])
+    assert "别的模型" not in page.memory_json.toPlainText(), "只显示当前选中的模型"
+
+    page.model_selector.setCurrentText("model-b")
+    for _ in range(2):
+        qapp.processEvents()
+    assert page.current_model == "model-b"
+    page.hide()
+
+
+def test_memory_page_without_models_shows_hint(qapp, isolated_config, monkeypatch):
+    page = _memory_page(qapp, isolated_config, monkeypatch, models=())
+
+    assert page.model_selector.count() == 0
+    assert "还没有可用模型" in page.memory_json.toPlainText()
+    page.hide()
+
+
 def _skills_page(qapp, isolated_config):
     from stlibs.themes.hacker.llm import Skills
 
