@@ -1,0 +1,30 @@
+{
+  "N": [
+    {"id": "pebble", "name": "路边小石子", "emoji": "🪨"},
+    {"id": "leaf", "name": "一片叶子", "emoji": "🍃"},
+    {"id": "button", "name": "掉漆的纽扣", "emoji": "🔘"},
+    {"id": "bottle", "name": "空汽水瓶", "emoji": "🥤"},
+    {"id": "sock", "name": "单只袜子", "emoji": "🧦"}
+  ],
+  "R": [
+    {"id": "candy", "name": "橘子糖", "emoji": "🍬"},
+    {"id": "acorn", "name": "橡果", "emoji": "🌰"},
+    {"id": "key", "name": "生锈的钥匙", "emoji": "🗝️"},
+    {"id": "cassette", "name": "旧磁带", "emoji": "📼"}
+  ],
+  "SR": [
+    {"id": "cake", "name": "草莓蛋糕", "emoji": "🍰"},
+    {"id": "guitar", "name": "迷你吉他", "emoji": "🎸"},
+    {"id": "ticket", "name": "流星列车票", "emoji": "🎫"},
+    {"id": "lamp", "name": "会呼吸的台灯", "emoji": "🪔"}
+  ],
+  "SSR": [
+    {"id": "crown", "name": "会说话的皇冠", "emoji": "👑"},
+    {"id": "comet", "name": "彗星碎片", "emoji": "☄️"},
+    {"id": "console", "name": "初代掌机", "emoji": "🎮"}
+  ],
+  "UR": [
+    {"id": "heart", "name": "猫猫的心", "emoji": "💖"},
+    {"id": "moon", "name": "第二颗月亮", "emoji": "🌙"}
+  ]
+}
