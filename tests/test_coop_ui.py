@@ -241,8 +241,48 @@ def test_cooperation_refresh_lists_available_models(qapp, isolated_config, monke
 
     page.refresh()
 
-    hint = page.available_label.text()
-    assert "云端" in hint and "本地模型" in hint
+    # 模型不再挤成一行字：列表 + 搜索框，来源分开标
+    listed = [page.model_table.item(row, 0).text() for row in range(page.model_table.rowCount())]
+    sources = {page.model_table.item(row, 0).text(): page.model_table.item(row, 1).text()
+               for row in range(page.model_table.rowCount())}
+    assert listed == ["云端", "本地模型"]
+    assert sources == {"云端": "API", "本地模型": "本地"}
+    assert "2 个模型" in page.available_label.text()
+
+
+def test_cooperation_search_filters_models(qapp, isolated_config, monkeypatch):
+    monkeypatch.setattr("stlibs.themes.hacker.llm.get_model_lists",
+                        lambda: [f"model-{index:02d}:latest" for index in range(30)])
+    page = _cooperation_page(qapp, isolated_config)
+
+    assert page.model_table.rowCount() == 30, "模型多也要全列出来（列表可滚动）"
+
+    page.model_search.setText("model-1")
+    assert page.model_table.rowCount() == 10, "只列匹配的"
+    assert "匹配 10 / 共 30" in page.available_label.text()
+
+    page.model_search.setText("")
+    assert page.model_table.rowCount() == 30
+    page.hide()
+
+
+def test_cooperation_add_selected_model(qapp, isolated_config, monkeypatch, notify_spy):
+    monkeypatch.setattr("stlibs.themes.hacker.llm.get_model_lists", lambda: ["本地模型"])
+    page = _cooperation_page(qapp, isolated_config)
+
+    page.add_selected()
+    assert notify_spy[-1][0] == "warning", "没选模型时给提示"
+
+    page.model_table.selectRow(0)
+    page.add_selected()
+    assert page.agent_table.rowCount() == 1
+    assert page.agent_table.item(0, 0).text() == "本地模型"
+    assert notify_spy[-1][0] == "success"
+
+    page.add_selected()
+    assert page.agent_table.rowCount() == 1, "重复加入要拦住"
+    assert notify_spy[-1][0] == "warning"
+    page.hide()
 
 
 def _basic_page(qapp):

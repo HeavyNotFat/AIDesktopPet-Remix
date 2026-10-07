@@ -595,7 +595,7 @@ class Cooperation(QWidget):
 
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerSwitch, HackerTable, HackerLabel, HackerButton, HackerComboBox, HackerSlider
+        from . import HackerSwitch, HackerTable, HackerLabel, HackerButton, HackerComboBox, HackerSlider, HackerLineEdit
 
         HackerLabel("开启多模型协作", self).setGeometry(20, 10, 200, 30)
         self.enable_switch = HackerSwitch(parent=self)
@@ -619,31 +619,45 @@ class Cooperation(QWidget):
         self.rounds_slider.valueChanged.connect(self.check_rounds)
 
         self.available_label = HackerLabel("", self)
-        self.available_label.setWordWrap(True)
-        self.available_label.setGeometry(20, 124, 600, 46)
+        self.available_label.setGeometry(20, 384, 280, 20)
+
+        HackerLabel("可用模型（双击加入协作）", self).setGeometry(20, 130, 300, 24)
+        self.model_search = HackerLineEdit("搜索模型…", parent=self)
+        self.model_search.setGeometry(20, 156, 280, 30)
+        self.model_search.textChanged.connect(self.filter_models)
+
+        self.model_table = HackerTable(parent=self)
+        self.model_table.setGeometry(20, 192, 280, 186)
+        self.model_table.setHorizontalHeaderLabels(["模型", "来源"])
+        self.model_table.setColumnWidth(0, 190)
+        self.model_table.setColumnWidth(1, 80)
+        self.model_table.setEditTriggers(HackerTable.EditTrigger.NoEditTriggers)
+        self.model_table.cellDoubleClicked.connect(lambda *_args: self.add_selected())
+
+        join_button = HackerButton("加入协作 →", parent=self)
+        join_button.set_border()
+        join_button.setGeometry(20, 402, 130, 28)
+        join_button.clicked.connect(self.add_selected)
+
+        HackerLabel("协作成员（主模型之外，按角色给意见）", self).setGeometry(315, 130, 305, 24)
 
         self.agent_table = HackerTable(parent=self)
-        self.agent_table.setGeometry(20, 178, 600, 205)
-        self.agent_table.setHorizontalHeaderLabels(["模型", "角色名", "角色提示词"])
-        self.agent_table.setColumnWidth(0, 150)
-        self.agent_table.setColumnWidth(1, 110)
-        self.agent_table.setColumnWidth(2, 330)
+        self.agent_table.setGeometry(315, 156, 305, 222)
+        self.agent_table.setHorizontalHeaderLabels(["模型", "角色名", "提示词"])
+        self.agent_table.setColumnWidth(0, 95)
+        self.agent_table.setColumnWidth(1, 85)
+        self.agent_table.setColumnWidth(2, 115)
         self.agent_table.itemChanged.connect(self.change_data)
 
-        add_button = HackerButton("添加模型", parent=self)
-        add_button.set_border()
-        add_button.setGeometry(20, 395, 100, 30)
-        add_button.clicked.connect(self.add_agent)
-
-        remove_button = HackerButton("删除选中", parent=self)
-        remove_button.set_border()
-        remove_button.setGeometry(130, 395, 100, 30)
-        remove_button.clicked.connect(self.remove_agent)
-
-        save_button = HackerButton("保存协作", parent=self)
-        save_button.set_border()
-        save_button.setGeometry(240, 395, 100, 30)
-        save_button.clicked.connect(self.save_agents)
+        for index, (label, slot) in enumerate((
+            ("添加空行", self.add_agent),
+            ("删除选中", self.remove_agent),
+            ("保存协作", self.save_agents),
+        )):
+            button = HackerButton(label, parent=self)
+            button.set_border()
+            button.setGeometry(315 + index * 100, 384, 95, 28)
+            button.clicked.connect(slot)
 
         self.refresh()
 
@@ -663,9 +677,67 @@ class Cooperation(QWidget):
             self.add_row(agent.get("model", ""), agent.get("name", ""), agent.get("prompt", ""))
         self.agent_table.blockSignals(False)
 
-        keys = [*Config.models.keys(), *get_model_lists()]
-        hint = "、".join(keys) if keys else "（还没有可用模型，先去「新增 LLM」加一个）"
-        self.available_label.setText(f"可用模型（{len(keys)}）：{hint}")
+        self.models = self._available_models()
+        keys = self._available_models()
+        self.filter_models(self.model_search.text())
+        if not keys:
+            self.available_label.setText("（还没有可用模型，先去「新增 LLM」加一个）")
+
+    @staticmethod
+    def _available_models() -> list:
+        """可用模型（云端别名 + 本地模型），带来源标识、去过重。"""
+        rows = [(alias, str(values.get("name") or alias), "API") for alias, values in Config.models.items()]
+        rows += [(model, model, "本地") for model in get_model_lists()]
+
+        seen, unique = set(), []
+        for key, model, source in rows:
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique.append((key, model, source))
+        return unique
+
+    def filter_models(self, keyword: str):
+        """按关键字筛可用模型：模型几十个的时候靠它找，而不是挤成一行字。"""
+        keyword = (keyword or "").strip().lower()
+        rows = [row for row in self.models
+                if not keyword or keyword in row[0].lower() or keyword in row[1].lower()]
+
+        table = self.model_table
+        table.blockSignals(True)
+        table.setRowCount(0)
+        for key, model, source in rows:
+            row = table.rowCount()
+            table.insertRow(row)
+            table.setItem(row, 0, QTableWidgetItem(key))
+            table.setItem(row, 1, QTableWidgetItem(source))
+            table.item(row, 0).setToolTip(model)
+        table.blockSignals(False)
+        table.rows = rows
+
+        total = len(self.models)
+        if not total:
+            return
+        if len(rows) != total:
+            self.available_label.setText(f"匹配 {len(rows)} / 共 {total} 个模型")
+        else:
+            self.available_label.setText(f"共 {total} 个模型，双击就能加入协作")
+
+    def add_selected(self):
+        """把列表里选中的模型加成协作成员。"""
+        rows = getattr(self.model_table, "rows", [])
+        index = self.model_table.currentRow()
+        if index < 0 or index >= len(rows):
+            notify("先在上面的列表里选一个模型", "warning")
+            return
+
+        model = rows[index][0]
+        if any(self._cell(row, 0) == model for row in range(self.agent_table.rowCount())):
+            notify(f"「{model}」已经在协作成员里了", "warning")
+            return
+
+        self.add_row(model, "", "")
+        notify(f"已加入协作：{model}（记得点保存协作）", "success")
 
     def add_row(self, model, name, prompt):
         row = self.agent_table.rowCount()

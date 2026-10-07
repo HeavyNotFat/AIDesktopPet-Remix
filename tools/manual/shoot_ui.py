@@ -76,7 +76,7 @@ def shoot_cultivation():
         id = "cultivation_system"
 
     panel = CultivationWindow(Api(), state)
-    panel.resize(620, 560)
+    panel.resize(720, 660)
     panel.show()
     panel.refresh()
     shot("cultivation-panel.png", panel)
@@ -130,7 +130,7 @@ print(f"  删除行 -> 下拉 {page.existing.width()}x{page.existing.height()}"
       f" 按钮 {page.remove_button.width()}x{page.remove_button.height()}")
 
 coop = settings_module.Cooperation(None)
-coop.resize(660, 460)
+coop.resize(660, 470)
 coop.show()
 shot("coop-page.png", coop)
 print(f"  协作表 -> {coop.agent_table.rowCount()} 行 {coop.agent_table.columnCount()} 列")

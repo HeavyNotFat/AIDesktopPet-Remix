@@ -58,7 +58,7 @@ def panel(qapp, actions):
 
     state = PetState(storage={"state": dict(SAVED)}, foods=dict(FOODS))
     window = CultivationWindow(FakeAPI(), state, on_action=lambda action, payload=None: actions.append((action, payload)))
-    window.resize(620, 560)
+    window.resize(700, 600)
     window.show()
     window.refresh()
     for _ in range(3):
@@ -108,18 +108,32 @@ def test_status_on_top_shop_left_bag_right(panel):
 
     assert status_y < panel.shop_panel.mapTo(panel, panel.shop_panel.rect().topLeft()).y(), "状态要在上面"
     assert shop_x < bag_x, "商店在左、背包在右"
-    assert abs(panel.shop_panel.width() - panel.bag_panel.width()) <= 4, "左右两栏宽度应该差不多"
+    assert panel.shop_panel.width() > panel.bag_panel.width(), "商店要更宽（格子更大）"
 
 
 def test_bag_shows_counts_and_shop_shows_prices(panel):
-    bag = [item.text() for item in bag_widgets(panel)]
-    assert "可乐 ×2" in bag
-    assert "汉堡 ×1" in bag
-    assert not any("剩骨头" in item for item in bag)
+    bag = [(item.name_label.text(), item.detail_label.text()) for item in bag_widgets(panel)]
+    assert ("可乐", "×2") in bag
+    assert ("汉堡", "×1") in bag
+    assert not any(name == "剩骨头" for name, _detail in bag)
 
-    shop = [item.text() for item in shop_widgets(panel)]
+    shop = [(item.name_label.text(), item.detail_label.text()) for item in shop_widgets(panel)]
     assert len(shop) == len(FOODS)
-    assert any(item.startswith("汉堡") and "80 金币" in item for item in shop)
+    assert ("汉堡", "80 金币") in shop
+
+
+def test_shop_tiles_are_image_over_name(panel):
+    """商店格子：中间是图，下面才是名字与价格（要的上下布局）。"""
+    tile = shop_widgets(panel)[0]
+    image = tile.image_label
+
+    assert image.pixmap() is not None and not image.pixmap().isNull()
+    assert image.height() >= 60, "图片要给够大小"
+
+    image_bottom = image.mapTo(tile, image.rect().bottomLeft()).y()
+    name_top = tile.name_label.mapTo(tile, tile.name_label.rect().topLeft()).y()
+    detail_top = tile.detail_label.mapTo(tile, tile.detail_label.rect().topLeft()).y()
+    assert image_bottom <= name_top <= detail_top, "顺序必须是 图 → 名字 → 价格"
 
 
 def test_bag_items_flow_horizontally(panel):
@@ -131,24 +145,24 @@ def test_bag_items_flow_horizontally(panel):
     assert positions[1] == (0, 1), "背包第二格应该在同一行的右侧"
 
 
-def test_food_buttons_have_icons(panel):
+def test_every_tile_has_food_image(panel):
     for item in [*bag_widgets(panel), *shop_widgets(panel)]:
-        if isinstance(item, QtWidgets.QPushButton):
-            assert not item.icon().isNull(), f"{item.text()!r} 应该有食物图标"
+        pixmap = item.image_label.pixmap()
+        assert pixmap is not None and not pixmap.isNull(), f"{item.name!r} 应该有食物图"
 
 
-def test_bag_button_forwards_eat(panel, actions):
+def test_bag_tile_forwards_eat(panel, actions):
     for item in bag_widgets(panel):
-        if item.text().startswith("汉堡"):
+        if item.name == "汉堡":
             item.click()
             break
 
     assert ("eat", "汉堡") in actions
 
 
-def test_shop_button_forwards_buy(panel, actions):
+def test_shop_tile_forwards_buy(panel, actions):
     for item in shop_widgets(panel):
-        if item.text().startswith("剩骨头"):
+        if item.name == "剩骨头":
             item.click()
             break
 

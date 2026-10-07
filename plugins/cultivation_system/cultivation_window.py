@@ -4,7 +4,7 @@ from cultivation_model import FOODS_DIR, PetState
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
-from PySide6.QtWidgets import QWidget, QProgressBar, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
+from PySide6.QtWidgets import QWidget, QProgressBar, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QLabel
 
 BAR_STYLE = """
 QProgressBar {
@@ -28,15 +28,28 @@ QFrame#panel {
 QFrame#panel QLabel { background: transparent; color: #00FF88; }
 """
 
+TILE_STYLE = """
+QFrame#tile {
+    background: rgba(0, 255, 0, 18);
+    border: 1px solid rgba(0, 255, 0, 70);
+    border-radius: 9px;
+}
+QFrame#tile:hover {
+    background: rgba(0, 255, 0, 40);
+    border: 1px solid #00FF00;
+}
+"""
+
 WINDOW_STYLE = """
 QWidget { background: #16181c; color: #d8ffd8; }
 QLabel { background: transparent; color: #00FF88; }
 QScrollArea { border: none; background: transparent; }
 """
 
+SHOP_COLS = 3
+SHOP_IMAGE = 72
 BAG_COLS = 2
-SHOP_WIDTH = 250
-BAG_WIDTH = 250
+BAG_IMAGE = 58
 
 
 def _pet_name() -> str:
@@ -48,13 +61,13 @@ def _pet_name() -> str:
         return "桌宠"
 
 
-def _food_icon(name: str, size: int = 28) -> QIcon:
-    """食物图当图标；图不在就现画一个绿色方块，别让按钮空着。"""
+def _food_pixmap(name: str, size: int) -> QPixmap:
+    """食物图；图不在就现画一个绿框，别让格子空着。"""
     path = FOODS_DIR / f"{name}.png"
     if path.exists():
         pixmap = QPixmap(str(path))
         if not pixmap.isNull():
-            return QIcon(pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            return pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
     fallback = QPixmap(size, size)
     fallback.fill(Qt.transparent)
@@ -62,9 +75,58 @@ def _food_icon(name: str, size: int = 28) -> QIcon:
     painter.setRenderHint(QPainter.Antialiasing)
     painter.setPen(QPen(QColor("#00FF00"), 1))
     painter.setBrush(QColor(0, 255, 0, 40))
-    painter.drawRoundedRect(1, 1, size - 2, size - 2, 6, 6)
+    painter.drawRoundedRect(1, 1, size - 2, size - 2, 8, 8)
     painter.end()
-    return QIcon(fallback)
+    return fallback
+
+
+def _food_icon(name: str, size: int = 28) -> QIcon:
+    """给按钮用的图标形式（兼容旧调用）。"""
+    return QIcon(_food_pixmap(name, size))
+
+
+class FoodTile(QFrame):
+    """一格食物：上面大图，下面名字与价格（或数量）。整格可点。"""
+
+    def __init__(self, name: str, detail: str, image_size: int, parent: QWidget, on_click=None):
+        super().__init__(parent)
+        self.setObjectName("tile")
+        self.setStyleSheet(TILE_STYLE)
+        self.setCursor(Qt.PointingHandCursor)
+        self.name = name
+        self.on_click = on_click
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 10, 8, 10)
+        layout.setSpacing(6)
+
+        self.image_label = QLabel(self)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setPixmap(_food_pixmap(name, image_size))
+        self.image_label.setFixedHeight(image_size)
+        layout.addWidget(self.image_label)
+
+        self.name_label = QLabel(name, self)
+        self.name_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.name_label)
+
+        self.detail_label = QLabel(detail, self)
+        self.detail_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.detail_label)
+
+        layout.addStretch(1)
+
+    def text(self) -> str:
+        return self.name
+
+    def click(self):
+        if self.on_click is not None:
+            self.on_click(self.name)
+
+    def mouseReleaseEvent(self, event, /):
+        if event.button() == Qt.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.click()
+        super().mouseReleaseEvent(event)
 
 
 class CultivationWindow(QWidget):
@@ -79,7 +141,7 @@ class CultivationWindow(QWidget):
         self.on_action = on_action or (lambda action, payload=None: None)
 
         self.setWindowTitle(f"养成系统 · {_pet_name()}")
-        self.resize(620, 560)
+        self.resize(720, 660)
         self.setStyleSheet(WINDOW_STYLE)
 
         root = QVBoxLayout(self)
@@ -126,19 +188,17 @@ class CultivationWindow(QWidget):
         columns.setSpacing(10)
 
         shop_panel, shop_layout = self._panel(hacker, "商店（点一下购买）")
-        self.shop_holder = self._grid_holder(shop_panel, BAG_COLS)
+        self.shop_holder = self._grid_holder(shop_panel, SHOP_COLS)
         shop_layout.addWidget(self.shop_holder)
         shop_layout.addStretch(1)
-        columns.addWidget(shop_panel, 1)
+        columns.addWidget(shop_panel, 3)
 
         bag_panel, bag_layout = self._panel(hacker, "背包（点一下吃掉）")
         self.bag_holder = self._grid_holder(bag_panel, BAG_COLS)
         bag_layout.addWidget(self.bag_holder)
         bag_layout.addStretch(1)
-        columns.addWidget(bag_panel, 1)
+        columns.addWidget(bag_panel, 2)
 
-        columns.setStretch(0, 1)
-        columns.setStretch(1, 1)
         self.shop_panel, self.bag_panel = shop_panel, bag_panel
         return columns
 
@@ -146,7 +206,6 @@ class CultivationWindow(QWidget):
         panel = QFrame(self)
         panel.setObjectName("panel")
         panel.setStyleSheet(PANEL_STYLE)
-        panel.setMinimumWidth(SHOP_WIDTH)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 12)
@@ -237,20 +296,20 @@ class CultivationWindow(QWidget):
                 grid.addWidget(hint, 0, 0, 1, columns)
             return
 
+        image_size = SHOP_IMAGE if action == "buy" else BAG_IMAGE
         for index, (name, count) in enumerate(sorted(items.items())):
             if action == "eat":
-                text = f"{name} ×{count}"
-                tooltip = "点一下吃掉"
+                detail = f"×{count}"
+                tooltip = f"{name}：点一下吃掉（还有 {count} 个）"
             else:
-                text = f"{name}\n{self._price(name)}"
+                detail = self._price(name)
                 tooltip = f"{name}：饥饿 +{self._food(name, 'hungry')}、好感 +{self._food(name, 'favor')}"
 
-            button = hacker.Button(text, icon=_food_icon(name), parent=holder)
-            button.set_border()
-            button.setToolTip(tooltip)
-            button.setMinimumHeight(52)
-            button.clicked.connect(lambda _checked=False, food=name: self.on_action(action, food))
-            grid.addWidget(button, index // columns, index % columns)
+            tile = FoodTile(name, detail, image_size, holder,
+                            on_click=lambda food, act=action: self.on_action(act, food))
+            tile.setToolTip(tooltip)
+            tile.setMinimumHeight(image_size + 54)
+            grid.addWidget(tile, index // columns, index % columns)
 
     def _food(self, name: str, key: str):
         return (self.state.foods.get(name) or {}).get(key, "?")
@@ -265,4 +324,4 @@ class CultivationWindow(QWidget):
         self.raise_()
 
 
-__all__ = ["BAR_STYLE", "BAG_COLS", "PANEL_STYLE", "WINDOW_STYLE", "CultivationWindow"]
+__all__ = ["BAR_STYLE", "BAG_COLS", "PANEL_STYLE", "SHOP_COLS", "TILE_STYLE", "WINDOW_STYLE", "FoodTile", "CultivationWindow"]
