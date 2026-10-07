@@ -69,7 +69,8 @@ ADPRemix/
 │   │   └── hacker/            默认主题（代码雨 + 绿色终端风），见 §4.5
 │   ├── graphics/              窗口装配层
 │   │   ├── chat.py            聊天窗：主题 Window + 按「本地/API」分类的模型页导航
-│   │   └── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）
+│   │   ├── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）
+│   │   └── menu.py            插件右键菜单装配：按插件分组、标题带图标、悬浮子菜单
 │   ├── derfer/__init__.py     线程边界与音频：LLMAICallback(QThread) + 音频解码/播放
 │   ├── mproc/onlinechat/      网页聊天服务端（FastAPI）
 │   │   ├── __init__.py        路由：/api/chat、/chat/stream(SSE)、/chat/recall、/reset、/status、/getmodellist、/getmodelname、/health + 静态托管
@@ -80,9 +81,10 @@ ADPRemix/
 │   ├── plugins/               插件系统（宿主侧）
 │   │   ├── __init__.py        对外导出
 │   │   ├── api.py             插件 API 门面（日志/提示/设置/存储/菜单/命令/提示词/动作表情/主线程回调）+ hook 常量
-│   │   ├── manifest.py        plugin.json 解析与校验
+│   │   ├── icons.py           插件图标：自定义图解码 + 字母徽章兜底（带缓存与无 GUI 守卫）
+│   │   ├── manifest.py        plugin.json 解析与校验（含 icon / menu）
 │   │   └── manager/           管理子包
-│   │       ├── core.py        PluginManager：发现/加载/派发/卸载/事件/能力聚合
+│   │       ├── core.py        PluginManager：发现/加载/派发/卸载/事件/能力聚合/菜单分组
 │   │       ├── python_plugin.py Python 入口导入 + hook 表（签名自适应）
 │   │       ├── js_plugin.py   node 子进程桥（一行一个 JSON 的同步协议）
 │   │       ├── runtime.js     跑在 node 里的那一半
@@ -118,9 +120,10 @@ ADPRemix/
 │
 ├── tools/
 │   ├── ci/                    自研门禁（零第三方依赖，AST 静态分析）54 项检查
-│   └── manual/                手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、strip_doc_headers
+│   └── manual/                手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、
+│                              make_plugin_icons（画插件图标）、strip_doc_headers
 │
-└── tests/                     536 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
+└── tests/                     602 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
 ```
 
 ## 3. 启动链路
@@ -203,10 +206,12 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 | 驱动   | `startTimer(0)` 满帧 update+draw               | `QTimer(1000/fps)` 推帧 + `startTimer(5)` 做穿透检测 |
 | 命中   | `glReadPixels` 单点 alpha                      | 等比缩放换算回图片坐标取 alpha                            |
 | 鼠标穿透 | Win32 `WS_EX_TRANSPARENT` 切换                 | 同一套 ctypes 逻辑                                 |
-| 右键菜单 | 设置 / 聊天 / 在线聊天 / 插件项 / 关闭                    | 同类菜单（无「在线聊天」项）                                |
+| 右键菜单 | 设置 / 聊天 / 在线聊天 / 插件分组 / 关闭                    | 同类菜单（无「在线聊天」项）                                |
 
 两者都会在鼠标释放（未拖动）时发 `pet_click`：插件总线 `plugin_manager().emit_event("pet_click")`
 与 SDK 事件 `stlibs.emit_sdk_event(...)`。
+
+插件菜单的装配（按插件分组、子菜单悬浮展开）抽在 `stlibs/graphics/menu.py`，两个 shader 都调它。
 
 ### 4.4 线程边界（`stlibs/derfer/`）
 
@@ -220,17 +225,18 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 * `chat.py`：聊天窗 = 主题 Window + 左侧「本地 / API」两分类下的模型页导航；提供 `add_model/find_model/reload_models`。
 * `settings.py`：设置窗 = 6 页（常规 / LLM / 语音 / 动画 / 插件 / 设置），把子页信号中转成窗口级信号。
+* `menu.py`：插件右键菜单的装配（按插件分组 → 子菜单，标题带图标；单插件单条目时平铺）+ 点击回调转发。
 
-`stlibs/themes/hacker/`（默认主题实现，`__init__.py` 约 2776 行）：
+`stlibs/themes/hacker/`（默认主题实现，`__init__.py` 约 2900 行）：
 
 | 文件                          | 内容                                                                                                                                                                                                                                                                                                                                                                                    |
 |:----------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `__init__.py`               | 全部控件与契约映射：`HackerWindow`（标题栏/导航/堆叠页/快捷键）、`HackerMenu`（Qt.Popup 自绘菜单）、`HackerNotify`（窗口内提示条，多级配色 + 堆叠）、`HackerSwitch`/`HackerSlider`/`HackerComboBox`/`HackerTable`/`HackerCard`/`HackerTabWidget`、`_CodeRain` 背景、`HackerChatBubble`（复制/播放/技能标签/附件）、`HackerChatWidget`（消息区 + 技能栏 + 附件栏 + 输入行）、`_ChatInputEdit`（回车发送、Ctrl+V 图片转附件）、`ModelChat`（单模型聊天页：LLM 缓存、函数线程、插件改写、技能与插件提示词合并、协作提示） |
+| `__init__.py`               | 全部控件与契约映射：`HackerWindow`（标题栏/导航/堆叠页/快捷键）、`HackerMenu`（Qt.Popup 自绘菜单，`addMenu` 子菜单悬浮展开 + ▸ 指示）/`HackerSubMenu`（子菜单，独立工具窗不抢弹出状态）、`HackerNotify`（窗口内提示条，多级配色 + 堆叠）、`HackerSwitch`/`HackerSlider`/`HackerComboBox`/`HackerTable`/`HackerCard`/`HackerTabWidget`、`_CodeRain` 背景、`HackerChatBubble`（复制/播放/技能标签/附件）、`HackerChatWidget`（消息区 + 技能栏 + 附件栏 + 输入行）、`_ChatInputEdit`（回车发送、Ctrl+V 图片转附件）、`ModelChat`（单模型聊天页：LLM 缓存、函数线程、插件改写、技能与插件提示词合并、协作提示） |
 | `llm.py`                    | LLM 设置页六 Tab：新增 LLM / 记忆（模型下拉 + JSON 视图）/ RAG / MCP / 协作 / 技能                                                                                                                                                                                                                                                                                                                         |
 | `general.py`                | 常规设置：名字、形象、透明度、大小、旋转                                                                                                                                                                                                                                                                                                                                                                  |
 | `animation.py`              | 动画页：Live2D 动作/表情面板、坐标录入、智能与 AI 控制开关                                                                                                                                                                                                                                                                                                                                                   |
 | `settings.py`               | 设置页外壳：主题下拉（`available_themes()`）                                                                                                                                                                                                                                                                                                                                                      |
-| `plugins.py`                | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）                                                                                                                                                                                                                                                                                                                                             |
+| `plugins.py`                | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标                                                                                                                                                                                                                                                                                                                                   |
 | `tts.py` / `recognition.py` | 语音页占位 / 空文件（未实现）                                                                                                                                                                                                                                                                                                                                                                      |
 
 **主题契约三处必须同步**：`stlibs/__init__.py::_ThemeTypingProtocol`（类型）、
@@ -260,10 +266,16 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
   （一行一个 JSON 的同步协议，`fs.readSync(0)` × 专用读线程）。
 * Hook：`on_load` / `on_unload` / `on_chat_send` / `on_chat_reply` / `on_system_prompt` / `on_command` / `on_event`。
 * API：日志、提示、设置、私有存储、菜单项、命令注册、系统提示词、动作表情、`send_to_chat`、`run_on_ui`。
+* 图标：清单 `icon` 指插件目录内的相对路径（png/svg/jpg/webp/ico/bmp），没有或文件不在时由 `icons.py`
+  按插件名生成字母/汉字徽章（颜色由 id 哈希决定，进程级缓存）；没有 QGuiApplication 时一律返回空图标
+  （Qt 在这种情况下构造 `QPixmap` 会**直接终止进程**，不是抛异常）。设置页表格首列与插件菜单组标题共用它。
+* 菜单：`menu_groups()` 按插件分组（标题 = 清单 `menu`，默认 `name`），`stlibs/graphics/menu.py` 把每组挂成
+  一层子菜单（`HackerMenu.addMenu` + 悬浮展开）；只有"一个插件 + 一条菜单"时平铺。`menu_items()` 保留扁平结果给
+  SDK/探针等老调用方。
 * 宿主挂载点：`core.py`（加载）、两个 shader（右键菜单 + `pet_click`）、`ModelChat`（发送前/回复后/提示词）、网页聊天（插件提示词）。
 * 隔离：单个 hook 异常只记进该插件状态并提示一次；JS 单次调用有超时；插件目录 `.data/<id>.json` 存私有数据。
 * 示例与玩法见 `plugins/README.md`；养成系统是完整玩法样例（`cultivation_model.py` 纯逻辑 + `cultivation_window.py` 面板 +
-  `main.py` 接线）。
+  `main.py` 接线），它和扭蛋机的图标由 `tools/manual/make_plugin_icons.py` 生成。
 
 ### 4.8 SDK 与 MCP
 
@@ -287,9 +299,9 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
   支持 `# ci: ignore[=id]` 内联抑制、5 种输出格式（text/json/markdown/github/sarif）。
   用法：`python -m tools.ci [检查id|分类|前缀*] [--strict] [--format …]`。
 * `tools/manual/`：真机联调脚本（附件/协作/养成/插件/技能/网页聊天各一个）、
-  `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、养成面板、聊天窗）、
-  `strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
-* `tests/`：536 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
+  `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件子菜单、养成面板、聊天窗）、
+  `make_plugin_icons.py` 用 Pillow 画插件图标、`strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
+* `tests/`：602 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
   前端 js 用例用 node 跑真实脚本（`test_web_*.py`）；`conftest.py` 统一把临时目录收敛到 `.ci-tmp/`。
 
 ### 4.11 CI/CD
@@ -335,6 +347,7 @@ Chat 窗口 → ModelChat._send_message
 | 配置项增删                  | `stlibs/__init__.py::_BaseModelConfig` + `resources/configure.json` + 设置页 UI（CI `config/schema` 会拦） |
 | 网页接口 / 前端 id / JS 命名空间 | 后端路由 + `index.html` + 对应 js（CI `web/*` 六项会拦）                                                        |
 | 插件 API 增删              | `stlibs/plugins/api.py` + `runtime.js`（JS 侧）+ `plugins/README.md` + 两个示例                            |
+| 插件清单字段增删              | `stlibs/plugins/manifest.py` + `plugins/README.md` 的 plugin.json 段 + 设置页插件表（列宽很紧，加列要一起调）             |
 | SDK 方法增删               | `stlibs/sdk/methods.py` + `METHOD_HELP` + 客户端方法 + `stlibs/sdk/README.md`（`mcp_servers/sdk` 若也要用需同步） |
 | 新增资源文件                 | 放进 `resources/` 并确认代码里的路径字面量（CI `resource/missing` 会拦）                                              |
 

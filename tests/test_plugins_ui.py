@@ -55,6 +55,18 @@ def write_plugin(root, plugin_id, code):
     )
 
 
+def column(page, title: str) -> int:
+    """按表头名找列号：表里加过「图标」列，写死下标会随列变动而错位。"""
+    headers = [page.card.table.horizontalHeaderItem(index).text()
+               for index in range(page.card.table.columnCount())]
+    assert title in headers, f"没有这一列：{title}（现有 {headers}）"
+    return headers.index(title)
+
+
+def cell(page, row: int, title: str) -> str:
+    return page.card.table.item(row, column(page, title)).text()
+
+
 @pytest.fixture
 def notify_spy(monkeypatch):
     calls = []
@@ -82,8 +94,10 @@ def test_page_lists_plugins(qapp, plugins_dir):
     page.refresh()
 
     assert page.card.table.rowCount() == 2
-    assert "alpha" in page.card.table.item(0, 0).text()
-    assert "Python" in page.card.table.item(0, 1).text()
+    assert "alpha" in cell(page, 0, "插件")
+    assert "Python" in cell(page, 0, "语言")
+    assert cell(page, 0, "图标") == "", "图标画在 item 的 icon 上，不是文字"
+    assert not page.card.table.item(0, column(page, "图标")).icon().isNull(), "每个插件都要有图标"
 
 
 def test_page_shows_manifest_problems(qapp, plugins_dir):
@@ -109,7 +123,7 @@ def test_page_shows_load_error(qapp, plugins_dir):
     state = page.card.detail.text()
     assert "bad" in state or "坏掉了" in state or page.card.table.rowCount() == 1
 
-    row_text = page.card.table.item(0, 3).text()
+    row_text = cell(page, 0, "状态")
     assert "运行出错" in row_text, "模块加载成功但 hook 抛异常也要显示出来"
     assert "坏掉了" in row_text
 
@@ -122,7 +136,7 @@ def test_page_shows_import_error(qapp, plugins_dir):
     page = _page(qapp, plugins_dir)
     page.refresh()
 
-    assert "加载失败" in page.card.table.item(0, 3).text()
+    assert "加载失败" in cell(page, 0, "状态")
 
 
 def test_toggle_requires_selection(qapp, plugins_dir, notify_spy):

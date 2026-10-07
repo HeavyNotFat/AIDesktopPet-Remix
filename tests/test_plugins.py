@@ -622,3 +622,79 @@ def test_plugin_prompts_helper_never_raises(monkeypatch):
 
     assert stlibs.plugin_prompts() == []
     assert stlibs.run_plugin_command("/x") == (False, "")
+
+
+# 菜单分组（右键菜单每个插件一层子菜单）
+MENU_TWO = '''
+    def on_load(api):
+        api.add_menu_item("第一项", "one")
+        api.add_menu_item("第二项", "two")
+'''
+
+
+def test_menu_groups_split_by_plugin(plugins_root):
+    write_plugin(plugins_root, "alpha", MENU_TWO, name="甲插件", order=10)
+    write_plugin(plugins_root, "beta", 'def on_load(api):\n    api.add_menu_item("乙项", "bee")\n',
+                 name="乙插件", order=20)
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    groups = manager.menu_groups()
+
+    assert [(group.plugin, group.title) for group in groups] == [("alpha", "甲插件"), ("beta", "乙插件")]
+    assert [len(group) for group in groups] == [2, 1]
+    assert groups[0].items[0].label == "第一项"
+    assert groups[0].items[0].plugin == "alpha"
+    assert groups[0].public()["items"][0]["action"] == "one"
+
+
+def test_menu_group_title_comes_from_manifest_menu(plugins_root):
+    write_plugin(plugins_root, "alpha", MENU_TWO, name="甲插件", menu="甲组")
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    assert manager.menu_groups()[0].title == "甲组"
+    assert manager.menu_title("alpha") == "甲组"
+
+
+def test_menu_items_stays_flat_for_old_callers(plugins_root):
+    """老接口（SDK / 探针 / 这些测试）拿到的还是扁平列表。"""
+    write_plugin(plugins_root, "alpha", MENU_TWO)
+    write_plugin(plugins_root, "beta", 'def on_load(api):\n    api.add_menu_item("乙项", "bee")\n')
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    flat = manager.menu_items()
+
+    assert [item.label for item in flat] == ["第一项", "第二项", "乙项"]
+    assert [item.plugin for item in flat] == ["alpha", "alpha", "beta"]
+
+
+def test_menu_groups_skip_disabled_plugins(plugins_root):
+    write_plugin(plugins_root, "alpha", MENU_TWO)
+    write_plugin(plugins_root, "beta", 'def on_load(api):\n    api.add_menu_item("乙项", "bee")\n')
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    manager.set_enabled("alpha", False)
+
+    assert [group.plugin for group in manager.menu_groups()] == ["beta"]
+
+
+def test_menu_groups_empty_without_plugins(plugins_root):
+    manager = make_manager(plugins_root)
+
+    assert manager.menu_groups() == []
+    assert manager.menu_items() == []
+
+
+def test_menu_groups_do_not_need_qt(plugins_root):
+    """纯逻辑调用（SDK、测试）不该因为造不出图标而报错。"""
+    write_plugin(plugins_root, "alpha", MENU_TWO, icon="icon.png")
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    groups = manager.menu_groups()
+
+    assert len(groups) == 1
+    assert groups[0].title == "alpha"

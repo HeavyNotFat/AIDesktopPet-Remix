@@ -44,7 +44,10 @@ class PluginsPanel:
         return self.manager.enabled()
 
     def rows(self) -> list:
-        """表格行：名称 / 语言 / 版本 / 状态 / 调用次数（先 refresh 再读）。"""
+        """表格行：名称 / 语言 / 版本 / 状态 / 调用次数（先 refresh 再读）。
+
+        ``icon`` 是这一行的图标（QIcon）；没有 Qt 时是 None，展示层跳过图标列就行。
+        """
         rows = []
         for info in self.manager.status()["plugins"]:
             rows.append({
@@ -57,8 +60,20 @@ class PluginsPanel:
                 "calls": str(info["calls"]),
                 "enabled": info["enabled"],
                 "loaded": info["loaded"],
+                "icon": self.icon(info["id"]),
             })
         return rows
+
+    def icon(self, plugin_id: str, size: int = 48):
+        """这一行的插件图标（自定义图或字母徽章）；没有界面/拿不到就返回 None。"""
+        try:
+            icon = self.manager.plugin_icon(plugin_id, size)
+        except Exception as exc:  # noqa: BLE001 - 图标只是装饰
+            print(f"[plugin:{plugin_id}] 图标读取失败：{exc}")
+            return None
+
+        # 空图标（没有 QGuiApplication 时就是这种）按"没有"处理，展示层好判断
+        return None if icon is None or icon.isNull() else icon
 
     def hint(self) -> str:
         """详情行文案（先 refresh 再读）。"""

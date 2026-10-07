@@ -618,12 +618,8 @@ class Cooperation(QWidget):
         self.rounds_slider.setGeometry(180, 95, 200, 30)
         self.rounds_slider.valueChanged.connect(self.check_rounds)
 
-        self.available_label = HackerLabel("", self)
-        self.available_label.setGeometry(20, 384, 280, 20)
-
-        HackerLabel("可用模型（双击加入协作）", self).setGeometry(20, 130, 300, 24)
         self.model_search = HackerLineEdit("搜索模型…", parent=self)
-        self.model_search.setGeometry(20, 156, 280, 30)
+        self.model_search.setGeometry(20, 140, 280, 30)
         self.model_search.textChanged.connect(self.filter_models)
 
         self.model_table = HackerTable(parent=self)
@@ -636,7 +632,7 @@ class Cooperation(QWidget):
 
         join_button = HackerButton("加入协作 →", parent=self)
         join_button.set_border()
-        join_button.setGeometry(20, 402, 130, 28)
+        join_button.setGeometry(20, 392, 130, 28)
         join_button.clicked.connect(self.add_selected)
 
         HackerLabel("协作成员（主模型之外，按角色给意见）", self).setGeometry(315, 130, 305, 24)
@@ -718,10 +714,6 @@ class Cooperation(QWidget):
         total = len(self.models)
         if not total:
             return
-        if len(rows) != total:
-            self.available_label.setText(f"匹配 {len(rows)} / 共 {total} 个模型")
-        else:
-            self.available_label.setText(f"共 {total} 个模型，双击就能加入协作")
 
     def add_selected(self):
         """把列表里选中的模型加成协作成员。"""

@@ -7,6 +7,8 @@
   "language": "python",
   "entry": "main.py",
   "order": 30,
+  "icon": "icon.png",
+  "menu": "养成系统",
   "hooks": ["on_load", "on_unload", "on_command", "on_chat_reply", "on_event", "on_system_prompt"],
   "settings": [
     {"key": "click_coin", "label": "点一下最多给几枚金币", "type": "number", "default": 5},

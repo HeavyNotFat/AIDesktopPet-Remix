@@ -204,32 +204,19 @@ class PublicShader(ADPOpenGLCanvas):
         context_menu.exec(self.mapToGlobal(position))
 
     def add_plugin_actions(self, context_menu):
-        """把插件注册的菜单项挂到右键菜单上（UI Hook）。"""
-        try:
-            items = stlibs.plugin_manager().menu_items()
-        except Exception as exc:  # noqa: BLE001 - 插件坏了不能挡住菜单
-            print(f"[plugin] 菜单项读取失败：{exc}")
-            return
+        """把插件注册的菜单项挂到右键菜单上（UI Hook）：一个插件一层子菜单。"""
+        from stlibs.graphics import menu as menu_module
 
-        if not items:
-            return
+        return menu_module.add_plugin_menu(context_menu, action_factory=self.plugin_menu_action)
 
-        context_menu.addSeparator()
-        for item in items:
-            action = stlibs.SharingData.theme.Action(item.label, self, stlibs.SharingData.theme.IconList.SETTING)
-            action.triggered.connect(lambda _checked=False, name=item.action: self.run_plugin_action(name))
-            context_menu.addAction(action)
+    def plugin_menu_action(self, text, icon):
+        """主题动作工厂：主题的 Action 签名是 (text, parent, icon)。"""
+        return stlibs.SharingData.theme.Action(text, self, icon)
 
     def run_plugin_action(self, action: str):
-        try:
-            manager = stlibs.plugin_manager()
-            result = manager.trigger_menu(action) or manager.trigger_menu(action.split(":")[-1])
-        except Exception as exc:  # noqa: BLE001
-            stlibs.notify(f"插件菜单执行失败：{exc}", "error", 4000)
-            return
+        from stlibs.graphics import menu as menu_module
 
-        if result:
-            stlibs.notify(str(result)[:120], "info", 3000)
+        return menu_module.trigger_plugin_action(action)
 
     @staticmethod
     def emit_sdk_event(name: str, data=None):

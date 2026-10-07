@@ -32,6 +32,7 @@ with open(stlibs.CONFIG_PATH, "w", encoding="utf-8") as handle:
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint
+from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QFrame
 
 app = QApplication([])
@@ -104,6 +105,56 @@ def shoot_menu():
     return menu
 
 
+def shoot_plugin_menu():
+    """插件右键菜单：每个插件一层子菜单（标题带图标），悬浮才展开。
+
+    截图是"父菜单 + 已展开的子菜单"拼在一起的预览——悬浮展开后的真实样子，
+    单独 grab 父菜单是看不到子菜单的（子菜单是独立窗口）。
+    """
+    from stlibs.graphics import menu as menu_module
+    from stlibs.plugins.manager import core as plugin_core
+
+    plugin_core.manager.directory = os.path.abspath("plugins")
+    plugin_core.manager.load_all()
+
+    menu = hacker.HackerMenu(None)
+    for text in ("设置", "聊天"):
+        menu.addAction(hacker.Action(text, menu, hacker.IconList.SETTING))
+    groups = menu_module.add_plugin_menu(menu)
+    menu.addAction(hacker.Action("关闭", menu, hacker.IconList.SHUTDOWN))
+    menu.exec(QPoint(20, 20))
+
+    print("   插件菜单分组：", [(group.title, len(group), "有图" if group.icon is not None else "无图")
+                                for group in groups])
+    assert groups, "装了插件却没挂上插件菜单"
+    assert len(menu.sub_menus()) == len(groups), "每个插件应该各有一层子菜单"
+
+    # 悬浮第一组：展开它的子菜单
+    entry = next(item for item in menu._action_items if item['submenu'] is not None)
+    entry['label'].enterEvent(None)
+    for _ in range(3):
+        app.processEvents()
+    submenu = entry['submenu']
+    assert submenu.isVisible(), "悬浮后子菜单要展开"
+    print(f"   悬浮 {entry['text']!r} -> 子菜单 {submenu.title_text!r} "
+          f"{submenu.width()}x{submenu.height()}，条目 {[i['text'] for i in submenu._action_items]}")
+
+    # 把两个窗口拼成一张预览图（子菜单贴在父菜单右边，和真实位置一致）
+    preview = QPixmap(menu.width() + submenu.width() + 16, max(menu.height(), submenu.height()) + 16)
+    preview.fill(QColor(30, 31, 34))
+    painter = QPainter(preview)
+    painter.drawPixmap(0, 8, menu.grab())
+    painter.drawPixmap(menu.width() + 16, max(0, (menu.height() - submenu.height()) // 2 + 8), submenu.grab())
+    painter.end()
+
+    path = os.path.join(OUT_DIR, "menu-plugin-submenu.png")
+    preview.save(path)
+    print(f"   menu-plugin-submenu.png  {preview.width()}x{preview.height()}")
+
+    menu.close()
+    return menu
+
+
 # 假窗口：模拟主题窗口的深色底，让提示条有地方贴
 window = QFrame()
 window.setStyleSheet("QFrame { background: #1e1f22; border: 1px solid #00FF00; }")
@@ -159,6 +210,8 @@ print(f"  插件表 -> {plugins.card.table.rowCount()} 行")
 
 print("右键菜单：")
 shoot_menu()
+print("插件右键菜单：")
+shoot_plugin_menu()
 
 cultivation = shoot_cultivation()
 print(f"  养成面板 -> 商店 {cultivation.shop_holder.grid.count()} 格 / 背包 {cultivation.bag_holder.grid.count()} 格")

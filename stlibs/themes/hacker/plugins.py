@@ -1,10 +1,11 @@
 from ...plugins.manager import PluginsPanel
 
 from PySide6.QtWidgets import QWidget, QTableWidgetItem
-from PySide6.QtCore import QRect
+from PySide6.QtCore import QRect, QSize, Qt
 
 
-COLUMNS = (("插件", 200), ("语言", 140), ("版本", 70), ("状态", 150), ("调用", 50))
+COLUMNS = (("图标", 48), ("插件", 196), ("语言", 106), ("版本", 60), ("状态", 110), ("调用", 46))
+ICON_CELL_SIZE = 26
 
 
 class PluginsWidgetScroll(QWidget):
@@ -57,11 +58,24 @@ class PluginsWidgetScroll(QWidget):
         for row in rows:
             index = self.table.rowCount()
             self.table.insertRow(index)
+
+            icon_item = QTableWidgetItem()
+            if row.get("icon") is not None:
+                icon_item.setIcon(row["icon"])
+                icon_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table.setRowHeight(index, max(self.table.verticalHeader().defaultSectionSize(), 32))
+            self.table.setItem(index, 0, icon_item)
+
             cells = (row["title"], row["language"], row["version"], row["state"], row["calls"])
-            for column, text in enumerate(cells):
+            for column, text in enumerate(cells, start=1):
                 self.table.setItem(index, column, QTableWidgetItem(text))
 
+        self._apply_icon_size()
         self.detail.setText(self.panel.hint())
+
+    def _apply_icon_size(self):
+        """图标列按 ICON_CELL_SIZE 显示（默认 16px 太小，看不清自定义图）。"""
+        self.table.setIconSize(QSize(ICON_CELL_SIZE, ICON_CELL_SIZE))
 
     def _selected_id(self):
         row = self.table.currentRow()

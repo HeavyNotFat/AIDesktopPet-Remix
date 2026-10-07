@@ -2005,6 +2005,27 @@ class HackerTextEdit(QTextEdit):
         """)
 
 
+# 子菜单标题左边的图标默认尺寸，以及鼠标离开后子菜单的收合延迟
+SUB_MENU_ICON = 22
+SUB_MENU_HIDE_DELAY = 260
+
+
+def menu_icon_pixmap(icon, size: int = SUB_MENU_ICON):
+    """QIcon / QPixmap / 图片路径 → 画菜单用的 QPixmap；认不出来就返回 None。"""
+    if isinstance(icon, QPixmap):
+        pixmap = icon
+    elif isinstance(icon, QIcon):
+        pixmap = icon.pixmap(size, size)
+    elif isinstance(icon, str) and icon:
+        pixmap = QPixmap(icon)
+    else:
+        return None
+
+    if pixmap.isNull():
+        return None
+    return pixmap
+
+
 class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
     triggered = Signal(object)
 
@@ -2014,6 +2035,8 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self._actions = []
         self._items = []  # Track all items including separators
         self._action_items = []  # 每条 item 的绘制数据（用来统一宽度）
+        self._sub_menus = []  # 挂在这个菜单上的子菜单（装配时就登记，跟有没有展开无关）
+        self._active_sub = None  # 当前展开的那一个
         self._max_width = 0
 
         font_id = QFontDatabase.addApplicationFont("./resources/fonts/jetbrains.ttf")
@@ -2059,7 +2082,7 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self._items.append(('action', action))
 
         text = action.text()
-        pixmap = action.icon().pixmap(24, 24) if not action.icon().isNull() else None
+        pixmap = menu_icon_pixmap(action.icon())
 
         label_height = 36
         label = QLabel()
@@ -2068,8 +2091,8 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
         # 每一条都按「最宽的那条」来画：早先按自己文字宽度画，短条目右边留空、
         # 悬停高亮也只亮一半，看着很难受。
-        entry = {'label': label, 'text': text, 'pixmap': pixmap, 'width': 0}
-        entry['width'] = self._measure(text, pixmap)
+        entry = {'label': label, 'text': text, 'pixmap': pixmap, 'submenu': None, 'width': 0}
+        entry['width'] = self._measure(text, pixmap, False)
 
         def redraw(hovered=False, entry=entry):
             width = max(entry['width'], self._max_width)
@@ -2091,7 +2114,16 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
                 painter.drawPixmap(text_x, (label_height - entry['pixmap'].height()) // 2, entry['pixmap'])
                 text_x += entry['pixmap'].width() + 6
 
-            painter.drawText(text_x, 0, width - text_x, label_height, Qt.AlignVCenter, entry['text'])
+            reserved = 0
+            if entry['submenu'] is not None:
+                # 有子菜单的条目右边留出 ▸ 的位置（没留的话文字会顶到指示符上）
+                reserved = metrics.horizontalAdvance("  ▸") + 4
+                painter.drawText(
+                    width - reserved, 0, reserved - 4, label_height,
+                    Qt.AlignVCenter | Qt.AlignRight, "▸",
+                )
+
+            painter.drawText(text_x, 0, max(0, width - text_x - reserved), label_height, Qt.AlignVCenter, entry['text'])
             painter.end()
             entry['label'].setPixmap(combined)
 
@@ -2100,9 +2132,11 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
         def enter_event(_event, redraw=redraw):
             redraw(True)
+            self._hover(entry)
 
         def leave_event(_event, redraw=redraw):
             redraw(False)
+            self._unhover(entry)
 
         def mouse_press_event(_event, action=action):
             self._emit(action)
@@ -2115,18 +2149,99 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self._action_items.append(entry)
         self.layout.addWidget(label)
         self._apply_width()
+        return entry
 
-    def _measure(self, text: str, pixmap) -> int:
+    def addMenu(self, title, pixmap=None):
+        """加一条会展开子菜单的条目（鼠标悬浮即展开，不响应点击）。
+
+        返回子菜单对象，往它上面继续 addAction / addSeparator 就挂在这一组里。
+        """
+        action = Action(str(title), self, menu_icon_pixmap(pixmap))
+        entry = self.addAction(action)
+
+        submenu = self._build_sub_menu(title, entry, action)
+        entry['submenu'] = submenu
+        entry['width'] = self._measure(entry['text'], entry['pixmap'], True)
+        self._apply_width()
+        return submenu
+
+    def _build_sub_menu(self, title, entry, action):
+        """子菜单用无边框工具窗（不是 Qt.Popup）：这样不会抢走父菜单的弹出状态。"""
+        submenu = HackerSubMenu(self, title, host=self)
+        submenu.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        submenu.setAttribute(Qt.WA_TranslucentBackground)
+        submenu.setWindowTitle(str(title))
+        # 子菜单靠悬浮展开，点这一条本身不该触发任何动作
+        action.triggered.connect(lambda *_args: None)
+
+        def show_sub(_event=None, entry=entry, submenu=submenu):
+            self._show_sub_menu(entry, submenu)
+
+        entry['label'].enterEvent = show_sub
+        # 装配时就登记：sub_menus() 是"挂上了哪些子菜单"，跟有没有展开过无关
+        self._sub_menus.append(submenu)
+        return submenu
+
+    def _show_sub_menu(self, entry, submenu):
+        """把子菜单摆在条目右边；同时收起这个菜单里别的子菜单。"""
+        for other in self._sub_menus:
+            if other is not submenu:
+                other.hide()
+
+        label = entry['label']
+        # 纵向跟着被悬浮的那一行走（-10 是为了连框顶一起抬起来，视觉上"接住"这一行）
+        row_top = label.mapTo(self.box, QPoint(0, 0)).y() + self.box.y()
+        submenu.move(label.mapToGlobal(QPoint(label.width() - 4, -10 - row_top)))
+        submenu.popup()
+        self._active_sub = submenu
+
+    def _unhover(self, entry):
+        """鼠标离开条目：等一小会儿再收（左右横跳时不至于闪）。"""
+        submenu = entry.get('submenu')
+        if submenu is None or not submenu.isVisible():
+            return
+
+        timer = getattr(self, '_sub_timer', None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._hide_sub_menus)
+            self._sub_timer = timer
+        timer.start(SUB_MENU_HIDE_DELAY)
+
+    def _hide_sub_menus(self):
+        for submenu in self._sub_menus:
+            submenu.hide()
+
+    def _hover(self, entry):
+        timer = getattr(self, '_sub_timer', None)
+        if timer is not None:
+            timer.stop()
+        for other in self._action_items:
+            if other is not entry and other.get('submenu') is not None and other['submenu'].isVisible():
+                other['submenu'].hide()
+
+    def hideEvent(self, event, /):
+        self._hide_sub_menus()
+        super().hideEvent(event)
+
+    def closeEvent(self, event, /):
+        self._hide_sub_menus()
+        super().closeEvent(event)
+
+    def _measure(self, text: str, pixmap, has_submenu: bool = False) -> int:
         metrics = QFontMetrics(self.hacker_font)
         width = 6 + metrics.horizontalAdvance(" > ") + metrics.horizontalAdvance(text) + 16
         if pixmap:
             width += pixmap.width() + 6
+        if has_submenu:
+            width += metrics.horizontalAdvance("  ▸") + 4
         return width
 
     def _apply_width(self):
         """把每条 item 拉到同一宽度（= 最宽那条），保证一行铺满、高亮不留空。"""
         for entry in self._action_items:
-            entry['width'] = self._measure(entry['text'], entry['pixmap'])
+            entry['width'] = self._measure(entry['text'], entry['pixmap'], entry['submenu'] is not None)
             self._max_width = max(self._max_width, entry['width'])
 
         for entry in self._action_items:
@@ -2153,10 +2268,15 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         """已经加进来的 QAction（条目是自己画的，Qt 的 actions() 拿不到）。"""
         return list(self._actions)
 
+    def sub_menus(self):
+        """已经挂上的子菜单（顺序 = addMenu 的调用顺序）。"""
+        return list(self._sub_menus)
+
     def _emit(self, action):
         self.triggered.emit(action)
         if hasattr(action, 'trigger'):
             action.trigger()
+        self._hide_sub_menus()
         self.close()
 
     def exec(self, pos=None):
@@ -2165,6 +2285,34 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
             pos = QCursor.pos()
         self.move(pos)
         self.show()
+
+
+class HackerSubMenu(HackerMenu):
+    """悬停展开的子菜单：内容和父菜单同款，只是不抢弹出焦点、点完要连父菜单一起收。"""
+
+    def __init__(self, parent=None, title="", host=None):
+        super().__init__(parent)
+        self._host_menu = host if host is not None else parent
+        self.title_text = str(title or "")
+
+    def _emit(self, action):
+        # 先照常触发，再连父菜单一起收掉：只关子菜单会把父菜单孤零零留在屏幕上
+        super()._emit(action)
+        host = self._host_menu
+        if host is not None and host is not self:
+            host._hide_sub_menus()
+            host.close()
+
+    def popup(self):
+        self.adjustSize()
+        self.show()
+        self.raise_()
+
+    def exec(self, pos=None):
+        if pos is not None:
+            self.move(pos)
+        self.popup()
+
 
 
 class IconList(IconListABS):

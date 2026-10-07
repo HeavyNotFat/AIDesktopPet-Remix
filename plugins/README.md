@@ -38,6 +38,11 @@ stlibs/plugins/
   // 默认 main.py / main.js
   "order": 100,
   // 小的先执行（hook 按这个顺序串）
+  "icon": "icon.png",
+  // 可选：插件图标，插件目录内的相对路径（png/svg/jpg/webp/ico/bmp）
+  // 不写或文件不在，就按插件名生成一枚字母徽章兜底
+  "menu": "我的插件",
+  // 可选：右键菜单里这一组的标题，默认取 name
   "hooks": [
     "on_chat_reply"
   ],
@@ -116,6 +121,24 @@ api.storage_all()                   # -> {"count": 3, ...}
 | `action` | 否 | `greet` | 动作名；点了会带着它走 `on_command` |
 | `text` / `role` | 是 / 否 | `后台跑完了`、`assistant` | 往聊天窗塞的内容与角色 |
 | `name` / `index` | 是 / 否 | `摸摸头`、`0` | 动作或表情名（先用 `motions()` 查） |
+
+注册的菜单项**不会平铺**在右键菜单上，而是收进一层子菜单里：
+
+* 子菜单标题 = 清单里的 `menu`（没写就是 `name`），左边是插件图标；
+* 鼠标悬浮在标题上才展开，组里是 `add_menu_item` 注册的条目；
+* 只有"一个插件 + 一条菜单"时才直接平铺，省掉没必要的层级。
+
+一个插件注册多条时，组内顺序就是注册顺序：
+
+```python
+# 右键菜单里长这样：
+#   养成系统 ▸ ┌ 打开面板
+#              ├ 喂食
+#              └ 商店
+api.add_menu_item("打开面板", "panel")
+api.add_menu_item("喂食", "feed")
+api.add_menu_item("商店", "shop")
+```
 
 #### 返回值解析
 

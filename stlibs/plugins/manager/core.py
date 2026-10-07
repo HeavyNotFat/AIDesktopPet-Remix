@@ -44,6 +44,29 @@ class MenuItem:
 
 
 @dataclass
+class MenuGroup:
+    """右键菜单里一个插件那一组：标题取插件清单的 menu（默认插件名），items 是它注册的条目。
+
+    ``icon`` 是这一组菜单标题左边那枚图（QPixmap）；宿主在不方便构造 Qt 对象时
+    不填它就行（比如纯逻辑测试里），菜单会退化成只有文字。
+    """
+    plugin: str
+    title: str
+    items: list = field(default_factory=list)
+    icon: object = None
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def public(self) -> dict:
+        return {
+            "plugin": self.plugin,
+            "title": self.title,
+            "items": [{"label": item.label, "action": item.action} for item in self.items],
+        }
+
+
+@dataclass
 class PluginManager:
     directory: str = DEFAULT_DIR
     timeout: float = DEFAULT_TIMEOUT
@@ -326,20 +349,75 @@ class PluginManager:
     def _invalidate_prompts(self):
         self._prompts_cache = []
 
-    def menu_items(self) -> list:
-        items = []
-        for plugin_id, plugin_api in self._apis.items():
+    def menu_groups(self) -> list:
+        """插件注册的菜单项，按插件分组（右键菜单一层子菜单一组）。
+
+        顺序 = 插件加载顺序（order 小的在前），组内顺序 = 插件注册顺序。
+        组标题取清单的 ``menu``（没写就是插件名），图标取 ``icon``（没有就是字母徽章）。
+        """
+        with self._lock:
+            apis = list(self._apis.items())
+            tables = list(self._hooks.items())
+
+        items: list[MenuItem] = []
+        for plugin_id, plugin_api in apis:
             info = self.infos.get(plugin_id)
             if info is not None and not info.manifest.enabled:
                 continue
             items.extend(MenuItem(plugin_id, item["label"], item["action"]) for item in plugin_api.menu_items)
 
-        for plugin_id, _table in self._each(api_module.MENU):
+        for plugin_id, _table in tables:
             value = self._call(plugin_id, api_module.MENU, None)
             for item in value or []:
                 if isinstance(item, dict) and item.get("label"):
                     items.append(MenuItem(plugin_id, str(item["label"]), str(item.get("action") or item["label"])))
-        return items
+
+        groups: dict[str, MenuGroup] = {}
+        for item in items:
+            group = groups.get(item.plugin)
+            if group is None:
+                group = MenuGroup(item.plugin, self.menu_title(item.plugin), [], self.menu_icon(item.plugin))
+                groups[item.plugin] = group
+            group.items.append(item)
+        return list(groups.values())
+
+    def menu_items(self) -> list:
+        """扁平的菜单项列表（保留老接口：SDK/探针/测试都还在用它）。"""
+        return [item for group in self.menu_groups() for item in group.items]
+
+    def menu_title(self, plugin_id: str) -> str:
+        info = self.infos.get(plugin_id)
+        if info is None:
+            return plugin_id
+        return info.manifest.menu_title
+
+    def menu_icon(self, plugin_id: str):
+        """插件图标（QPixmap）；没装 Qt / 解码失败都返回 None，菜单退化成纯文字。"""
+        info = self.infos.get(plugin_id)
+        if info is None:
+            return None
+
+        try:
+            from .. import icons as icons_module
+
+            return icons_module.plugin_pixmap(info.manifest, 22)
+        except Exception as exc:  # noqa: BLE001 - 图标只是装饰，画不出来不该影响菜单
+            print(f"[plugin:{plugin_id}] 图标加载失败：{exc}")
+            return None
+
+    def plugin_icon(self, plugin_id: str, size: int = 64):
+        """插件图标（QIcon）；设置页和别的地方共用同一份缓存。"""
+        info = self.infos.get(plugin_id)
+        if info is None:
+            return None
+
+        try:
+            from .. import icons as icons_module
+
+            return icons_module.plugin_icon(info.manifest, size)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[plugin:{plugin_id}] 图标加载失败：{exc}")
+            return None
 
     def trigger_menu(self, action: str) -> str:
         """菜单项被点击：转成插件的 on_command（action 当命令名）。"""
@@ -450,6 +528,7 @@ __all__ = [
     "DEFAULT_DIR",
     "DEFAULT_TIMEOUT",
     "ManifestError",
+    "MenuGroup",
     "MenuItem",
     "PluginInfo",
     "PluginManager",
