@@ -58,7 +58,7 @@ class HackerModelChat:
     def return_llm_class(model): pass
 '''
 
-#: 只提供「必需映射」里的前五个，其余留给测试断言
+# 只提供「必需映射」里的前五个，其余留给测试断言
 THEME_EXPORTS = '''\
 Window = HackerWindow
 Button = HackerButton

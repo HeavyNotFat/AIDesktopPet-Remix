@@ -25,13 +25,13 @@ os.chdir(ROOT)
 from tools.ci import Report, run  # noqa: E402
 from tools.ci.core import Severity  # noqa: E402
 
-#: 迷你仓库的落脚点。
-#: 用点开头的目录：``Settings.is_excluded`` 会跳过任何点目录，
-#: 所以即使临时目录被创建在仓库内部（某些环境下 gettempdir() 就是仓库根），
-#: 真实仓库的扫描也不会被这些样例文件污染。
+# 迷你仓库的落脚点。
+# 用点开头的目录：``Settings.is_excluded`` 会跳过任何点目录，
+# 所以即使临时目录被创建在仓库内部（某些环境下 gettempdir() 就是仓库根），
+# 真实仓库的扫描也不会被这些样例文件污染。
 WORK_ROOT = ROOT / ".ci-tmp"
 
-#: 迷你仓库里可用的最小主题契约（与 stlibs/__init__.py 的 Protocol 保持一致）
+# 迷你仓库里可用的最小主题契约（与 stlibs/__init__.py 的 Protocol 保持一致）
 MAPPING_NAMES = (
     "Window",
     "Button",

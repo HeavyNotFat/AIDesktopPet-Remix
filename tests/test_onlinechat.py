@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import threading
 import time
 from pathlib import Path
@@ -557,7 +558,6 @@ def test_build_llm_constructs_real_classes(monkeypatch):
 
 
 def test_ask_after_close_raises_clear_error(patched_registry):
-    """会话被别的线程回收掉时，要报明确错误而不是 TypeError(None)。"""
     pool = _pool(patched_registry)
     session = pool._acquire("s1", patched_registry.resolve("alpha"))
     pool.reset("s1")
@@ -579,6 +579,303 @@ def test_closed_session_maps_to_409(monkeypatch):
     )
     assert response.status_code == 409
     assert "已回收" in response.json()["detail"]
+
+
+class SlowLocalLLM(FakeLocalLLM):
+    def __init__(self, model, chunks=("你", "好", "喵"), delay=0.02):
+        super().__init__(model)
+        self.chunks = chunks
+        self.delay = delay
+
+    def chat(self, user_input, should_emit=True):
+        assert should_emit is False
+        self.seen.append(user_input)
+        for chunk in self.chunks:
+            time.sleep(self.delay)
+            yield chunk
+
+
+class RecordingLocalLLM(FakeLocalLLM):
+    def __init__(self, model):
+        super().__init__(model)
+        self.memory = SimpleMemory()
+
+    def chat(self, user_input, should_emit=True):
+        raise AssertionError("补记记忆时不该调用模型")
+
+
+class SimpleMemory:
+    def __init__(self):
+        self.messages = []
+
+    def add_user_msg(self, msg):
+        self.messages.append({"role": "user", "content": msg})
+
+    def add_assistant_msg(self, msg):
+        self.messages.append({"role": "assistant", "content": msg})
+
+
+def _stream_pool(llm_factory=None, **kwargs):
+    created = []
+
+    def builder(session_id, target):
+        session = oc_llm.WebChatSession.__new__(oc_llm.WebChatSession)
+        session.session_id = session_id
+        session.target = target
+        session.lock = threading.Lock()
+        session.created_at = session.last_used = time.monotonic()
+        session.turns = 0
+        session.llm = (llm_factory or SlowLocalLLM)(target.model)
+        created.append(session.llm)
+        return session
+
+    pool = oc_llm.WebChatPool(builder=builder, **kwargs)
+    pool._created = created
+    return pool
+
+
+def test_stream_yields_chunks_in_order(patched_registry):
+    pool = _stream_pool()
+    assert list(pool.stream("alpha", "hi", "s1")) == ["你", "好", "喵"]
+    assert pool.stats()["live"][0]["turns"] == 1
+
+
+def test_stream_without_delay_matches_ask(patched_registry):
+    pool = _stream_pool(lambda model: FakeLocalLLM(model))
+    assert "".join(pool.stream("alpha", "hi", "s1")) == "local:hi"
+
+
+def test_stream_validates_model_and_session_up_front(patched_registry):
+    pool = _stream_pool()
+
+    with pytest.raises(registry_api.UnknownModelError):
+        pool.stream("nope", "hi", "s1")
+
+    # 会话实例被回收但还挂在池子的窗口期（TTL/LRU/reset 与请求撞车）：
+    # 必须在返回迭代器之前就抛错，不能让 SSE 先发 200 再报错
+    session = pool._acquire("s2", patched_registry.resolve("alpha"))
+    session.close()
+    with pytest.raises(oc_llm.SessionClosedError):
+        pool.stream("alpha", "hi", "s2")
+    with pytest.raises(oc_llm.SessionClosedError):
+        session.ensure_alive()
+
+
+def test_stream_stop_event_aborts_and_releases_lock(patched_registry):
+    pool = _stream_pool(lambda model: SlowLocalLLM(model, chunks=tuple("abcdefghij")))
+    pump = pool.stream("alpha", "hi", "s1")
+
+    iterator = iter(pump)
+    assert next(iterator) == "a"
+
+    pump.stop_event.set()
+    assert list(iterator) == [], "置位 stop_event 后不该继续吐字"
+
+    session = pool._sessions["s1"]
+    assert session.lock.acquire(timeout=2), "中止后会话锁没有交还"
+    session.lock.release()
+
+
+def test_abandoned_stream_stops_the_worker(patched_registry):
+    pool = _stream_pool(lambda model: SlowLocalLLM(model, chunks=tuple("abcdefghij")))
+    pump = pool.stream("alpha", "hi", "s1")
+
+    iterator = iter(pump)
+    assert next(iterator) == "a"
+    iterator.close()
+
+    assert pump.stop_event.is_set(), "客户端断开后没通知工作线程收手"
+    assert pump._thread.join(timeout=3) is None
+    assert not pump._thread.is_alive()
+
+
+def test_stream_propagates_errors(patched_registry):
+    class Broken(FakeLocalLLM):
+        def chat(self, user_input, should_emit=True):
+            yield "开头"
+            raise RuntimeError("模型炸了")
+
+    pool = _stream_pool(lambda model: Broken(model))
+    with pytest.raises(RuntimeError, match="模型炸了"):
+        list(pool.stream("alpha", "hi", "s1"))
+
+
+def test_stream_ignores_non_text_events(patched_registry):
+    class Eventful(FakeLocalLLM):
+        def chat(self, user_input, should_emit=True):
+            yield "a"
+            yield {"type": "tool_call", "name": "x"}
+            yield "b"
+
+    pool = _stream_pool(lambda model: Eventful(model))
+    assert list(pool.stream("alpha", "hi", "s1")) == ["a", "b"]
+
+
+def test_stream_keeps_sessions_isolated(patched_registry):
+    pool = _stream_pool(lambda model: FakeLocalLLM(model))
+    assert list(pool.stream("alpha", "a", "s1")) == ["local:", "a"]
+    assert list(pool.stream("alpha", "b", "s2")) == ["local:", "b"]
+    assert pool.stats()["instances_created"] == 2
+
+
+def test_stream_shares_lock_with_ask(patched_registry):
+    pool = _stream_pool(lambda model: SlowLocalLLM(model, chunks=("1", "2", "3"), delay=0.05))
+
+    order = []
+    pump = pool.stream("alpha", "流", "s1")
+
+    def consume():
+        order.append(list(pump))
+        order.append("stream-done")
+
+    def queued():
+        session = pool._sessions["s1"]
+        session.ask("问")
+        order.append("ask-done")
+
+    streamer = threading.Thread(target=consume, daemon=True)
+    streamer.start()
+    time.sleep(0.02)
+    asker = threading.Thread(target=queued, daemon=True)
+    asker.start()
+
+    streamer.join(5)
+    asker.join(5)
+    assert order[0] == ["1", "2", "3"]
+    assert order.index("stream-done") < order.index("ask-done")
+
+
+def test_remember_appends_turn_without_calling_model(patched_registry):
+    pool = _stream_pool(lambda model: RecordingLocalLLM(model))
+
+    assert pool.remember("alpha", "缓存过的问题", "缓存过的回答", "s1") is True
+    session = pool._sessions["s1"]
+    assert session.llm.seen == [], "补记不该调用模型"
+    assert session.llm.memory.messages == [
+        {"role": "user", "content": "缓存过的问题"},
+        {"role": "assistant", "content": "缓存过的回答"},
+    ]
+    assert session.turns == 1
+
+
+def test_remember_on_closed_session(patched_registry):
+    pool = _stream_pool()
+    session = pool._acquire("s2", patched_registry.resolve("alpha"))
+    session.close()
+    with pytest.raises(oc_llm.SessionClosedError):
+        pool.remember("alpha", "q", "a", "s2")
+
+
+def test_recall_endpoint_records_turn(sse_client, monkeypatch):
+    client, pool = sse_client
+    pool._builder = _stream_pool(lambda model: RecordingLocalLLM(model))._builder
+
+    response = client.post(
+        "/api/chat/recall",
+        json={"model": "alpha", "question": "缓存问题", "answer": "缓存回答", "session_id": "s9"},
+    )
+    assert response.json() == {"recorded": True}
+    assert pool._sessions["s9"].llm.memory.messages[0]["content"] == "缓存问题"
+
+
+def test_recall_endpoint_rejects_empty(sse_client, monkeypatch):
+    client, _pool = sse_client
+    assert client.post("/api/chat/recall", json={"model": "alpha", "question": " ", "answer": "a"}).status_code == 400
+    assert client.post("/api/chat/recall", json={"model": "alpha", "question": "q", "answer": " "}).status_code == 400
+
+
+@pytest.fixture
+def sse_client(monkeypatch):
+    fastapi_testclient = pytest.importorskip("fastapi.testclient")
+    from stlibs.mproc.onlinechat import app, pool
+
+    monkeypatch.setattr(oc_llm, "registry", _registry())
+    return fastapi_testclient.TestClient(app), pool
+
+
+def _frames(response):
+    payloads = []
+    for line in response.text.splitlines():
+        if line.startswith("data:"):
+            payloads.append(json.loads(line[5:].strip()))
+    return payloads
+
+
+def test_api_stream_emits_start_delta_done(sse_client, monkeypatch):
+    client, pool = sse_client
+    monkeypatch.setattr(pool, "stream", lambda model, question, session_id=None, stop_event=None: ["你", "好"])
+
+    response = client.post("/api/chat/stream", json={"model": "alpha", "question": "hi", "session_id": "s1"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+
+    frames = _frames(response)
+    assert [f["type"] for f in frames] == ["start", "delta", "delta", "done"]
+    assert "".join(f["text"] for f in frames if f["type"] == "delta") == "你好"
+    assert frames[0]["session_id"] == "s1"
+
+
+def test_api_stream_reports_backend_error_as_event(sse_client, monkeypatch):
+    client, pool = sse_client
+
+    def broken(model, question, session_id=None, stop_event=None):
+        yield "半句"
+        raise RuntimeError("模型炸了")
+
+    monkeypatch.setattr(pool, "stream", broken)
+    response = client.post("/api/chat/stream", json={"model": "alpha", "question": "hi"})
+
+    frames = _frames(response)
+    assert frames[0]["type"] == "start"
+    assert frames[1] == {"type": "delta", "text": "半句"}
+    assert frames[-1]["type"] == "error"
+    assert "模型炸了" in frames[-1]["detail"]
+    assert not any(f["type"] == "done" for f in frames)
+
+
+def test_api_stream_maps_closed_session_to_event(sse_client, monkeypatch):
+    client, pool = sse_client
+
+    def closed(model, question, session_id=None, stop_event=None):
+        raise oc_llm.SessionClosedError(session_id or "default")
+        yield
+
+    monkeypatch.setattr(pool, "stream", closed)
+    response = client.post("/api/chat/stream", json={"model": "alpha", "question": "hi", "session_id": "s1"})
+
+    frames = _frames(response)
+    assert frames[-1]["type"] == "error"
+    assert frames[-1]["retry"] is True
+
+
+def test_api_stream_validates_before_streaming(sse_client, monkeypatch):
+    client, pool = sse_client
+
+    def boom(*args, **kwargs):
+        raise registry_api.UnknownModelError("nope", ["alpha"])
+
+    monkeypatch.setattr(pool, "stream", boom)
+    assert client.post("/api/chat/stream", json={"model": "nope", "question": "hi"}).status_code == 400
+    assert client.post("/api/chat/stream", json={"model": "alpha", "question": "  "}).status_code == 400
+
+
+def test_api_stream_ends_when_consumer_disconnects(sse_client, monkeypatch):
+    """客户端断开时流必须收尾，不能把工作线程和会话锁留着。"""
+    client, pool = sse_client
+    stopped = threading.Event()
+
+    def chunks(model, question, session_id=None, stop_event=None):
+        for index in range(50):
+            if stop_event is not None and stop_event.is_set():
+                stopped.set()
+                return
+            time.sleep(0.01)
+            yield str(index)
+
+    monkeypatch.setattr(pool, "stream", chunks)
+    response = client.post("/api/chat/stream", json={"model": "alpha", "question": "hi"})
+    assert response.status_code == 200
+    assert _frames(response)[0]["type"] == "start"
 
 
 def test_config_defaults():

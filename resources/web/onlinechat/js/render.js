@@ -5,6 +5,7 @@
   const ICON_SEND = '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>';
   const ICON_STOP = '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></svg>';
   const ICON_TRASH = '<svg class="i" viewBox="0 0 24 24"><path d="M5 7h14M10 11v6M14 11v6M7 7l1 12h8l1-12M9.5 7V4.5h5V7"/></svg>';
+  const DOTS = '<span class="dots"><i></i><i></i><i></i></span>';
 
   function esc(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -78,7 +79,7 @@
 
     for (const m of chat.messages) {
       const div = document.createElement('div');
-      div.className = 'msg ' + m.role + (m.error ? ' error' : '');
+      div.className = 'msg ' + m.role + (m.error ? ' error' : '') + (m.cached ? ' cached' : '');
       if (m.role === 'user') div.textContent = m.content;
       else div.innerHTML = formatText(m.content);
       dom.inner.appendChild(div);
@@ -86,11 +87,25 @@
 
     if (state.pending && state.pending.chatId === chat.id) {
       const wait = document.createElement('div');
-      wait.className = 'msg assistant';
-      wait.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+      wait.className = 'msg assistant streaming';
+      wait.innerHTML = state.pending.text ? formatText(state.pending.text) : DOTS;
+      state.pending.node = wait;
       dom.inner.appendChild(wait);
     }
 
+    dom.messages.scrollTop = dom.messages.scrollHeight;
+  }
+
+  function streamChunk(text) {
+    const pending = state.pending;
+    if (!pending) return;
+
+    pending.text = (pending.text || '') + text;
+    if (!pending.node) {
+      messages();
+      return;
+    }
+    pending.node.innerHTML = formatText(pending.text);
     dom.messages.scrollTop = dom.messages.scrollHeight;
   }
 
@@ -116,5 +131,5 @@
     dom.input.style.height = Math.min(dom.input.scrollHeight, 200) + 'px';
   }
 
-  QW.render = { history, messages, sendButton, greeting, autosize };
+  QW.render = { history, messages, sendButton, greeting, autosize, streamChunk };
 })();

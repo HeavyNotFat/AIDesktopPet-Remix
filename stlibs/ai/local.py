@@ -33,13 +33,14 @@ class LLM(QObject):
 
     def __init__(self, model: str = "glm4", system_prompt: str = ""):
         super().__init__()
-        from . import Memory, fc, rag
+        from . import LTMemory, Memory, fc, rag
 
         self.memory = Memory()
         self.function_call = fc.FunctionCall(model)
         self.model = model
         self._closed = False
         self.rag = None
+        self.lt_memory = LTMemory(scope=f"local:{model}") if Config.memory["longterm"] else None
 
         if Config.mcp["enable"] and mcp is not None:
             try:
@@ -66,6 +67,8 @@ class LLM(QObject):
         messages = self.memory.messages
         if self.rag and self._need_rag(user_input):
             messages = self._inject_rag(user_input, messages)
+        if self.lt_memory is not None:
+            messages = self._inject_memory(user_input, messages)
         print("[RAG MSG]", messages)
 
         reply_parts = []
@@ -81,7 +84,14 @@ class LLM(QObject):
         reply = "".join(reply_parts)
         if reply:
             self.memory.add_assistant_msg(reply)
+            if self.lt_memory is not None:
+                self.lt_memory.remember_turn(user_input, reply)
         if should_emit: self.memory_signal.emit([self.model, self.memory.messages])
+
+    def _inject_memory(self, user_input: str, messages: list):
+        from . import inject_memory_context
+
+        return inject_memory_context(messages, self.lt_memory.build_context(user_input))
 
     @staticmethod
     def _need_rag(user_input: str):

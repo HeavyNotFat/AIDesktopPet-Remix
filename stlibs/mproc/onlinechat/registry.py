@@ -9,7 +9,7 @@ from typing import Callable, Iterable
 from ... import Config, get_model_lists
 from .config import MODEL_LIST_TTL
 
-#: 云端模型 id 前缀
+# 云端模型 id 前缀
 CLOUD_PREFIX = "api::"
 
 BACKEND_LOCAL = "local"
@@ -124,5 +124,5 @@ class ModelRegistry:
         return target
 
 
-#: 进程级默认注册表，路由直接用它
+# 进程级默认注册表，路由直接用它
 registry = ModelRegistry(ttl=MODEL_LIST_TTL)

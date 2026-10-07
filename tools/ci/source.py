@@ -158,7 +158,7 @@ class SourceIndex:
         self._functions: dict[tuple[str, str], ast.AST] = {}
         self._assignments: dict[str, dict[str, ast.AST]] = {}
         self._node_files: dict[int, SourceFile] = {}
-        #: 名字 → 索引，避免每个 finding 都线性扫一遍（原来是平方级）
+        # 名字 → 索引，避免每个 finding 都线性扫一遍（原来是平方级）
         self._by_rel: dict[str, SourceFile] = {}
         self._classes_by_qualname: dict[str, ClassRecord] = {}
         self._classes_by_module_name: dict[tuple[str, str], ClassRecord] = {}

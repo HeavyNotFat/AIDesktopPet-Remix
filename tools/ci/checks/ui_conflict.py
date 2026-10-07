@@ -30,7 +30,7 @@ from typing import Iterable, Iterator
 from ..core import Finding, Location, Severity
 from ..source import SourceFile, iter_calls
 
-#: 样式选择器里允许出现的 Qt 类名（常用集合，不是全集；未知的 Q* 只给提示）
+# 样式选择器里允许出现的 Qt 类名（常用集合，不是全集；未知的 Q* 只给提示）
 QT_CLASSES: frozenset[str] = frozenset(
     """
     QObject QWidget QFrame QLabel QAbstractButton QPushButton QToolButton QRadioButton QCheckBox
@@ -45,7 +45,7 @@ QT_CLASSES: frozenset[str] = frozenset(
     """.split()
 )
 
-#: 互斥的 window flag
+# 互斥的 window flag
 EXCLUSIVE_FLAGS: tuple[tuple[str, str], ...] = (
     ("WindowStaysOnTopHint", "WindowStaysOnBottomHint"),
 )
@@ -69,8 +69,8 @@ _SELECTOR_TYPE_RE = re.compile(r"(?:^|[\s,>+~(])([A-Z][A-Za-z0-9_]*)\s*(?=[#:.{\
 _COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _HEX_COLOR_RE = re.compile(r"^[0-9A-Fa-f]{3,8}$")
 
-#: Qt 自带信号名。同名信号在项目里也有定义时（例如 HackerSwitch.stateChanged），
-#: 只有在接收者类型能确定的情况下才按项目信号算，否则放过，避免误报。
+# Qt 自带信号名。同名信号在项目里也有定义时（例如 HackerSwitch.stateChanged），
+# 只有在接收者类型能确定的情况下才按项目信号算，否则放过，避免误报。
 QT_SIGNAL_NAMES: frozenset[str] = frozenset(
     """
     clicked pressed released toggled triggered hovered destroyed

@@ -174,6 +174,9 @@ class PublicShader(ADPOpenGLCanvas):
             else:
                 window.hide()
 
+        def open_browser():
+            webbrowser.open("http://127.0.0.1:52493")
+
         context_menu = stlibs.SharingData.theme.Menu(self)
 
         setting_visible_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.settings"), self, stlibs.SharingData.theme.IconList.SETTING)
@@ -187,7 +190,7 @@ class PublicShader(ADPOpenGLCanvas):
         context_menu.addAction(chat_action)
 
         online_chat_action = stlibs.SharingData.theme.Action(get_translation("shader.menu.online_chat"), self, stlibs.SharingData.theme.IconList.CHAT)
-        online_chat_action.triggered.connect(lambda: webbrowser.open("http://127.0.0.1:52493"))
+        online_chat_action.triggered.connect(open_browser)
         context_menu.addAction(online_chat_action)
 
         context_menu.addSeparator()

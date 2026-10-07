@@ -21,7 +21,7 @@ from ..core import Finding, Location, Severity
 
 REQUIREMENTS = "requirements.txt"
 
-#: import 名 → 发行包名（requirements.txt 里写的是后者）
+# import 名 → 发行包名（requirements.txt 里写的是后者）
 DISTRIBUTION_ALIASES: dict[str, str] = {
     "PIL": "Pillow",
     "OpenGL": "PyOpenGL",
@@ -36,7 +36,7 @@ DISTRIBUTION_ALIASES: dict[str, str] = {
     "qfluentwidgets": "PySide6-Fluent-Widgets",
 }
 
-#: 只在本机开发脚本/测试里出现的库，不算运行时依赖
+# 只在本机开发脚本/测试里出现的库，不算运行时依赖
 DEV_ONLY_FILES = ("tests/", "tools/")
 
 

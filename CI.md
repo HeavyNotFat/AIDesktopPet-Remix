@@ -217,7 +217,7 @@ python -m tools.ci --root /tmp/某个坏仓库 --no-color
 `tests/ci/*` 里每个用例都是这么干的（`mini_repo` 夹具），
 所以新增规则时照抄一个用例就能覆盖。
 
-### 5.2 网页聊天真打接口（验证"新实例"）
+### 5.2 网页聊天真打接口（验证"新实例"与流式）
 
 网页聊天服务**不依赖 Qt、不依赖桌面端主程序**，可以单独拉起来：
 
@@ -229,7 +229,7 @@ python -m stlibs.mproc.onlinechat          # 默认 127.0.0.1:52493
 python tools/manual/probe_onlinechat.py glm4:latest
 ```
 
-预期输出（实测）：
+实例隔离部分（实测）：
 
 ```
 == 用 glm4:latest 给两个不同 session 各发一条（instances_created 应 +2）==
@@ -246,17 +246,37 @@ python tools/manual/probe_onlinechat.py glm4:latest
    pool -> {'sessions': 1, ..., 'evicted': 1, ...}
 ```
 
-三条结论一眼可见：**每会话一个独立实例**（`instances_created` 随 session 递增）、
-**同会话复用实例且记忆独立**（`turns` 递增但不新建）、
-**生命周期互不影响**（`/reset` 只丢弃指定 session）。
+流式部分（实测首字 0.13s，25 个 delta，约 55ms 一片）：
 
-手工打单个接口（PowerShell）：
+```
+== 流式：POST /api/chat/stream ==
+   + 0.13s start
+   + 0.19s delta '一'
+   + 0.26s delta '、'
+   ...
+   + 1.77s done 全文='\n一、二、三、四、五。到了！...'
+   首字延迟 0.13s，共 25 个 delta
+```
+
+四条结论一眼可见：**每会话一个独立实例**（`instances_created` 随 session 递增）、
+**同会话复用实例且记忆独立**（`turns` 递增但不新建）、
+**生命周期互不影响**（`/reset` 只丢弃指定 session）、
+**流式确实边生成边吐字**（多个 delta，首字远早于收尾）。
+
+手工打接口（PowerShell）：
 
 ```powershell
 $b = @{ model = "glm4:latest"; question = "你好"; session_id = "s1" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:52493/api/chat `
   -ContentType 'application/json' -Body $b
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:52493/api/status -ContentType 'application/json' -Body '{}'
+```
+
+前端本地缓存与长期记忆：
+
+```bash
+python -m pytest tests/test_web_cache.py -q   # 用 node 真跑 cache.js（命中/淘汰/过期/坏存储）
+python -m pytest tests/test_lt_memory.py -q   # 摘要、按 window 入库、召回排序、跨实例共享文件
 ```
 
 调池子行为不用改代码，用环境变量就行：
@@ -271,9 +291,13 @@ WEBCHAT_MAX_SESSIONS=2 WEBCHAT_SESSION_TTL=10 python -m stlibs.mproc.onlinechat
 python main.py          # 起桌宠 + 网页聊天线程
 ```
 
-然后浏览器打开 <http://127.0.0.1:52493> 聊两句，
-右侧模型下拉里换一个模型再聊 —— 后台会重建实例，`/api/status` 的
-`instances_created` 会 +1。
+然后浏览器打开 <http://127.0.0.1:52493> 聊两句，可以看到：
+
+* 回答逐字出现，停止按钮会把已收到的部分留在对话里；
+* 同样的「模型 + 问题」再问一次直接显示并标注「本地缓存」，后台不产生新的
+  `instances_created`；侧边栏的数据库图标可清空缓存；
+* 右侧模型下拉里换一个模型再聊 —— 后台会重建实例，`/api/status` 的
+  `instances_created` 会 +1。
 
 > 如果 MCP 服务起不来（比如没网、没装 npx），现在只会打印
 > `[MCP] 启动 'xxx' 失败，跳过该工具`，聊天本身照常可用。

@@ -21,8 +21,13 @@ from typing import Iterator
 from ..core import Finding, Location, Severity
 
 RESOURCE_PREFIX = "resources/"
-#: 运行时才生成的目录，缺失是正常的
-RUNTIME_DIRS = ("resources/rag/chroma_db", "resources/rag/lancedb_db", "resources/rag/vector")
+# 运行时才生成的目录，缺失是正常的
+RUNTIME_DIRS = (
+    "resources/rag/chroma_db",
+    "resources/rag/lancedb_db",
+    "resources/rag/vector",
+    "resources/memory",
+)
 _HREF_RE = re.compile(r'(?:href|src)\s*=\s*["\']([^"\'>]+)["\']')
 _CSS_URL_RE = re.compile(r'url\(\s*["\']?([^"\')]+)["\']?\s*\)')
 

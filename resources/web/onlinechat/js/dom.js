@@ -10,6 +10,7 @@
     searchBox: $('searchBox'),
     searchInput: $('searchInput'),
     collapseBtn: $('collapseBtn'),
+    cacheBtn: $('cacheBtn'),
     expandBtn: $('expandBtn'),
     newChatBtn: $('newChatBtn'),
     hello: $('hello'),

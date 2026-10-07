@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 
 from .core import Finding, Severity
 
-#: 默认不扫描的目录/文件（glob，相对仓库根）
+# 默认不扫描的目录/文件（glob，相对仓库根）
 DEFAULT_EXCLUDE: tuple[str, ...] = (
     ".git/*",
     ".venv/*",
@@ -30,7 +30,7 @@ DEFAULT_EXCLUDE: tuple[str, ...] = (
     "tools/ci/tests/fixtures/*",
 )
 
-#: 内联忽略：``# ci: ignore`` / ``# ci: ignore=ui/x,ui/y``
+# 内联忽略：``# ci: ignore`` / ``# ci: ignore=ui/x,ui/y``
 INLINE_MARKER = "ci: ignore"
 
 

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout
 
 from ... import Config, ConfigLoader
 
-#: 相对本文件定位，不依赖进程工作目录（打包成 exe、换 cwd 都不会失效）
+# 相对本文件定位，不依赖进程工作目录（打包成 exe、换 cwd 都不会失效）
 THEME_ROOT = Path(__file__).resolve().parents[1]
 
 

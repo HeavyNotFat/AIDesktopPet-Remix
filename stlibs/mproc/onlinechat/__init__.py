@@ -1,8 +1,10 @@
+import json
 import logging
+import threading
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,7 +19,6 @@ logger = logging.getLogger('onlinechat')
 class ChatRequest(BaseModel):
     model: str
     question: str
-    #: 前端每条会话一个 id；不传则共用 ``default`` 会话（兼容旧客户端）
     session_id: str | None = Field(default=None, max_length=128)
 
 
@@ -25,7 +26,31 @@ class SessionRequest(BaseModel):
     session_id: str | None = Field(default=None, max_length=128)
 
 
+class RecallRequest(BaseModel):
+    model: str
+    question: str
+    answer: str
+    session_id: str | None = Field(default=None, max_length=128)
+
+
 api = APIRouter(prefix='/api')
+
+SSE_HEADERS = {
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+}
+
+
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _validate(req: ChatRequest) -> str:
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail='问题不能为空')
+    return question
 
 
 @api.post('/getmodelname')
@@ -41,9 +66,7 @@ def get_model_list():
 
 @api.post('/chat')
 def chat(req: ChatRequest):
-    question = req.question.strip()
-    if not question:
-        raise HTTPException(status_code=400, detail='问题不能为空')
+    question = _validate(req)
 
     try:
         answer = pool.chat(req.model, question, req.session_id)
@@ -59,16 +82,74 @@ def chat(req: ChatRequest):
     return {'answer': answer}
 
 
+@api.post('/chat/stream')
+def chat_stream(req: ChatRequest):
+    """以 SSE 形式逐片段返回回答。
+
+    事件：``start`` → 若干 ``delta`` → ``done``；出错则发一条 ``error``。
+    流开始后 HTTP 状态码已经定了 200，所以错误只能走事件体。
+    """
+    question = _validate(req)
+    stop_event = threading.Event()
+
+    try:
+        chunks = pool.stream(req.model, question, req.session_id, stop_event=stop_event)
+    except UnknownModelError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SessionClosedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        logger.exception('网页聊天流式生成无法启动')
+        raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
+
+    def events():
+        yield _sse({'type': 'start', 'session_id': req.session_id})
+        try:
+            for chunk in chunks:
+                yield _sse({'type': 'delta', 'text': chunk})
+        except SessionClosedError as e:
+            yield _sse({'type': 'error', 'detail': str(e), 'retry': True})
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.exception('网页聊天流式生成中断')
+            yield _sse({'type': 'error', 'detail': f"{type(e).__name__}: {e}"})
+            return
+        finally:
+            stop_event.set()
+
+        yield _sse({'type': 'done'})
+
+    return StreamingResponse(events(), media_type='text/event-stream', headers=SSE_HEADERS)
+
+
+@api.post('/chat/recall')
+def chat_recall(req: RecallRequest):
+    """补记一轮没走模型的问答（前端命中本地缓存时用）。"""
+    question = req.question.strip()
+    if not question or not req.answer.strip():
+        raise HTTPException(status_code=400, detail='问题与回答都不能为空')
+
+    try:
+        recorded = pool.remember(req.model, question, req.answer, req.session_id)
+    except UnknownModelError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SessionClosedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        logger.exception('补记缓存问答失败')
+        raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
+
+    return {'recorded': recorded}
+
+
 @api.post('/reset')
 def reset(req: SessionRequest):
-    """丢弃会话实例（网页端「删除对话」时调用）。"""
     dropped = pool.reset(req.session_id)
     return {'dropped': dropped}
 
 
 @api.post('/status')
 def status():
-    """实例池观测接口：CI/排障时确认网页端确实用的是自己的实例。"""
     return {
         'assistant': config.ASSISTANT_NAME,
         'models': len(model_registry.snapshot()),

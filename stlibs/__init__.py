@@ -203,7 +203,7 @@ class _BaseModelConfig:
     opacity: int
     size: int
     rotate: int
-    #: 主题包名（stlibs/themes/<theme>），改动需重启生效
+    # 主题包名（stlibs/themes/<theme>），改动需重启生效
     theme: str = "hacker"
 
     def __setitem__(self, key, value):
@@ -259,7 +259,7 @@ class _ThemeTypingProtocol(Protocol):
     ChatWidget: Callable
     ChatBubble: Callable
     ModelChat: Callable
-    #: IconList 是实例（主题里 ``IconList = IconList()``），不是类
+    # IconList 是实例（主题里 ``IconList = IconList()``），不是类
     IconList: object
 
 

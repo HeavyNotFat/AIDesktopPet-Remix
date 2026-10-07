@@ -10,6 +10,7 @@ __pycache__/
 resources/rag/Identity.txt
 resources/rag/chroma_db/
 resources/rag/lancedb_db
+resources/memory/
 .idea/
 .ssh/
 test/

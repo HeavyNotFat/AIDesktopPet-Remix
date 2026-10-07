@@ -19,11 +19,10 @@ from typing import Iterator
 
 from ..core import Finding, Location, Severity
 
-#: 常见 Qt / 本项目的 API 名。
-#:
-#: 只收「界面编程专用」的名字：像 ``strip`` / ``emit`` / ``exit`` 这类通用名
-#: 参与"差一个字母"比较会疯狂误报（``lstrip`` vs ``strip``、``exit`` vs ``emit``）。
-#: 真正的收益是 ``bounds.ottom()`` 这种 Qt API 拼写错误。
+# 常见 Qt / 本项目的 API 名。
+# # 只收「界面编程专用」的名字：像 ``strip`` / ``emit`` / ``exit`` 这类通用名
+# 参与"差一个字母"比较会疯狂误报（``lstrip`` vs ``strip``、``exit`` vs ``emit``）。
+# 真正的收益是 ``bounds.ottom()`` 这种 Qt API 拼写错误。
 KNOWN_API_NAMES: frozenset[str] = frozenset(
     """
     bottom top left right width height size rect geometry move resize show hide close update

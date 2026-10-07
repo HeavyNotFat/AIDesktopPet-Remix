@@ -31,6 +31,15 @@
     refresh();
   }
 
+  function pushCached(chat, entry, model, question) {
+    chat.messages.push({ role: 'assistant', content: entry.answer, cached: true });
+    chat.updated = Date.now();
+    QW.store.saveChats();
+    refresh();
+    // 缓存命中不调模型，但得把这一轮补进服务端记忆，否则追问会断上下文
+    QW.api.recall(model, question, entry.answer, chat.id);
+  }
+
   async function send() {
     const question = dom.input.value.trim();
     if (!question || state.pending || !state.model) return;
@@ -44,16 +53,33 @@
     dom.input.value = '';
     QW.render.autosize();
 
+    const cached = QW.cache.get(model, question);
+    if (cached) {
+      pushCached(chat, cached, model, question);
+      return;
+    }
+
     const controller = new AbortController();
-    state.pending = { chatId: chat.id, controller };
+    state.pending = { chatId: chat.id, controller, text: '', node: null };
     refresh();
 
+    let streamed = '';
     try {
-      // sessionId = 本地会话 id：后台据此分配**独立**的 LLM 实例与记忆
-      const answer = await QW.api.chat(model, question, chat.id, controller.signal);
-      chat.messages.push({ role: 'assistant', content: answer });
+      streamed = await QW.api.chatStream(model, question, chat.id, controller.signal, chunk => {
+        streamed += chunk;
+        QW.render.streamChunk(chunk);
+      });
+      if (streamed) {
+        chat.messages.push({ role: 'assistant', content: streamed });
+        QW.cache.put(model, question, streamed);
+      }
     } catch (e) {
-      if (e.name !== 'AbortError') {
+      const partial = e.partial || streamed;
+      if (e.name === 'AbortError') {
+        // 用户点了停止：把已经收到的部分留下来，别白等一场
+        if (partial) chat.messages.push({ role: 'assistant', content: partial, stopped: true });
+      } else {
+        if (partial) chat.messages.push({ role: 'assistant', content: partial, stopped: true });
         chat.messages.push({
           role: 'assistant',
           error: true,
@@ -68,6 +94,13 @@
       }
       refresh();
     }
+  }
+
+  function clearCache() {
+    const removed = QW.cache.clear();
+    dom.cacheBtn.title = removed ? '已清除 ' + removed + ' 条本地缓存' : '本地缓存本来就是空的';
+    dom.cacheBtn.classList.add('flash');
+    setTimeout(() => dom.cacheBtn.classList.remove('flash'), 600);
   }
 
   async function loadGreeting() {
@@ -114,6 +147,7 @@
     });
 
     dom.newChatBtn.addEventListener('click', newChat);
+    dom.cacheBtn.addEventListener('click', clearCache);
   }
 
   function init() {

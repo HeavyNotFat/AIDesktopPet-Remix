@@ -24,10 +24,10 @@ PROTOCOL_MODULE = "stlibs"
 PROTOCOL_CLASS = "_ThemeTypingProtocol"
 BASE_MODULE = "stlibs.themes.base"
 
-#: 主题包内必须存在的子模块（``SharingData.theme.<sub>.<Page>`` 用它取页面）
+# 主题包内必须存在的子模块（``SharingData.theme.<sub>.<Page>`` 用它取页面）
 REQUIRED_SUBMODULES: tuple[str, ...] = ("general", "llm", "tts", "settings", "animation")
 
-#: 契约映射名 → 对应的抽象基类（成员要求从 ABC 自动推导）
+# 契约映射名 → 对应的抽象基类（成员要求从 ABC 自动推导）
 MAPPING_ABC: dict[str, str] = {
     "Window": "MainWindowABS",
     "Menu": "MenuWidgetABS",
@@ -35,8 +35,8 @@ MAPPING_ABC: dict[str, str] = {
     "IconList": "IconListABS",
 }
 
-#: 抽象基类管不到的映射，用「谁在用」显式列出来。
-#: 每一项都注明调用方，改动时必须同步。
+# 抽象基类管不到的映射，用「谁在用」显式列出来。
+# 每一项都注明调用方，改动时必须同步。
 EXTRA_MEMBERS: dict[str, tuple[str, ...]] = {
     # stlibs/themes/hacker/__init__.py::ModelChat 通过 self.chat.xxx 调用
     "ChatWidget": (
@@ -53,7 +53,7 @@ EXTRA_MEMBERS: dict[str, tuple[str, ...]] = {
     "ChatBubble": ("append_text", "updateBubbleWidth"),
 }
 
-#: ``SharingData.theme`` 上允许出现的名字（除映射与子模块外）
+# ``SharingData.theme`` 上允许出现的名字（除映射与子模块外）
 EXTRA_ATTRS: tuple[str, ...] = ("base",)
 
 

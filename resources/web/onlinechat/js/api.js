@@ -84,11 +84,78 @@
     return pick(data, ANSWER_KEYS) || JSON.stringify(data, null, 2);
   }
 
+  // 流式：后台按 SSE 推 delta，这里边收边回调；返回完整回答。
+  async function chatStream(model, question, sessionId, signal, onDelta) {
+    const res = await fetch(API_BASE + '/chat/stream', {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, question, session_id: sessionId || null })
+    });
+
+    if (!res.ok) {
+      const raw = await res.text();
+      const detail = pick(parse(raw), ['detail', 'message', 'error']) || raw;
+      throw new Error('HTTP ' + res.status + (detail ? '：' + String(detail).slice(0, 200) : ''));
+    }
+    if (!res.body || !res.body.getReader) throw new Error('当前浏览器不支持流式读取');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let answer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let split;
+      while ((split = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+
+        const line = frame.split('\n').find(part => part.startsWith('data:'));
+        if (!line) continue;
+
+        let payload;
+        try {
+          payload = JSON.parse(line.slice(5).trim());
+        } catch (e) {
+          continue;
+        }
+
+        if (payload.type === 'delta' && payload.text) {
+          answer += payload.text;
+          if (onDelta) onDelta(payload.text);
+        } else if (payload.type === 'error') {
+          const error = new Error(payload.detail || '生成失败');
+          error.partial = answer;
+          error.retry = !!payload.retry;
+          throw error;
+        }
+      }
+    }
+
+    return answer;
+  }
+
   // 删除对话时让后台丢掉对应的 LLM 实例与上下文记忆。
   async function resetSession(sessionId) {
     if (!sessionId) return null;
     try {
       return await post('/reset', { session_id: sessionId });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 命中本地缓存时，把这一轮补记进服务端记忆（不调用模型）。
+  async function recall(model, question, answer, sessionId) {
+    try {
+      return await post('/chat/recall', {
+        model, question, answer, session_id: sessionId || null
+      });
     } catch (e) {
       return null;
     }
@@ -111,5 +178,5 @@
     return models;
   }
 
-  QW.api = { chat, resetSession, getModelName, getModelList };
+  QW.api = { chat, chatStream, recall, resetSession, getModelName, getModelList };
 })();

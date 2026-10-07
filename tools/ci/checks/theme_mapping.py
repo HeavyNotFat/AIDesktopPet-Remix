@@ -103,7 +103,7 @@ def _module_members(ctx, theme: str, submodule: str) -> set[str] | None:
     return set(ctx.sources.module_members(src.module))
 
 
-#: 这些目录不是应用代码，里面的 `theme` 变量名会干扰用法扫描
+# 这些目录不是应用代码，里面的 `theme` 变量名会干扰用法扫描
 NON_APP_PREFIXES = ("tools/", "tests/", "docs/", "resources/")
 
 
