@@ -1,7 +1,3 @@
-"""桌宠主窗口的"外壳"零件：标题栏、代码雨背景、侧栏分类与导航按钮。
-
-`HackerWindow`（window.py）拿这些拼出主窗口；它们只跟 Qt 打交道，不碰主题里其它控件。
-"""
 
 import json
 import random

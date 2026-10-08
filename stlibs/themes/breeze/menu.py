@@ -1,22 +1,45 @@
 
-from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from __future__ import annotations
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import (
     QAction,
     QColor,
     QCursor,
     QFont,
-    QFontDatabase,
     QFontMetrics,
     QIcon,
     QPainter,
+    QPainterPath,
     QPixmap,
 )
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..base import CombinedMeta, MenuWidgetABS
+from .theme import (
+    ACCENT_SOFT,
+    BORDER,
+    BORDER_STRONG,
+    PRIMARY,
+    PRIMARY_SOFT,
+    RADIUS,
+    RADIUS_SMALL,
+    SURFACE,
+    TEXT,
+    font_css,
+)
 
 # 条目左边图标统一按这个尺寸取（插件图标、主题图标都走这里）
-MENU_ICON = 22
+MENU_ICON = 20
+
+
+class Action(QAction):
+    """主题契约里的 Action：``(text, parent, icon)``，和 Qt 的 QAction 同源。"""
+
+    def __init__(self, text, parent=None, icon: QIcon = None):
+        super().__init__(text, parent)
+        if icon is not None:
+            self.setIcon(icon)
 
 
 def menu_icon_pixmap(icon, size: int = MENU_ICON):
@@ -35,66 +58,56 @@ def menu_icon_pixmap(icon, size: int = MENU_ICON):
     return pixmap
 
 
-class Action(QAction):
-    """主题契约里的 Action：``(text, parent, icon)``，和 Qt 的 QAction 同源。"""
-
-    def __init__(self, text, parent=None, icon: QIcon = None):
-        super().__init__(text, parent)
-        if icon is not None:
-            self.setIcon(icon)
-
-
-class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
-    """右键菜单：整个条目都是自绘的（一条一张 QPixmap），一层平铺、没有子菜单。"""
+class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
+    """右键菜单：白底圆角卡片，条目自绘，一层平铺。"""
 
     triggered = Signal(object)
-    # 菜单收起来了。Popup 开着时鼠标事件归它管，宿主收不到 release，
-    # 所以"按住拖动"的宿主（桌宠）靠这个信号复位拖拽状态，否则会追着光标漂
     menu_closed = Signal()
 
-    ROW_HEIGHT = 36   # 单条菜单项的高度
+    ROW_HEIGHT = 34
+    PADDING = 8
+    SHADOW_MARGIN = 2   # 卡片外面留一点边，圆角描边不会被窗口边缘切掉
+    HOVER_BG = ACCENT_SOFT
 
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._actions = []
-        self._items = []  # Track all items including separators
-        self._action_items = []  # 每条 item 的绘制数据（用来统一宽度）
+        self._items = []
+        self._action_items = []
         self._max_width = 0
-        self._closed_announced = False  # menu_closed 已经发过了（hide/close 会重复触发）
+        self._closed_announced = False
 
-        font_id = QFontDatabase.addApplicationFont("./resources/fonts/jetbrains.ttf")
-        if font_id != -1:
-            family = QFontDatabase.applicationFontFamilies(font_id)[0]
-            self.hacker_font = QFont(family, 16)
-        else:
-            self.hacker_font = QFont("Courier New", 16)
+        self.hacker_font = QFont()
+        self.hacker_font.setPointSize(10)
 
         self.box = QWidget(self)
-        self.box.setObjectName("box")
+        # objectName 要带主题前缀：`#id` 选择器是按名字命中的，
+        # 两个主题都用 "box" 的话样式会互相打到（CI 的 ui/object-name 会拦）
+        self.box.setObjectName("breezeMenuBox")
 
+        # 顶部/底部内边距：让条目两侧的圆角高亮不至于贴着卡片边
         self.layout = QVBoxLayout(self.box)
-        self.layout.setSpacing(6)
-        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(2)
+        self.layout.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(self.SHADOW_MARGIN, self.SHADOW_MARGIN,
+                                self.SHADOW_MARGIN, self.SHADOW_MARGIN)
         root.addWidget(self.box)
 
-        self.setStyleSheet("""
-        #box {
-            background: rgba(10, 10, 10, 220);
-            border: 2px solid #00FF00;
-            border-radius: 12px;
-        }
-        QLabel {
-            background: transparent;
-            color: #00FF00;
-            padding: 0 12px;
-            border-radius: 6px;
-            min-height: 36px;
-            max-height: 36px;
-        }
+        self.setStyleSheet(f"""
+            #breezeMenuBox {{
+                background: {SURFACE};
+                border: 1px solid {BORDER_STRONG};
+                border-radius: {RADIUS}px;
+            }}
+            #breezeMenuBox QLabel {{
+                background: transparent;
+                border: none;
+                padding: 0px;
+                {font_css(14)}
+            }}
         """)
 
     # -- 装配 ---------------------------------------------------------------
@@ -105,27 +118,21 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         text = action.text()
         pixmap = menu_icon_pixmap(action.icon())
 
-        # 每一条都按「最宽的那条」来画：早先按自己文字宽度画，短条目右边留空、
-        # 悬停高亮也只亮一半，看着很难受。
+        # 每条都按「最宽的那条」来画：短条目右边留空、高亮只亮一半会很难看
         label = QLabel()
         label.setFixedHeight(self.ROW_HEIGHT)
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         label.setCursor(Qt.PointingHandCursor)
+        # 条目是自己画的，QAction 的 tooltip 不会自动出现，得挂到 label 上
         if hasattr(action, 'toolTip'):
             label.setToolTip(action.toolTip())
 
-        entry = {
-            'label': label,
-            'text': text,
-            'pixmap': pixmap,
-            'width': 0,
-            'redraw': None,
-        }
+        entry = {'label': label, 'text': text, 'pixmap': pixmap, 'width': 0, 'redraw': None}
         entry['width'] = self._measure(text, pixmap)
 
         def redraw(hovered=False, entry=entry):
-            row_width = max(entry['width'], self._max_width)
-            entry['label'].setPixmap(self._render_row(entry, row_width, hovered))
+            width = max(entry['width'], self._max_width)
+            entry['label'].setPixmap(self._render_row(entry, width, hovered))
 
         entry['redraw'] = redraw
         redraw(False)
@@ -153,7 +160,7 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
     def addSeparator(self):
         separator = QWidget()
         separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: rgba(0, 255, 0, 100); margin: 5px 0px;")
+        separator.setStyleSheet(f"background: {BORDER}; border: none;")
         separator.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.layout.addWidget(separator)
@@ -165,35 +172,40 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
     # -- 绘制 ---------------------------------------------------------------
     def _render_row(self, entry, width: int, hovered: bool) -> QPixmap:
-        """把一条菜单项画成一张位图（没有反锯齿，字才是清楚的）。"""
+        """把一条菜单项画成一张位图（悬停整行铺浅蓝底）。"""
         height = entry['label'].height() or self.ROW_HEIGHT
         pixmap = QPixmap(max(1, int(width)), int(height))
         pixmap.fill(Qt.transparent)
 
         painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setFont(self.hacker_font)
-        painter.setPen(QColor("#00FF88" if hovered else "#00FF00"))
 
-        metrics = QFontMetrics(self.hacker_font)
-        text_x = 6
         if hovered:
-            arrow_width = metrics.horizontalAdvance(" > ")
-            painter.drawText(text_x, 0, arrow_width, height, Qt.AlignVCenter, ">")
-            text_x += arrow_width
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(self.HOVER_BG))
+            painter.drawRoundedRect(0, 0, width, height, RADIUS_SMALL, RADIUS_SMALL)
+
+        painter.setPen(QColor(PRIMARY if hovered else TEXT))
+        metrics = QFontMetrics(self.hacker_font)
+        text_x = 8
         if entry['pixmap']:
             painter.drawPixmap(text_x, (height - entry['pixmap'].height()) // 2, entry['pixmap'])
-            text_x += entry['pixmap'].width() + 6
+            text_x += entry['pixmap'].width() + 8
+        else:
+            text_x += 2
 
-        painter.drawText(text_x, 0, max(0, width - text_x), height,
-                         Qt.AlignVCenter, entry['text'])
+        available = max(0, width - text_x - 8)
+        text = metrics.elidedText(entry['text'], Qt.TextElideMode.ElideRight, available)
+        painter.drawText(text_x, 0, available, height, Qt.AlignVCenter, text)
         painter.end()
         return pixmap
 
     def _measure(self, text: str, pixmap) -> int:
         metrics = QFontMetrics(self.hacker_font)
-        width = 6 + metrics.horizontalAdvance(" > ") + metrics.horizontalAdvance(text) + 16
-        if pixmap:
-            width += pixmap.width() + 6
+        # 左右各 8px 内边距；右侧再多留 16px，免得长条目贴着圆角边框
+        width = 16 + metrics.horizontalAdvance(text) + 16
+        width += (pixmap.width() + 8) if pixmap else 2
         return width
 
     def _apply_width(self):
@@ -206,9 +218,8 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
             entry['label'].setFixedWidth(self._max_width)
             entry['redraw'](False)
 
-        self.box.setFixedWidth(self._max_width + 20)
+        self.box.setFixedWidth(self._max_width + self.PADDING * 2)
         self.adjustSize()
-
     # -- 生命周期 -----------------------------------------------------------
     def _announce_closed(self):
         """通知宿主"菜单收起来了"（hide 与 close 可能都来一遍，去重）。"""
@@ -218,7 +229,6 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.menu_closed.emit()
 
     def hideEvent(self, event, /):
-        # Popup 关掉的时候鼠标事件才回到宿主手上，这里通知它复位拖拽状态
         self._announce_closed()
         super().hideEvent(event)
 
@@ -237,9 +247,40 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.close()
 
     def exec(self, pos=None):
-        self.adjustSize()
+        """弹出来。
+
+        宽度要在这里**显式**收敛：弹出窗有自己的默认尺寸（200x…），``show()`` 不会
+        按内容缩回去，得先量一遍再 ``resize(minimumSizeHint())``，否则右边会拖一条空边。
+        """
         if pos is None:
             pos = QCursor.pos()
         self._closed_announced = False  # 重新弹出来，下一次关闭要再通知一遍
-        self.move(pos)
+        self._apply_width()
         self.show()
+        self._apply_width()
+        self.resize(self.minimumSizeHint())
+        self.move(pos)
+
+
+def draw_badge(glyph: str, size: int = 64, color: str = PRIMARY, background: str = PRIMARY_SOFT) -> QPixmap:
+    """画一个圆角小徽章（标题栏图标、页面角标都用得上）。"""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, size, size, size * 0.32, size * 0.32)
+    painter.fillPath(path, QColor(background))
+
+    font = QFont()
+    font.setPointSizeF(size * 0.42)
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor(color))
+    painter.drawText(0, 0, size, size, Qt.AlignmentFlag.AlignCenter, glyph)
+    painter.end()
+    return pixmap
+
+
+__all__ = ["Action", "BreezeMenu", "MENU_ICON", "draw_badge", "menu_icon_pixmap"]

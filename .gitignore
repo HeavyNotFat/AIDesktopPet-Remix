@@ -16,6 +16,7 @@ resources/memory/
 test/
 search.py
 PROMPT.md
+AGENTS.md
 
 # Distribution / packaging
 .Python

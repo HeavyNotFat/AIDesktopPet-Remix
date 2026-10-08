@@ -46,7 +46,7 @@
 | **技能 Skills**  | 一段可随时套用的提示词，聊天里 `/技能名` 或点按钮                                   | [功能详解](.github/docs/FEATURES.md#聊天窗里的技能--复制--语音)                                                   |
 | **多模型协作**      | 主模型出稿 → 成员评审 → 定稿，成员实例独立缓存                                    | [功能详解](.github/docs/FEATURES.md#多模型协作)                                                             |
 | **网页聊天**       | FastAPI + SSE 流式 + 每会话独立实例与记忆 + 本地答案缓存                        | [HTTP 接口说明](API.md) · [前端目录](resources/web/onlinechat)                                             |
-| **质量门禁**       | 54 项自研静态检查（UI 冲突 / 抽象契约 / 主题映射 / 前后端契约…）                      | [门禁与怎么测](CI.md)                                                                                    |
+| **质量门禁**       | 55 项自研静态检查（UI 冲突 / 抽象契约 / 主题映射 / 前后端契约…）                      | [门禁与怎么测](CI.md)                                                                                    |
 | **结构地图**       | 每个文件干什么、启动链路、改动时要同步哪些契约                                       | [代码结构](STRUCTURE.md)                                                                               |
 
 ## ✨ 功能总览
@@ -60,10 +60,10 @@
 | 📚 **RAG 知识库**   | 语料切块 → Ollama 向量化 → BM25 + 向量混合检索 → 注入回答                                                      | [功能详解](.github/docs/FEATURES.md)         |
 | 🛠️ **MCP 工具调用** | stdio 连接 MCP server，工具自动注入模型（示例：`mcp_servers/live2d_motion.py`）                               | [功能详解](.github/docs/FEATURES.md)         |
 | 🖼️ **多模态**      | 图片直接喂给支持视觉的模型；不支持的模型会明确提示「看不见图片」                                                              | [功能详解](.github/docs/FEATURES.md#附件图片与文档) |
-| 🎨 **可插拔主题**     | 主题包 = 一个目录 + 契约映射；切换主题只改配置                                                                    | [代码结构](STRUCTURE.md#45-界面层)              |
+| 🎨 **可插拔主题**     | 主题包 = 一个目录 + 契约映射；自带 `hacker`（绿色终端风）与 `breeze`（清新浅色），切换只改配置                                | [代码结构](STRUCTURE.md#45-界面层)              |
 | 🔌 **插件系统**      | 右键菜单项、聊天命令、改写回复、追加系统提示词、控制动作表情、私有存储                                                           | [插件开发](plugins/README.md)                |
 | 📡 **外部控制 SDK**  | UDP JSON-RPC（默认 `127.0.0.1:9000`），24 个方法 + 事件推送                                               | [SDK 说明](stlibs/sdk/README.md)           |
-| 🧪 **质量门禁**      | 54 项检查 + 537 个测试用例（含离屏 Qt、node 跑前端 js）                                                        | [CI.md](CI.md)                           |
+| 🧪 **质量门禁**      | 55 项检查 + 537 个测试用例（含离屏 Qt、node 跑前端 js）                                                        | [CI.md](CI.md)                           |
 
 ---
 
@@ -186,7 +186,7 @@ ollama pull huihui_ai/gemma-4-abliterated:e4b   # 带视觉与音频能力
 | 做完整玩法（带界面 + 数值 + 存档）       | [养成系统](plugins/cultivation_system/README.md)：`cultivation_model.py`（纯逻辑）+ `cultivation_window.py`（界面）+ `main.py`（hook 接线） |
 | 写个外部程序遥控桌宠                 | [SDK 接口说明](stlibs/sdk/README.md)：24 个方法 + 事件订阅，一行一个 JSON 的 UDP 报文                                                         |
 | 接自己的聊天前端                   | [HTTP 接口说明](API.md)：8 个接口 + SSE 事件格式                                                                                      |
-| 换一套界面主题                    | [代码结构 §4.5](STRUCTURE.md#45-界面层)：主题包 = 目录 + 契约映射，`stlibs/themes/` 下照着 `hacker` 写                                          |
+| 换一套界面主题                    | [代码结构 §4.5](STRUCTURE.md#45-界面层)：主题包 = 目录 + 契约映射；照 `hacker`（深色）或 `breeze`（浅色）写，`tests/test_breeze_theme.py` 是契约清单 |
 | 改 AI 行为（提示词 / RAG / 工具）    | `resources/prompts.json`（提示词）、`stlibs/ai/`（后端与检索）、`mcp_servers/`（工具服务）                                                    |
 
 ---
@@ -197,7 +197,7 @@ ollama pull huihui_ai/gemma-4-abliterated:e4b   # 带视觉与音频能力
 |:-----------------------------------------------------------------------------|:---------------------------------------------------|
 | [README.md](README.md)                                                       | 你正在看的这一页：功能总览、部署、文档索引                              |
 | [API.md](API.md)                                                             | **网页聊天 HTTP 接口**：8 个接口的地址/用途/请求参数表/返回值解析/错误码       |
-| [CI.md](CI.md)                                                               | **质量门禁与「怎么测」**：54 项检查清单、测试矩阵、真机联调步骤                |
+| [CI.md](CI.md)                                                               | **质量门禁与「怎么测」**：55 项检查清单、测试矩阵、真机联调步骤                |
 | [STRUCTURE.md](STRUCTURE.md)                                                 | **代码结构与职责地图**：每个文件干什么、启动链路、契约同步点、已核实的问题清单          |
 | [.github/docs/FEATURES.md](.github/docs/FEATURES.md)                         | **功能详解**：长期记忆、多模型协作、提示条、模型刷新、技能、附件、插件、养成、SDK       |
 | [plugins/README.md](plugins/README.md)                                       | **插件开发**：清单字段、hook 一览、API 参数表、两种语言模板、调试技巧、安全边界     |
@@ -208,7 +208,7 @@ ollama pull huihui_ai/gemma-4-abliterated:e4b   # 带视觉与音频能力
 ## 🧪 质量门禁与测试
 
 ```bash
-python -m tools.ci            # 54 项静态检查：UI 冲突 / 抽象契约 / 主题映射 / 配置与前后端契约
+python -m tools.ci            # 55 项静态检查：UI 冲突 / 抽象契约 / 主题映射 / 配置与前后端契约
 python -m pytest tests -q     # 537 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
 ```
 
@@ -234,7 +234,7 @@ ADPRemix/
 ├── shader/                  渲染：OpenGL 画布 + Live2D 形象 + 静态形象
 ├── stlibs/                  核心库
 │   ├── ai/                  模型能力：local/cloud 后端、附件、RAG、函数调用、MCP、长期记忆、协作
-│   ├── themes/              可插拔主题（hacker 为默认）+ 主题契约
+│   ├── themes/              可插拔主题（hacker / breeze）+ 主题契约
 │   ├── graphics/            聊天窗与设置窗装配
 │   ├── plugins/             插件系统（管理子包 + JS 运行时）
 │   ├── sdk/                 外部控制 SDK（服务端/客户端/方法表）
@@ -243,7 +243,7 @@ ADPRemix/
 ├── plugins/                 插件目录：两个示例 + 养成系统
 ├── mcp_servers/             暴露给模型的 MCP 工具服务
 ├── resources/               配置、提示词、模型、语料、字体图标、网页前端
-├── tools/ci/                自研门禁（54 项）；tools/manual/ 联调与出图脚本
+├── tools/ci/                自研门禁（55 项）；tools/manual/ 联调与出图脚本
 └── tests/                   537 个用例
 ```
 

@@ -5,7 +5,7 @@
 所以 CI 里不需要装 PySide6、ollama、chromadb，几秒钟就能出结果。
 
 ```
-python -m tools.ci                 # 跑全部 54 项检查
+python -m tools.ci                 # 跑全部 55 项检查
 python -m tools.ci --list          # 列出检查项
 python -m tools.ci ui/*            # 只跑某一类
 python -m tools.ci --strict        # warning 也算失败
@@ -136,6 +136,7 @@ Qt 类 + CombinedMeta       → __abstractmethods__ 根本不存在，缺抽象�
 | id | 拦什么 |
 | --- | --- |
 | `hygiene/parse-error` | 文件读不了/语法错误 |
+| `hygiene/module-docstring` | 文件头部的模块 docstring（`"""..."""`），见 [AGENTS.md](AGENTS.md) 第一条硬规则；只拦"文件开头那一大段"，类/函数 docstring 与 `#` 注释照常写 |
 | `hygiene/bare-except` | 裸 `except:` 会把 `KeyboardInterrupt`/`SystemExit` 一起吞掉 |
 | `hygiene/attr-typo` | 调用了与 Qt API 只差一个字母、且全项目不存在的属性（`bounds.ottom()` 就是这么抓到的） |
 | `hygiene/todo` | TODO/FIXME 统计（info） |
@@ -193,7 +194,7 @@ allow = ["ui/stylesheet-class:QCustomThing"]   # 细粒度白名单
 ### 5.1 门禁 + 测试套件（几秒~几十秒，CI 每次都跑）
 
 ```bash
-python -m tools.ci            # 54 项静态检查，9 秒左右
+python -m tools.ci            # 55 项静态检查，9 秒左右
 python -m tools.ci ui/*       # 只跑某一类
 python -m tools.ci --strict   # warning 也算失败
 python -m pytest tests -q     # 153 个用例：门禁自身 + 实例隔离 + 平台金丝雀

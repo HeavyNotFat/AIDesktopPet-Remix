@@ -46,7 +46,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tools/ci/**" = ["SIM102"]
-"stlibs/themes/hacker/__init__.py" = ["E402", "F401", "I001"]
+# 主题包的 __init__ 是契约门面：只做重新导出 + 映射别名，本来就"用不到"那些名字
+"stlibs/themes/*/__init__.py" = ["E402", "F401", "I001"]
 "stlibs/__init__.py" = ["F401"]
 
 [tool.ruff.format]

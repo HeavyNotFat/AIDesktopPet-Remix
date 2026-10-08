@@ -40,7 +40,7 @@ EXTRA_MEMBERS: dict[str, tuple[str, ...]] = {
 }
 
 # ``SharingData.theme`` 上允许出现的名字（除映射与子模块外）
-EXTRA_ATTRS: tuple[str, ...] = ("base",)
+EXTRA_ATTRS: tuple[str, ...] = ("base", "PALETTE", "THEME_LABEL")
 
 
 @dataclass(slots=True)

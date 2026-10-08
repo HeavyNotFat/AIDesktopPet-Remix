@@ -96,6 +96,9 @@ register("web/script-loaded", "js 文件必须被 index.html 引入", "web")(web
 
 # --- 基础卫生 --------------------------------------------------------------
 register("hygiene/parse-error", "文件必须能被解析", "hygiene")(hygiene.check_parse_error)
+register("hygiene/module-docstring", "文件头部禁止模块 docstring", "hygiene", docs="AGENTS.md")(
+    hygiene.check_module_docstring
+)
 register("hygiene/bare-except", "禁止裸 except", "hygiene")(hygiene.check_bare_except)
 register("hygiene/attr-typo", "可疑的属性/方法名（疑似拼写错）", "hygiene")(hygiene.check_attribute_typo)
 register("hygiene/todo", "TODO/FIXME 统计", "hygiene")(hygiene.check_todo)

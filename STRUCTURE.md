@@ -8,7 +8,7 @@
 AI 桌宠：Live2D / 静态序列帧形象 + 本地（Ollama）或云端（OpenAI 兼容）大模型，
 对外提供 **桌面聊天窗**、**网页聊天**（FastAPI + SSE）、**插件系统**（Python / JavaScript）、
 **UDP SDK**（外部程序控制桌宠）四条入口，另有 RAG 知识库、MCP 工具调用、长期记忆、
-多模型协作与一套 54 项的自研 CI 门禁。
+多模型协作与一套 55 项的自研 CI 门禁。
 
 ## 1. 代码规模
 
@@ -17,7 +17,7 @@ AI 桌宠：Live2D / 静态序列帧形象 + 本地（Ollama）或云端（OpenA
 | `resources/`（配置/模型/知识库） |  93 | 74378 | 71.4% | 绝大部分是 Live2D 模型 JSON 与知识库语料，不是手写代码 |
 | `stlibs/`（核心库）          |  58 | 10742 | 10.3% | AI、主题、插件、SDK、网页聊天服务                |
 | `tests/`（测试）            |  27 |  8082 |  7.8% | 536 个用例                            |
-| `tools/`（CI 门禁与手工脚本）    |  25 |  4907 |  4.7% | 54 项检查 + 联调/出图脚本                   |
+| `tools/`（CI 门禁与手工脚本）    |  25 |  4907 |  4.7% | 55 项检查 + 联调/出图脚本                   |
 | 根目录（入口/文档/配置）           |  19 |  1825 |  1.8% | `main.py`、`core.py`、README、CI.md   |
 | `resources/web/`（前端）    |  12 |  1524 |  1.5% | 网页聊天单页（原生 JS）                      |
 | `plugins/`（示例与养成插件）     |  19 |  1162 |  1.1% | 插件作者参考实现                           |
@@ -66,7 +66,8 @@ ADPRemix/
 │   ├── themes/                主题（可插拔外观）
 │   │   ├── __init__.py        主题自动发现（目录含 __init__.py 即算主题）
 │   │   ├── base.py            契约抽象基类 + CombinedMeta（Qt 元类与 ABCMeta 合并）
-│   │   └── hacker/            默认主题（代码雨 + 绿色终端风），见 §4.5
+│   │   ├── hacker/            默认主题（代码雨 + 绿色终端风），见 §4.5
+│   │   └── breeze/            清新主题「轻风」（浅色卡片 + 薄荷绿/雾蓝），见 §4.5
 │   ├── graphics/              窗口装配层
 │   │   ├── chat.py            聊天窗：主题 Window + 按「本地/API」分类的模型页导航
 │   │   ├── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）
@@ -119,7 +120,7 @@ ADPRemix/
 │   └── web/onlinechat/        网页聊天前端（index.html + css + 10 个 js 模块）
 │
 ├── tools/
-│   ├── ci/                    自研门禁（零第三方依赖，AST 静态分析）54 项检查
+│   ├── ci/                    自研门禁（零第三方依赖，AST 静态分析）55 项检查
 │   └── manual/                手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、
 │                              make_plugin_icons（画插件图标）、strip_doc_headers
 │
@@ -226,6 +227,10 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 * `chat.py`：聊天窗 = 主题 Window + 左侧「本地 / API」两分类下的模型页导航；提供 `add_model/find_model/reload_models`。
 * `settings.py`：设置窗 = 6 页（常规 / LLM / 语音 / 动画 / 插件 / 设置），把子页信号中转成窗口级信号。
 * `menu.py`：插件右键菜单的装配（所有插件的条目**一层平铺**，每条带自己插件的图标、标签是「插件名 · 菜单名」）+ 点击回调转发。
+* `palette.py`：**插件用的语义配色**。主题包可以导出一个 `PALETTE = ThemePalette(...)`（见 `themes/base.py`），
+  插件用 `palette()` 取 `surface` / `border` / `text` / `tint("level")` 这类语义色，而不是把某套主题的色号抄进插件；
+  主题没声明就退回默认那套深色（老主题因此不用改也不会变样）。
+* `theme_label.py`：窗口标题里的主题名（`轻风(breeze)`），取 `Config.theme` + 主题包的 `THEME_LABEL`，别在窗口里写死主题名。
 
 `stlibs/themes/hacker/`（默认主题实现，按职责拆成一包文件，`__init__.py` 只做契约门面）：
 
@@ -246,19 +251,32 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 | `plugins.py`     | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标                                                                                                                          |
 | `tts.py` / `recognition.py` | 语音页占位 / 空文件（未实现）                                                                                                                                          |
 
+`stlibs/themes/breeze/`（清新主题「轻风」，浅色外观，与 hacker 结构一一对应）：
+
+配色是**白底 + 雾蓝描边 + 薄荷绿主色 + 暖橙点缀**，圆角与留白都比 hacker 大一号。
+文件和 hacker 同名同职责（`primitives.py` / `menu.py` / `chrome.py` / `feedback.py` / `chat.py` /
+`window.py` / `model_chat.py` + 六个设置页），类名前缀换成 `Breeze*`（`BreezeWindow` / `BreezeMenu` /
+`BreezeLabel` …）。两处和 hacker 不同的地方：
+
+* 多一个 `theme.py`：**所有颜色、圆角、间距、字体都集中在这里**，控件里不写死十六进制；
+* `chrome.py` 的 `_CodeRain`（代码雨）换成 `_SoftBackdrop`（淡蓝渐变 + 柔光圆斑），名字保留是为了主窗口少一处分支。
+
+换主题只改 `resources/configure.json` 的 `theme` 字段（或在设置页「设置 → 主题」里选），重启生效。
+
 **主题契约三处必须同步**：`stlibs/__init__.py::_ThemeTypingProtocol`（类型）、
-`stlibs/themes/base.py`（ABC）、`tools/ci/contract.py`（CI 侧），外加 `hacker/__init__.py` 尾部的映射别名。
+`stlibs/themes/base.py`（ABC）、`tools/ci/contract.py`（CI 侧），外加各主题 `__init__.py` 尾部的映射别名。
 映射类可以定义在主题包的任意子模块里（`Window = HackerWindow` 或 `from .window import HackerWindow` 都行），
 `tools/ci` 会顺着 import 表把映射解析回真实类再校验成员。
+`tests/test_breeze_theme.py` 是"换主题不改调用方式"的可执行版本：映射、成员、子模块与页面类都在里面钉住了。
 
 **为什么菜单不做子菜单**：`HackerMenu` 原先支持"悬浮条目 → 右边展开一层 `Qt.Tool` 子菜单"，
 但桌宠右键菜单里体验不好——鼠标从条目滑向子菜单的途中菜单就收了（得跟"离开条目后延迟收合"的计时器打架），
 还得横着再找一次。插件菜单因此改成**一层平铺**：插件注册几条就排几条，标签「插件名 · 菜单名」
-（插件名已经在菜单名里就不重复），左边带各自插件的图标。`HackerMenu` 不再提供 `addMenu`。
+（插件名已经在菜单名里就不重复），左边带各自插件的图标。菜单映射不再提供 `addMenu`。
 
 **Popup 与拖拽状态的冲突**（`menu_closed` 信号的由来）：菜单是 `Qt.Popup`，弹出来之后鼠标事件归它管，
 宿主窗口收不到那一下 `release`，于是"正在拖拽"的标志会一直挂着——之后鼠标随手在桌宠上移一下（没按任何键）
-桌宠就跟着光标漂。所以：`HackerMenu` 关闭时发 `menu_closed`；
+桌宠就跟着光标漂。所以：主题菜单（`HackerMenu` / `BreezeMenu`）关闭时都要发 `menu_closed`；
 `PublicShader.connect_menu_closed()` 把它接到 `reset_drag_state()`（两个 shader 都有），
 开菜单前也先复位一次；`core.DesktopPetRemix` 再通过 `reset_host_drag_state` 清自己的 `_dragging`。
 两个 shader 的 `mouseMoveEvent` 另外都要求"左键真的按住"才跟着走，这样即使标志泄漏也不会漂。
@@ -295,8 +313,8 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
   SDK/探针等老调用方用它。
 * 宿主挂载点：`core.py`（加载）、两个 shader（右键菜单 + `pet_click`）、`ModelChat`（发送前/回复后/提示词）、网页聊天（插件提示词）。
 * 隔离：单个 hook 异常只记进该插件状态并提示一次；JS 单次调用有超时；插件目录 `.data/<id>.json` 存私有数据。
-* 示例与玩法见 `plugins/README.md`；养成系统是完整玩法样例（`cultivation_model.py` 纯逻辑 + `cultivation_window.py` 面板 +
-  `main.py` 接线），它和扭蛋机的图标由 `tools/manual/make_plugin_icons.py` 生成。
+* 示例与玩法见 `plugins/README.md`；养成系统是仓库里唯一的完整玩法样例（`cultivation_model.py` 纯逻辑 +
+  `cultivation_window.py` 面板 + `main.py` 接线），它的图标由 `tools/manual/make_plugin_icons.py` 生成。
 
 ### 4.8 SDK 与 MCP
 
@@ -315,12 +333,13 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 ### 4.10 工具链与测试
 
-* `tools/ci/`：零第三方依赖的 AST 门禁，54 项检查分 8 类
+* `tools/ci/`：零第三方依赖的 AST 门禁，55 项检查分 8 类
   （abstract 6 / ui 14 / theme 11 / config 4 / resource 6 / web 6 / hygiene 4 / import 3），
   支持 `# ci: ignore[=id]` 内联抑制、5 种输出格式（text/json/markdown/github/sarif）。
   用法：`python -m tools.ci [检查id|分类|前缀*] [--strict] [--format …]`。
 * `tools/manual/`：真机联调脚本（附件/协作/养成/插件/技能/网页聊天各一个）、
   `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件菜单、养成面板、聊天窗）、
+  `shoot_theme.py <主题名>` 出某个主题的对照图（主窗口 / LLM 页 / 聊天窗 / 右键菜单 / 提示条），
   `make_plugin_icons.py` 用 Pillow 画插件图标、`strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
 * `tests/`：602 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
   前端 js 用例用 node 跑真实脚本（`test_web_*.py`）；`conftest.py` 统一把临时目录收敛到 `.ci-tmp/`。

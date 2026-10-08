@@ -1,8 +1,3 @@
-"""养成面板（离屏 Qt）：状态、商店、背包、按钮回调与版面顺序。
-
-数值逻辑在 test_cultivation.py、hook 接线在 test_cultivation_hooks.py，
-这里只确认"数据有没有画到控件上、点按钮有没有转发出去、版面是不是按要求排的"。
-"""
 
 import os
 import sys
@@ -218,3 +213,65 @@ def test_show_panel_refreshes_and_shows(panel):
     assert panel.isVisible()
     assert panel.coin_label.text() == "金币 5"
     panel.hide()
+
+
+# -- 跟着主题走 -------------------------------------------------------------
+def _panel_with_theme(qapp, theme_name):
+    """在当前主题下建一个面板（配色应该取自这个主题）。"""
+    import stlibs
+    from cultivation_window import CultivationWindow
+
+    previous = stlibs.SharingData.theme
+    stlibs.SharingData.theme = stlibs.load_theme(theme_name)
+    try:
+        state = PetState(storage={"state": dict(SAVED)}, foods=dict(FOODS))
+        window = CultivationWindow(FakeAPI(), state)
+        window.show()
+        window.refresh()
+        for _ in range(3):
+            qapp.processEvents()
+        return window
+    finally:
+        stlibs.SharingData.theme = previous
+
+
+def test_panel_follows_the_current_theme(qapp):
+    """同一个面板在深色/浅色主题下的配色必须不一样（以前是写死的绿色）。"""
+    dark = _panel_with_theme(qapp, "hacker")
+    light = _panel_with_theme(qapp, "breeze")
+
+    dark_style = dark.styleSheet() + dark.shop_panel.styleSheet() + dark.level_bar.styleSheet()
+    light_style = light.styleSheet() + light.shop_panel.styleSheet() + light.level_bar.styleSheet()
+
+    assert dark_style != light_style
+    assert "#16181c" not in light_style, "浅色主题下不该还留着深色底"
+    assert "#F7FAFC" not in dark_style, "深色主题下不该出现浅色底"
+
+    for window in (dark, light):
+        window.hide()
+
+
+def test_panel_uses_theme_widgets(qapp):
+    """控件本身也要是当前主题的（字体/内边距跟着变，不是自绘 QLabel）。"""
+    window = _panel_with_theme(qapp, "breeze")
+    try:
+        assert type(window.title).__module__.startswith("stlibs.themes.breeze"), \
+            f"标题应该是当前主题的 Label，实际 {type(window.title)}"
+    finally:
+        window.hide()
+
+
+def test_theme_palette_declares_what_plugins_need():
+    """插件只用语义名取色：PALETTE 得给全，不然面板会掉回默认深色。"""
+    import stlibs
+    from stlibs.graphics.palette import palette
+    from stlibs.themes.base import ThemePalette
+
+    for name in ("hacker", "breeze"):
+        stlibs.SharingData.theme = stlibs.load_theme(name)
+        colors = palette()
+        assert isinstance(colors, ThemePalette)
+        for key in ("bg", "surface", "surface_soft", "primary", "text", "border"):
+            assert getattr(colors, key), f"{name} 的 PALETTE 少了 {key}"
+        bright, soft = colors.tint("level")
+        assert bright and soft

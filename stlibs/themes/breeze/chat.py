@@ -1,6 +1,8 @@
 
 import base64
 
+from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, Signal
+from PySide6.QtGui import QAction, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -12,16 +14,34 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QImage, QPixmap
 
 from ... import Config, derfer
+from .feedback import BreezeNotify
+from .menu import BreezeMenu
+from .primitives import BreezeButton, BreezeLabel, BreezeScrollArea, BreezeTextEdit
+from .theme import (
+    ACCENT,
+    ACCENT_DEEP,
+    ACCENT_SOFT,
+    BORDER,
+    BORDER_STRONG,
+    PRIMARY,
+    PRIMARY_DEEP,
+    PRIMARY_SOFT,
+    RADIUS,
+    RADIUS_LARGE,
+    RADIUS_SMALL,
+    SURFACE,
+    SURFACE_SOFT,
+    TEXT,
+    TEXT_DIM,
+    TEXT_FAINT,
+    font_css,
+)
 
-from .feedback import HackerNotify
-from .menu import HackerMenu
-from .primitives import HackerButton, HackerLabel, HackerScrollArea, HackerTextEdit
-class HackerBubbleAction(QToolButton):
-    """气泡底下的小按钮（复制 / 播放）。"""
+
+class BreezeBubbleAction(QToolButton):
+    """气泡底下的小按钮（复制 / 播放）：白底细描边的浅色药丸。"""
 
     def __init__(self, text: str, tooltip: str = "", parent=None):
         super().__init__(parent)
@@ -31,29 +51,32 @@ class HackerBubbleAction(QToolButton):
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAutoRaise(True)
-        self.setFixedHeight(22)
+        self.setFixedHeight(24)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.setFont(QFont("Consolas", 10))
-        self.setStyleSheet("""
-            QToolButton {
-                color: rgba(0, 255, 0, 150);
-                background: rgba(0, 255, 0, 12);
-                border: 1px solid rgba(0, 255, 0, 60);
-                border-radius: 6px;
-                padding: 1px 8px;
-            }
-            QToolButton:hover {
-                color: #00FF00;
-                background: rgba(0, 255, 0, 40);
-                border: 1px solid #00FF00;
-            }
-            QToolButton:pressed {
-                background: rgba(0, 255, 0, 70);
-            }
-            QToolButton:disabled {
-                color: rgba(0, 255, 0, 60);
-                border: 1px solid rgba(0, 255, 0, 30);
-            }
+        self.setStyleSheet(f"""
+            QToolButton {{
+                color: {TEXT_DIM};
+                background: {SURFACE};
+                border: 1px solid {BORDER};
+                border-radius: {RADIUS_SMALL}px;
+                padding: 1px 10px;
+                {font_css(12)}
+            }}
+            QToolButton:hover {{
+                color: {ACCENT_DEEP};
+                background: {ACCENT_SOFT};
+                border: 1px solid {ACCENT};
+            }}
+            QToolButton:pressed {{
+                color: {PRIMARY_DEEP};
+                background: {PRIMARY_SOFT};
+                border: 1px solid {PRIMARY};
+            }}
+            QToolButton:disabled {{
+                color: {TEXT_FAINT};
+                background: {SURFACE_SOFT};
+                border: 1px solid {BORDER};
+            }}
         """)
 
     def set_busy(self, busy: bool, text: str = ""):
@@ -62,7 +85,9 @@ class HackerBubbleAction(QToolButton):
             self.setText(text)
 
 
-class HackerChatBubble(QFrame):
+class BreezeChatBubble(QFrame):
+    """一条消息气泡：用户靠右（主色浅底），助手靠左（白底），都带大圆角。"""
+
     MAX_WIDTH_RATIO = 0.60
 
     def __init__(self, text: str = "", image: str | QPixmap | None = None, is_user: bool = True, parent=None):
@@ -72,31 +97,34 @@ class HackerChatBubble(QFrame):
         self.skill_name: str = ""
         self.image_labels: list = []
 
+        # 样式按 objectName 选：类名选择器会连带命中子控件，白底卡片很容易被刷掉
+        self.setObjectName("BreezeBubble")
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(12, 8, 12, 8)
+        self.layout.setContentsMargins(14, 10, 14, 10)
         self.layout.setSpacing(6)
 
-        self.skill_label = HackerLabel("")
-        self.skill_label.setStyleSheet("""
-            QLabel {
-                color: rgba(0, 255, 0, 180);
-                background: rgba(0, 255, 0, 20);
-                border: 1px solid rgba(0, 255, 0, 70);
-                border-radius: 6px;
-                padding: 1px 6px;
-                font-size: 11px;
-            }
+        self.skill_label = BreezeLabel("")
+        self.skill_label.setStyleSheet(f"""
+            QLabel {{
+                color: {PRIMARY_DEEP};
+                background: {PRIMARY_SOFT};
+                border: 1px solid {PRIMARY};
+                border-radius: {RADIUS_SMALL}px;
+                padding: 1px 8px;
+                {font_css(12)}
+            }}
         """)
         self.skill_label.setVisible(False)
         self.layout.addWidget(self.skill_label, 0, Qt.AlignmentFlag.AlignLeft)
 
-        self.text_label = HackerLabel(text)
+        self.text_label = BreezeLabel(text)
         self.text_label.setWordWrap(True)
         self.text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-
-        self._set_font(self.text_label, 14)
+        self.text_label.setStyleSheet(
+            f"QLabel {{ background: transparent; border: none; color: {TEXT}; {font_css(14)} }}"
+        )
         self.layout.addWidget(self.text_label)
         if image is not None:
             self._add_image(image)
@@ -111,11 +139,11 @@ class HackerChatBubble(QFrame):
         self.actions_layout.setContentsMargins(0, 0, 0, 0)
         self.actions_layout.setSpacing(6)
 
-        self.copy_button = HackerBubbleAction("复制", "把这条回复复制到剪贴板")
+        self.copy_button = BreezeBubbleAction("复制", "把这条回复复制到剪贴板")
         self.copy_button.clicked.connect(self.copy_text)
         self.actions_layout.addWidget(self.copy_button)
 
-        self.play_button = HackerBubbleAction("▶ 播放", "播放这条回复的语音")
+        self.play_button = BreezeBubbleAction("▶ 播放", "播放这条回复的语音")
         self.play_button.clicked.connect(self.play_audio)
         self.play_button.setVisible(False)
         self.actions_layout.addWidget(self.play_button)
@@ -130,11 +158,11 @@ class HackerChatBubble(QFrame):
     def copy_text(self):
         content = self.text().strip()
         if not content:
-            HackerNotify("这条回复还是空的", "warning", 1800)
+            BreezeNotify("这条回复还是空的", "warning", 1800)
             return
 
         QApplication.clipboard().setText(content)
-        HackerNotify("已复制这条回复", "success", 1600)
+        BreezeNotify("已复制这条回复", "success", 1600)
 
     def attach_audio(self, data: str):
         """挂上语音但**不自动播**，等用户点播放。"""
@@ -150,9 +178,9 @@ class HackerChatBubble(QFrame):
         try:
             derfer.play_audio(self.audio_data)
         except Exception as exc:  # noqa: BLE001 - 没声卡/解码失败都要给出提示
-            HackerNotify(f"播放失败：{type(exc).__name__}: {exc}", "error", 4000)
+            BreezeNotify(f"播放失败：{type(exc).__name__}: {exc}", "error", 4000)
         else:
-            HackerNotify("正在播放这条回复的语音", "info", 1800)
+            BreezeNotify("正在播放这条回复的语音", "info", 1800)
         finally:
             self.play_button.set_busy(False)
 
@@ -160,15 +188,6 @@ class HackerChatBubble(QFrame):
         self.skill_name = name or ""
         self.skill_label.setText(f"技能 · {self.skill_name}")
         self.skill_label.setVisible(bool(self.skill_name))
-
-    @staticmethod
-    def _set_font(widget, size=14):
-        font_id = QFontDatabase.addApplicationFont("./resources/fonts/jetbrains.ttf")
-        if font_id != -1:
-            family = QFontDatabase.applicationFontFamilies(font_id)[0]
-            widget.setFont(QFont(family, size))
-        else:
-            widget.setFont(QFont("Consolas", size))
 
     def _add_image(self, image: str | QPixmap):
         pixmap = QPixmap(image) if isinstance(image, str) else image
@@ -182,7 +201,7 @@ class HackerChatBubble(QFrame):
         self.layout.addWidget(self.image_label)
 
     def add_attachments(self, attachments):
-        """图片放缩略图，文档放一个小标签（名字 + 大小 + 读取情况）。"""
+        """图片放缩略图，文档放一个小药丸标签（名字 + 大小 + 读取情况）。"""
         from ...ai import human_size
 
         for item in attachments or []:
@@ -201,14 +220,15 @@ class HackerChatBubble(QFrame):
             else:
                 chip = QLabel(f"📄 {item.get('name')}（{human_size(item.get('size'))}）· {item.get('note', '')}")
                 chip.setWordWrap(True)
-                chip.setStyleSheet("""
-                    QLabel {
-                        color: #00FF88;
-                        background: rgba(0, 255, 0, 16);
-                        border: 1px solid rgba(0, 255, 0, 70);
-                        border-radius: 6px;
-                        padding: 3px 8px;
-                    }
+                chip.setStyleSheet(f"""
+                    QLabel {{
+                        color: {ACCENT_DEEP};
+                        background: {ACCENT_SOFT};
+                        border: 1px solid {BORDER};
+                        border-radius: {RADIUS}px;
+                        padding: 3px 10px;
+                        {font_css(12)}
+                    }}
                 """)
                 self.layout.addWidget(chip)
 
@@ -217,9 +237,13 @@ class HackerChatBubble(QFrame):
     def updateBubbleWidth(self, available_width: int):
         max_width = int(available_width * self.MAX_WIDTH_RATIO)
         self.setMaximumWidth(max_width)
-        content_width = max_width - 24
+        content_width = max_width - 28  # 减去左右各 14 的内边距
         if hasattr(self, "image_label") and content_width > 0:
-            scaled = self.image_pixmap.scaled(QSize(content_width, 320), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            scaled = self.image_pixmap.scaled(
+                QSize(content_width, 320),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
             self.image_label.setPixmap(scaled)
         if content_width > 0:
             for label, pixmap in self.image_labels:
@@ -237,32 +261,34 @@ class HackerChatBubble(QFrame):
         self.updateGeometry()
 
     def _update_style(self):
-        if not self.is_user:
-            self.setStyleSheet("""
-                HackerChatBubble {
-                    background: rgba(0, 0, 0, 170);
-                    border: 1px solid rgba(0, 255, 0, 90);
-                    border-radius: 10px;
-                }
-                HackerChatBubble:hover {
-                    background: rgba(0, 255, 0, 15);
-                    border: 1px solid rgba(0, 255, 0, 160);
-                }
+        if self.is_user:
+            # 用户：主色浅底 + 主色描边，靠右
+            self.setStyleSheet(f"""
+                QFrame#BreezeBubble {{
+                    background: {PRIMARY_SOFT};
+                    border: 1px solid {PRIMARY};
+                    border-radius: {RADIUS_LARGE}px;
+                }}
+                QFrame#BreezeBubble:hover {{
+                    border: 1px solid {PRIMARY_DEEP};
+                }}
             """)
         else:
-            self.setStyleSheet("""
-                HackerChatBubble {
-                    background: rgba(0, 255, 0, 35);
-                    border: 1px solid #00FF00;
-                    border-radius: 10px;
-                }
-                HackerChatBubble:hover {
-                    background: rgba(0, 255, 0, 50);
-                }
+            # 助手：白底 + 雾蓝描边，靠左；悬停时底色微微压深一点
+            self.setStyleSheet(f"""
+                QFrame#BreezeBubble {{
+                    background: {SURFACE};
+                    border: 1px solid {BORDER};
+                    border-radius: {RADIUS_LARGE}px;
+                }}
+                QFrame#BreezeBubble:hover {{
+                    background: {SURFACE_SOFT};
+                    border: 1px solid {BORDER_STRONG};
+                }}
             """)
 
 
-class HackerAttachmentChip(QFrame):
+class BreezeAttachmentChip(QFrame):
     """待发送附件的小标签（名字 + 大小 + 移除）。"""
 
     def __init__(self, attachment: dict, on_remove=None, parent=None):
@@ -270,30 +296,33 @@ class HackerAttachmentChip(QFrame):
 
         super().__init__(parent)
         self.setProperty("attachment", attachment)
-        self.setStyleSheet("""
-            HackerAttachmentChip {
-                background: rgba(0, 255, 0, 16);
-                border: 1px solid rgba(0, 255, 0, 70);
-                border-radius: 6px;
-            }
+        self.setObjectName("BreezeAttachmentChip")
+        self.setStyleSheet(f"""
+            QFrame#BreezeAttachmentChip {{
+                background: {ACCENT_SOFT};
+                border: 1px solid {BORDER};
+                border-radius: {RADIUS}px;
+            }}
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 2, 4, 2)
+        layout.setContentsMargins(10, 2, 4, 2)
         layout.setSpacing(6)
 
         mark = "🖼" if attachment.get("kind") == "image" else "📄"
-        label = HackerLabel(f"{mark} {attachment.get('name')}（{attachment_api.human_size(attachment.get('size'))}）")
-        label.setStyleSheet("QLabel { color: #00FF88; background: transparent; border: none; }")
+        label = BreezeLabel(f"{mark} {attachment.get('name')}（{attachment_api.human_size(attachment.get('size'))}）")
+        label.setStyleSheet(
+            f"QLabel {{ color: {ACCENT_DEEP}; background: transparent; border: none; {font_css(12)} }}"
+        )
         layout.addWidget(label)
 
         if on_remove is not None:
-            close = HackerBubbleAction("×", "移除这个附件")
+            close = BreezeBubbleAction("×", "移除这个附件")
             close.clicked.connect(lambda: on_remove(attachment))
             layout.addWidget(close)
 
 
-class _ChatInputEdit(HackerTextEdit):
+class _ChatInputEdit(BreezeTextEdit):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_ = parent
@@ -348,7 +377,7 @@ class _ChatInputEdit(HackerTextEdit):
         super().insertFromMimeData(source)
 
 
-class HackerChatWidget(QWidget):
+class BreezeChatWidget(QWidget):
     # (正文, 附件列表)：附件跟着信号走，避免发送方清空后接收方拿到空列表
     userInputSignal = Signal(str, list)
 
@@ -364,7 +393,7 @@ class HackerChatWidget(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        self.scroll = HackerScrollArea()
+        self.scroll = BreezeScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -374,8 +403,8 @@ class HackerChatWidget(QWidget):
         self.container.setStyleSheet("QWidget { background: transparent; }")
 
         self.message_layout = QVBoxLayout(self.container)
-        self.message_layout.setContentsMargins(12, 12, 12, 12)
-        self.message_layout.setSpacing(10)
+        self.message_layout.setContentsMargins(14, 14, 14, 14)
+        self.message_layout.setSpacing(12)
         self.message_layout.addStretch()
         self.scroll.setWidget(self.container)
         main_layout.addWidget(self.scroll)
@@ -384,26 +413,24 @@ class HackerChatWidget(QWidget):
         main_layout.addWidget(self._build_attachment_bar())
 
         input_layout = QHBoxLayout()
-        input_layout.setContentsMargins(12, 8, 12, 12)
+        input_layout.setContentsMargins(14, 8, 14, 14)
         input_layout.setSpacing(8)
 
-        self.attach_button = HackerButton("附件")
-        self.attach_button.setFixedSize(70, 45)
-        self.attach_button.set_border()
+        self.attach_button = BreezeButton("附件")
+        self.attach_button.setFixedSize(72, 44)
         self.attach_button.setToolTip("选图片或文档；也可以直接 Ctrl+V 粘贴、把文件拖进来")
         self.attach_button.clicked.connect(self.pick_attachments)
 
-        self.skill_button = HackerButton("技能")
-        self.skill_button.setFixedSize(70, 45)
-        self.skill_button.set_border()
+        self.skill_button = BreezeButton("技能")
+        self.skill_button.setFixedSize(72, 44)
         self.skill_button.setToolTip("选一个技能，或者直接在输入框打 /技能名")
         self.skill_button.clicked.connect(self.show_skills)
 
         self.input_edit = _ChatInputEdit(self)
         self.input_edit.setPlaceholderText("输入消息...（/技能名 用技能，Ctrl+V 粘图片，可拖文件进来）")
-        self.input_edit.setFixedHeight(45)
-        self.send_button = HackerButton("发送")
-        self.send_button.setFixedSize(70, 45)
+        self.input_edit.setFixedHeight(44)
+        self.send_button = BreezeButton("发送")
+        self.send_button.setFixedSize(72, 44)
 
         input_layout.addWidget(self.attach_button)
         input_layout.addWidget(self.skill_button)
@@ -411,6 +438,7 @@ class HackerChatWidget(QWidget):
         input_layout.addWidget(self.send_button)
         main_layout.addLayout(input_layout)
 
+        # 只有"发送"是主行动：实心主色，附件/技能保持浅色描边
         self.send_button.set_border()
         self.send_button.clicked.connect(self._send_message)
 
@@ -423,14 +451,24 @@ class HackerChatWidget(QWidget):
             event.acceptProposedAction()
 
     def _build_skill_bar(self):
+        """当前技能提示条：没启用技能时整条藏起来，不占位置。"""
         self.skill_bar = QWidget()
         layout = QHBoxLayout(self.skill_bar)
-        layout.setContentsMargins(12, 4, 12, 0)
+        layout.setContentsMargins(14, 6, 14, 0)
         layout.setSpacing(6)
 
-        self.skill_bar_label = HackerLabel("")
-        self.skill_bar_label.setStyleSheet("QLabel { color: #00FF00; background: transparent; }")
-        self.clear_skill_button = HackerBubbleAction("×", "取消当前技能")
+        self.skill_bar_label = BreezeLabel("")
+        self.skill_bar_label.setStyleSheet(f"""
+            QLabel {{
+                color: {PRIMARY_DEEP};
+                background: {PRIMARY_SOFT};
+                border: 1px solid {PRIMARY};
+                border-radius: {RADIUS}px;
+                padding: 3px 10px;
+                {font_css(12)}
+            }}
+        """)
+        self.clear_skill_button = BreezeBubbleAction("×", "取消当前技能")
         self.clear_skill_button.clicked.connect(lambda: self.set_skill(None))
 
         layout.addWidget(self.skill_bar_label)
@@ -450,7 +488,7 @@ class HackerChatWidget(QWidget):
             self.skill_bar_label.setText(f"当前技能：{name}" + (f" —— {description}" if description else ""))
             self.skill_bar.setVisible(True)
             self.skill_button.setText("技能 ✓")
-            HackerNotify(f"已启用技能「{name}」", "success", 2000)
+            BreezeNotify(f"已启用技能「{name}」", "success", 2000)
         else:
             self.skill_bar.setVisible(False)
             self.skill_button.setText("技能")
@@ -459,7 +497,7 @@ class HackerChatWidget(QWidget):
         """菜单每次重建：设置页里刚加的技能不用重启就能选到。"""
         from ... import get_translation
 
-        menu = HackerMenu(self)
+        menu = BreezeMenu(self)
 
         def add(text, callback, enabled=True):
             action = QAction(text, menu)
@@ -490,7 +528,7 @@ class HackerChatWidget(QWidget):
     def _build_attachment_bar(self):
         self.attachment_bar = QWidget()
         layout = QHBoxLayout(self.attachment_bar)
-        layout.setContentsMargins(12, 4, 12, 0)
+        layout.setContentsMargins(14, 6, 14, 0)
         layout.setSpacing(6)
         self.attachment_layout = layout
         self.attachment_bar.setVisible(False)
@@ -502,11 +540,11 @@ class HackerChatWidget(QWidget):
         if not attachment:
             return False
         if len(self.attachments) >= MAX_ATTACHMENTS:
-            HackerNotify(f"最多一次带 {MAX_ATTACHMENTS} 个附件", "warning", 2200)
+            BreezeNotify(f"最多一次带 {MAX_ATTACHMENTS} 个附件", "warning", 2200)
             return False
 
         self.attachments.append(attachment)
-        chip = HackerAttachmentChip(attachment, on_remove=self.remove_attachment)
+        chip = BreezeAttachmentChip(attachment, on_remove=self.remove_attachment)
         self.attachment_layout.addWidget(chip)
         self.attachment_bar.setVisible(True)
         return True
@@ -515,14 +553,14 @@ class HackerChatWidget(QWidget):
         self.attachments = [item for item in self.attachments if item is not attachment]
         for index in range(self.attachment_layout.count()):
             widget = self.attachment_layout.itemAt(index).widget()
-            if isinstance(widget, HackerAttachmentChip) and self._is_same_attachment(widget, attachment):
+            if isinstance(widget, BreezeAttachmentChip) and self._is_same_attachment(widget, attachment):
                 widget.setParent(None)
                 widget.deleteLater()
                 break
         self.attachment_bar.setVisible(bool(self.attachments))
 
     @staticmethod
-    def _is_same_attachment(chip: "HackerAttachmentChip", attachment: dict) -> bool:
+    def _is_same_attachment(chip: "BreezeAttachmentChip", attachment: dict) -> bool:
         """chip 上挂的是不是这份附件。
 
         动态属性取回来的是 Python 对象的副本，只比 `is` 永远不成立，
@@ -550,7 +588,7 @@ class HackerChatWidget(QWidget):
                 if self.add_attachment(from_path(path)):
                     added += 1
             except OSError as exc:
-                HackerNotify(f"读不了这个文件：{exc}", "error", 3000)
+                BreezeNotify(f"读不了这个文件：{exc}", "error", 3000)
         return added
 
     def can_attach_mime(self, source) -> bool:
@@ -600,7 +638,7 @@ class HackerChatWidget(QWidget):
         added += self.attach_paths(self._local_files(source))
 
         if added:
-            HackerNotify(f"已加入 {added} 个附件", "success", 2000)
+            BreezeNotify(f"已加入 {added} 个附件", "success", 2000)
         return added > 0
 
     def _attach_pixmap(self, pixmap: QPixmap) -> int:
@@ -667,7 +705,7 @@ class HackerChatWidget(QWidget):
         return pending
 
     def add_assistant_msg(self, text: str = "", image: str | QPixmap | None = None):
-        bubble = HackerChatBubble(text=text, image=image, is_user=False)
+        bubble = BreezeChatBubble(text=text, image=image, is_user=False)
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
@@ -689,7 +727,7 @@ class HackerChatWidget(QWidget):
 
     def add_user_msg(self, text: str = "", image: str | QPixmap | None = None, skill: dict | None = None,
                      attachments=None):
-        bubble = HackerChatBubble(text=text, image=image, is_user=True)
+        bubble = BreezeChatBubble(text=text, image=image, is_user=True)
         if skill:
             bubble.set_skill(skill.get("name", ""))
         if attachments:

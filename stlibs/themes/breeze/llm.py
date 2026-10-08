@@ -1,98 +1,146 @@
+
+from __future__ import annotations
+
+import contextlib
 import json
 import os
 
-from ...ai.rag.engine import SUPPORTED_ENGINES
-from ... import Config, ConfigLoader, SharingData
-from ... import get_model_lists, notify, refresh_coop, refresh_models
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QHBoxLayout,
+    QHeaderView,
+    QLineEdit,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTableWidgetItem, QHeaderView
-from PySide6.QtCore import QRect, Qt
+from ... import Config, ConfigLoader, SharingData, get_model_lists, notify, refresh_coop, refresh_models
+from ...ai.rag.engine import SUPPORTED_ENGINES
+from .primitives import (
+    BreezeButton,
+    BreezeCard,
+    BreezeComboBox,
+    BreezeLabel,
+    BreezeLineEdit,
+    BreezeScrollArea,
+    BreezeSlider,
+    BreezeSwitch,
+    BreezeTable,
+    BreezeTabWidget,
+    BreezeTextEdit,
+)
+from .theme import ACCENT_DEEP, ACCENT_SOFT, PRIMARY_DEEP, RADIUS_LARGE, SURFACE, font_css
+from .window import PageHint, PageTitle
+
+
+def _section(text: str, parent=None) -> BreezeLabel:
+    """小节标题：主色偏深的粗体小字，用来给一栏内容起名（页面里不进卡片）。"""
+    label = BreezeLabel(text, parent)
+    label.setStyleSheet(
+        f"QLabel {{ background: transparent; border: none; color: {PRIMARY_DEEP}; {font_css(13, weight=600)} }}"
+    )
+    return label
+
+
+def _count_chip(parent=None) -> BreezeLabel:
+    """数量小胶囊：浅雾蓝底 + 雾蓝字，挂在"可用模型"标题右边。"""
+    chip = BreezeLabel("", parent)
+    chip.setStyleSheet(f"""
+        QLabel {{
+            background: {ACCENT_SOFT};
+            color: {ACCENT_DEEP};
+            border: none;
+            border-radius: {RADIUS_LARGE}px;
+            padding: 2px 10px;
+            {font_css(12)}
+        }}
+    """)
+    return chip
 
 
 class BasicWidgetScroll(QWidget):
+    """「新增 LLM」页的表单：别名 / 模型名 / Key / Base URL，加完立刻进聊天列表。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerLineEdit, HackerButton, HackerCard, HackerComboBox
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
         # AI 名字
-        self.ai_name = HackerLineEdit("", parent=self)
-        ai_name_card = HackerCard(
+        self.ai_name = BreezeLineEdit("给AI取的别名", parent=self)
+        self.ai_name.setMinimumWidth(260)
+        layout.addWidget(BreezeCard(
             "AI的名字",
             self.ai_name,
-            "给AI取的别名"
-        )
-        layout.addWidget(ai_name_card)
-        layout.addStretch()
+            "给AI取的别名",
+            parent=self,
+        ))
 
         # AI Model
-        self.ai_model = HackerLineEdit("", parent=self)
-        self.ai_model.setFixedWidth(250)
-        ai_model_card = HackerCard(
+        self.ai_model = BreezeLineEdit("服务商要求的模型名，例如 deepseek-chat", parent=self)
+        self.ai_model.setMinimumWidth(280)
+        layout.addWidget(BreezeCard(
             "AI模型",
             self.ai_model,
-            "需要使用的AI模型"
-        )
-        layout.addWidget(ai_model_card)
-        layout.addStretch()
+            "需要使用的AI模型",
+            parent=self,
+        ))
 
         # API Key
-        self.api_key = HackerLineEdit("", parent=self)
-        self.api_key.setFixedWidth(350)
-        self.api_key.setEchoMode(QLineEdit.Password)
-        api_key_card = HackerCard(
+        self.api_key = BreezeLineEdit("sk-…（本地服务可以不填）", parent=self)
+        self.api_key.setMinimumWidth(320)
+        self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        layout.addWidget(BreezeCard(
             "AI Key密钥",
             self.api_key,
-            "访问AI必要的密钥 Key"
-        )
-        layout.addWidget(api_key_card)
-        layout.addStretch()
+            "访问AI必要的密钥 Key",
+            parent=self,
+        ))
 
         # Base URL
-        self.api_url = HackerLineEdit("", parent=self)
-        self.api_url.setFixedWidth(350)
-        api_url_card = HackerCard(
+        self.api_url = BreezeLineEdit("https://api.deepseek.com", parent=self)
+        self.api_url.setMinimumWidth(320)
+        layout.addWidget(BreezeCard(
             "Base URL",
             self.api_url,
-            "AI响应的API Url"
-        )
-        layout.addWidget(api_url_card)
-        layout.addStretch()
+            "AI响应的API Url",
+            parent=self,
+        ))
 
         # 添加
-        self.add_button = HackerButton("添加", parent=self)
+        self.add_button = BreezeButton("添加", parent=self)
         self.add_button.set_border()
         self.add_button.clicked.connect(self.add_llm)
-        button_card = HackerCard(
+        layout.addWidget(BreezeCard(
             "保存配置",
             self.add_button,
-            "添加AI配置"
-        )
-        layout.addWidget(button_card)
-        layout.addStretch()
+            "添加AI配置",
+            parent=self,
+        ))
 
         # 删除已有配置
-        self.existing = HackerComboBox(self)
+        self.existing = BreezeComboBox(parent=self)
         self.existing.setMinimumWidth(320)
         self.existing.currentIndexChanged.connect(self.sync_remove_button)
-        self.remove_button = HackerButton("删除", parent=self)
-        self.remove_button.set_border()
+        self.remove_button = BreezeButton("删除", parent=self)
         self.remove_button.setMinimumWidth(110)
         self.remove_button.clicked.connect(self.remove_llm)
-        remove_card = HackerCard(
+        layout.addWidget(BreezeCard(
             "删除配置",
             self._build_remove_row(),
             "选中后删除，密钥一并移除",
+            parent=self,
             stacked=True,
-        )
-        layout.addWidget(remove_card)
+        ))
+
+        layout.addWidget(PageHint("配置写在 resources/configure.json：别名进聊天列表，密钥只留在本机。"))
         layout.addStretch()
 
         self.reload_existing()
-        self.setLayout(layout)
 
     def _build_remove_row(self):
         # 上下排的卡片里独占一行：下拉框自己撑开，按钮固定宽
@@ -126,8 +174,6 @@ class BasicWidgetScroll(QWidget):
         return str(data).strip() if data else ""
 
     def add_llm(self):
-        from . import HackerLineEdit
-
         name = self.ai_name.text().strip()
         model = self.ai_model.text().strip()
         base_url = self.api_url.text().strip()
@@ -154,7 +200,7 @@ class BasicWidgetScroll(QWidget):
         ConfigLoader.save_config()
 
         for field in (self.ai_name, self.ai_model, self.api_key, self.api_url):
-            if isinstance(field, HackerLineEdit):
+            if isinstance(field, BreezeLineEdit):
                 field.setText("")
 
         self.reload_existing()
@@ -176,40 +222,63 @@ class BasicWidgetScroll(QWidget):
 
 
 class Basic(QWidget):
+    """「新增 LLM」页：表单放进滚动区，窗口拉小也不会挤没。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import ScrollArea
 
-        card = BasicWidgetScroll(self)
-        scroll = ScrollArea(self)
-        scroll.setWidget(card)
-        scroll.setGeometry(QRect(10, 10, 600, 400))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.card = BasicWidgetScroll(self)
+        self.scroll = BreezeScrollArea(self)
+        self.scroll.setWidget(self.card)
+        layout.addWidget(self.scroll)
 
 
 class Memory(QWidget):
+    """记忆：两个总开关 + 按模型看它的记忆 JSON。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerSwitch, HackerLabel, HackerComboBox, HackerTextEdit
 
-        HackerLabel("短期即时记忆", self).setGeometry(20, 20, 200, 30)
-        self.memory_switch = HackerSwitch(parent=self)
-        self.memory_switch.setGeometry(240, 15, 80, 30)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(8)
+
+        self.memory_switch = BreezeSwitch(parent=self)
         self.memory_switch.setChecked(Config.memory['shortterm'])
         self.memory_switch.stateChanged.connect(self.check_short)
+        layout.addWidget(BreezeCard(
+            "短期即时记忆",
+            self.memory_switch,
+            "只记当前这段对话，关掉就不带上下文",
+            parent=self,
+        ))
 
-        HackerLabel("长期存储记忆", self).setGeometry(20, 60, 200, 30)
-        self.longterm_memory_switch = HackerSwitch(parent=self)
-        self.longterm_memory_switch.setGeometry(240, 55, 80, 30)
+        self.longterm_memory_switch = BreezeSwitch(parent=self)
         self.longterm_memory_switch.setChecked(Config.memory['longterm'])
         self.longterm_memory_switch.stateChanged.connect(self.check_long)
+        layout.addWidget(BreezeCard(
+            "长期存储记忆",
+            self.longterm_memory_switch,
+            "落盘保存，下次打开还记得",
+            parent=self,
+        ))
 
-        HackerLabel("看哪个模型的记忆", self).setGeometry(20, 100, 200, 30)
-        self.model_selector = HackerComboBox(self)
-        self.model_selector.setGeometry(220, 95, 380, 32)
+        # 选模型这一行直接挂在页面上（别再套一层容器）：外面按页面坐标找这个下拉框
+        picker = QHBoxLayout()
+        picker.setContentsMargins(0, 0, 0, 0)
+        picker.setSpacing(8)
+        picker.addWidget(BreezeLabel("看哪个模型的记忆", self), 0)
+        self.model_selector = BreezeComboBox(self)
+        self.model_selector.setMinimumWidth(260)
         self.model_selector.currentTextChanged.connect(self.show_model)
+        picker.addWidget(self.model_selector, 1)
+        layout.addLayout(picker)
 
-        self.memory_json = HackerTextEdit("", parent=self)
-        self.memory_json.setGeometry(QRect(20, 140, 580, 280))
+        self.memory_json = BreezeTextEdit("", parent=self)
+        layout.addWidget(self.memory_json, 1)
 
         self.models: list = []
         self.reload_models()
@@ -245,11 +314,15 @@ class Memory(QWidget):
             return
         self.show_model(self.model_selector.currentText())
 
+    def refresh(self):
+        """按契约暴露的短名字：和 `reload_models` 一回事（重新扫一遍模型）。"""
+        self.reload_models()
+
     def show_model(self, model: str):
         """切到某个模型：只刷新展示区，不再给每个模型建控件。
 
-        以前这里是 "每个模型建一个 MemoryShowItem 塞进页签"，改成下拉之后那些控件
-        已经没用了；继续创建它们会盖在整页上（看得见两个输入框、控件点不动）。
+        以前这里是 "每个模型建一个展示项塞进页签"，改成下拉之后那些控件已经没用了；
+        继续创建它们会盖在整页上（看得见两个输入框、控件点不动）。
         """
         if not model:
             return
@@ -285,173 +358,192 @@ class Memory(QWidget):
 
 
 class RAGWidgetScroll(QWidget):
+    """RAG 配置：开关、知识库、引擎、分块参数、识别模型。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerComboBox, HackerSwitch, HackerSlider, HackerCard, HackerLineEdit, HackerButton
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
         # 下次启动清除缓存
-        clear_cache_next_time = HackerButton("清除缓存", parent=self)
+        clear_cache_next_time = BreezeButton("清除缓存", parent=self)
         clear_cache_next_time.clicked.connect(self.clear_cache)
-        clear_cache_next_time_card = HackerCard(
+        layout.addWidget(BreezeCard(
             "清除缓存",
             clear_cache_next_time,
-            "下次启动时清除RAG缓存（加入新RAG时请清除）"
-        )
-        layout.addWidget(clear_cache_next_time_card)
-        layout.addStretch()
+            "下次启动时清除RAG缓存（加入新RAG时请清除）",
+            parent=self,
+        ))
+
         # 启用？
-        enable_rag_switch = HackerSwitch(parent=self)
+        enable_rag_switch = BreezeSwitch(parent=self)
         enable_rag_switch.setChecked(Config.rag['enable'])
-        enable_rag_switch_card = HackerCard(
+        enable_rag_switch.stateChanged.connect(self.check_enable)
+        layout.addWidget(BreezeCard(
             "启用RAG",
             enable_rag_switch,
-            "启用知识库检索"
-        )
-        enable_rag_switch.stateChanged.connect(self.check_enable)
-        layout.addWidget(enable_rag_switch_card)
-        layout.addStretch()
+            "启用知识库检索",
+            parent=self,
+        ))
+
         # 启用BM25
-        enable_bm25_switch = HackerSwitch(parent=self)
+        enable_bm25_switch = BreezeSwitch(parent=self)
         enable_bm25_switch.setChecked(Config.rag['bm25_enable'])
-        enable_bm25_switch_card = HackerCard(
+        enable_bm25_switch.stateChanged.connect(self.check_bm25_enable)
+        layout.addWidget(BreezeCard(
             "启用BM25",
             enable_bm25_switch,
-            "强化关键字检索，答案更符合问题"
-        )
-        enable_bm25_switch.stateChanged.connect(self.check_bm25_enable)
-        layout.addWidget(enable_bm25_switch_card)
-        layout.addStretch()
+            "强化关键字检索，答案更符合问题",
+            parent=self,
+        ))
+
         # 压缩启用
-        compressed_rag_switch = HackerSwitch(parent=self)
+        compressed_rag_switch = BreezeSwitch(parent=self)
         compressed_rag_switch.setChecked(Config.rag['compressed_enable'])
-        compressed_rag_switch_card = HackerCard(
+        compressed_rag_switch.stateChanged.connect(self.check_compressed_enable)
+        layout.addWidget(BreezeCard(
             "启用压缩RAG",
             compressed_rag_switch,
-            "RAG 字段过长压缩RAG"
-        )
-        compressed_rag_switch.stateChanged.connect(self.check_compressed_enable)
-        layout.addWidget(compressed_rag_switch_card)
-        layout.addStretch()
+            "RAG 字段过长压缩RAG",
+            parent=self,
+        ))
+
         # 配置知识库类型
-        self.knowledge_base_type = HackerComboBox(parent=self)
-        self.knowledge_base_type.setFixedWidth(200)
-        for dir_ in os.listdir("./resources/rag"):
-            if dir_ == "chroma_db": continue
+        self.knowledge_base_type = BreezeComboBox(parent=self)
+        self.knowledge_base_type.setMinimumWidth(220)
+        for dir_ in self._collections():
             self.knowledge_base_type.addItem(dir_)
         self.knowledge_base_type.setCurrentText(Config.rag['collection'])
-        knowledge_base_type_card = HackerCard(
+        self.knowledge_base_type.currentTextChanged.connect(self.check_type)
+        layout.addWidget(BreezeCard(
             "知识库类型",
             self.knowledge_base_type,
-            "选择知识库类型"
-        )
-        self.knowledge_base_type.currentTextChanged.connect(self.check_type)
-        layout.addWidget(knowledge_base_type_card)
-        layout.addStretch()
+            "选择知识库类型",
+            parent=self,
+        ))
+
         # RAG 引擎
-        rag_engine = HackerComboBox(parent=self)
-        rag_engine.setFixedWidth(200)
+        rag_engine = BreezeComboBox(parent=self)
+        rag_engine.setMinimumWidth(220)
         rag_engine.addItems(SUPPORTED_ENGINES)
         rag_engine.setCurrentText(Config.rag['engine'])
-        rag_engine_card = HackerCard(
+        rag_engine.currentTextChanged.connect(self.check_engine)
+        layout.addWidget(BreezeCard(
             "RAG引擎",
             rag_engine,
             # "Chroma轻量，Lance多元，Milvus海量。"
-            "Chroma 轻量，Lance多元"
-        )
-        rag_engine.currentTextChanged.connect(self.check_engine)
-        layout.addWidget(rag_engine_card)
-        layout.addStretch()
+            "Chroma 轻量，Lance多元",
+            parent=self,
+        ))
+
         # 区块大小
-        block_size = HackerSlider(parent=self)
-        block_size.setFixedWidth(300)
+        block_size = BreezeSlider(Qt.Orientation.Horizontal, self)
         block_size.setMinimum(128)
         block_size.setMaximum(2048)
         block_size.setValue(Config.rag['chunks'])
-        block_size_card = HackerCard(
+        block_size_card = BreezeCard(
             f"区块大小（{Config.rag['chunks']} / tks）",
             block_size,
-            "单次筛选的最大 Tokens"
+            "单次筛选的最大 Tokens",
+            parent=self,
+            stacked=True,
         )
         block_size.valueChanged.connect(self.check_chunks)
-        block_size.valueChanged.connect(lambda: block_size_card.set_title(f"区块大小（{block_size.value()} / tks）"))
+        block_size.valueChanged.connect(
+            lambda: block_size_card.set_title(f"区块大小（{block_size.value()} / tks）")
+        )
         layout.addWidget(block_size_card)
-        layout.addStretch()
+
         # 重排序
-        top_k_slider = HackerSlider(parent=self)
-        top_k_slider.setFixedWidth(200)
-        top_k_slider.setValue(Config.rag['top_k'])
+        top_k_slider = BreezeSlider(Qt.Orientation.Horizontal, self)
         top_k_slider.setMaximum(50)
-        top_k_card = HackerCard(
+        top_k_slider.setValue(Config.rag['top_k'])
+        top_k_card = BreezeCard(
             f"重排序（{Config.rag['top_k']}）",
             top_k_slider,
-            "（Cross-Encoder）增强用户体验(设置top_k)"
+            "（Cross-Encoder）增强用户体验(设置top_k)",
+            parent=self,
+            stacked=True,
         )
         top_k_slider.valueChanged.connect(self.check_top_k)
         top_k_slider.valueChanged.connect(lambda: top_k_card.set_title(f"重排序（{top_k_slider.value()}）"))
         layout.addWidget(top_k_card)
-        layout.addStretch()
+
         # Overlap
-        overlap = HackerSlider(parent=self)
-        overlap.setFixedWidth(200)
+        overlap = BreezeSlider(Qt.Orientation.Horizontal, self)
+        overlap.setMaximum(100)
         overlap.setValue(Config.rag['overlap'])
-        overlap_card = HackerCard(
+        overlap_card = BreezeCard(
             f"重叠率（{Config.rag['overlap']} %）",
             overlap,
-            "话语气和指代关系的连续性。"
+            "话语气和指代关系的连续性。",
+            parent=self,
+            stacked=True,
         )
         overlap.valueChanged.connect(self.check_overlap)
         overlap.valueChanged.connect(lambda: overlap_card.set_title(f"重叠率（{overlap.value()} %）"))
         layout.addWidget(overlap_card)
-        layout.addStretch()
+
         # Embedding Model
-        self.embedding_model = HackerLineEdit(parent=self)
+        self.embedding_model = BreezeLineEdit("", parent=self)
         self.embedding_model.setText(Config.rag['embedding'])
-        self.embedding_model.setFixedWidth(200)
-        embedding_model_card = HackerCard(
+        self.embedding_model.setMinimumWidth(240)
+        self.embedding_model.textChanged.connect(self.check_embedding)
+        layout.addWidget(BreezeCard(
             "嵌入（向量）模型",
             self.embedding_model,
-            "捕获文本的语义信息"
-        )
-        self.embedding_model.textChanged.connect(self.check_embedding)
-        layout.addWidget(embedding_model_card)
-        layout.addStretch()
+            "捕获文本的语义信息",
+            parent=self,
+        ))
+
         # Model
-        self.model = HackerComboBox(parent=self)
+        self.model = BreezeComboBox(parent=self)
         self.model.addItems(get_model_lists())
         self.model.setCurrentText(Config.rag['model'])
-        self.model.setFixedWidth(350)
-        model_card = HackerCard(
+        self.model.setMinimumWidth(280)
+        self.model.currentTextChanged.connect(self.check_model)
+        layout.addWidget(BreezeCard(
             "识别模型",
             self.model,
-            "识别是否需要RAG检索"
-        )
-        self.model.currentTextChanged.connect(self.check_model)
-        layout.addWidget(model_card)
+            "识别是否需要RAG检索",
+            parent=self,
+        ))
+
+        layout.addWidget(PageHint("换知识库或换嵌入模型之后记得清一次缓存，否则还是老向量。"))
         layout.addStretch()
 
         for methods in dir(self):
             if methods.startswith('check_'):
-                try:
+                with contextlib.suppress(Exception):  # 逐个字段容错，缺字段不影响其它配置
                     getattr(self, methods)()
-                except Exception:  # noqa: BLE001 - 逐个字段容错，缺字段不影响其它配置
-                    pass
+
+    @staticmethod
+    def _collections() -> list[str]:
+        """./resources/rag 下的知识库；chroma_db 是引擎自己建的目录，不算知识库。"""
+        try:
+            entries = os.listdir("./resources/rag")
+        except OSError:
+            # 目录不在（打包、换过工作目录）时返回空表，不能连累整页打不开
+            return []
+        return [name for name in entries if name != "chroma_db"]
 
     def check_model(self, text: str | None = None):
-        if text is None: text = self.model.currentText()
+        if text is None:
+            text = self.model.currentText()
         Config.rag['model'] = text
         ConfigLoader.save_config()
 
     def check_type(self, text: str | None = None):
-        if text is None: text = self.knowledge_base_type.currentText()
+        if text is None:
+            text = self.knowledge_base_type.currentText()
         Config.rag['collection'] = text
         ConfigLoader.save_config()
 
     def check_embedding(self, text: str | None = None):
-        if text is None: text = self.embedding_model.text()
+        if text is None:
+            text = self.embedding_model.text()
         Config.rag['embedding'] = text
         ConfigLoader.save_config()
 
@@ -476,7 +568,7 @@ class RAGWidgetScroll(QWidget):
         ConfigLoader.save_config()
 
     @staticmethod
-    def check_engine(value: int):
+    def check_engine(value: str):
         Config.rag['engine'] = value
         ConfigLoader.save_config()
 
@@ -497,49 +589,68 @@ class RAGWidgetScroll(QWidget):
 
 
 class RAG(QWidget):
+    """RAG 页：配置项放进滚动区（项多，屏幕矮的时候要能滚）。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import ScrollArea
 
-        card = RAGWidgetScroll(self)
-        scroll = ScrollArea(self)
-        scroll.setWidget(card)
-        scroll.setGeometry(QRect(10, 10, 600, 400))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.card = RAGWidgetScroll(self)
+        self.scroll = BreezeScrollArea(self)
+        self.scroll.setWidget(self.card)
+        layout.addWidget(self.scroll)
 
 
 class MCP(QWidget):
+    """MCP：总开关 + 服务器表，表格里改完立刻落盘。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerSwitch, HackerTable, HackerLabel, HackerButton
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(8)
 
         # 开启MCP
-        HackerLabel("开启MCP", self).setGeometry(20, 10, 150, 30)
-        mcp_switch = HackerSwitch(parent=self)
-        mcp_switch.setChecked(Config.mcp['enable'])
-        mcp_switch.setGeometry(170, 5, 100, 30)
-        mcp_switch.stateChanged.connect(self.check_mcp)
+        self.mcp_switch = BreezeSwitch(parent=self)
+        self.mcp_switch.setChecked(Config.mcp['enable'])
+        self.mcp_switch.stateChanged.connect(self.check_mcp)
+        layout.addWidget(BreezeCard(
+            "开启MCP",
+            self.mcp_switch,
+            "允许模型调用本机的 MCP 服务器",
+            parent=self,
+        ))
 
         # MCP表格
-        self.mcp_table = HackerTable(parent=self)
-        self.mcp_table.setGeometry(20, 50, 600, 300)
+        self.mcp_table = BreezeTable(parent=self)
         self.mcp_table.setHorizontalHeaderLabels(['服务器ID', '参数', '启动命令'])
         for server in Config.mcp['mcp']:
             self.add_data(server['server'], ' '.join(server['args']), server['command'])
-        # 调整宽度
-        self.mcp_table.setColumnWidth(0, 110)
-        self.mcp_table.setColumnWidth(1, 400)
-        self.mcp_table.setColumnWidth(2, 90)
+        # 参数最长，让它吃掉多余宽度；首尾两列按内容给固定宽
+        self.mcp_table.setColumnWidth(0, 130)
+        self.mcp_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.mcp_table.horizontalHeader().setStretchLastSection(False)
+        self.mcp_table.setColumnWidth(2, 140)
         self.mcp_table.itemChanged.connect(self.change_data)
+        layout.addWidget(self.mcp_table, 1)
 
         # 增加MCP面板
-        add_mcp_button = HackerButton("添加MCP", parent=self)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        add_mcp_button = BreezeButton("添加MCP", parent=self)
         add_mcp_button.set_border()
-        add_mcp_button.setGeometry(20, 360, 100, 30)
         add_mcp_button.clicked.connect(self.add_mcp)
-        remove_mcp_button = HackerButton("删除MCP", parent=self)
-        remove_mcp_button.set_border()
-        remove_mcp_button.setGeometry(130, 360, 100, 30)
+        buttons.addWidget(add_mcp_button)
+        remove_mcp_button = BreezeButton("删除MCP", parent=self)
         remove_mcp_button.clicked.connect(self.remove_mcp)
+        buttons.addWidget(remove_mcp_button)
+        buttons.addStretch()
+        layout.addLayout(buttons)
+
+        layout.addWidget(PageHint("双击单元格直接改：参数用空格分开，改完自动保存。"))
 
     @staticmethod
     def change_data(item: QTableWidgetItem):
@@ -559,6 +670,28 @@ class MCP(QWidget):
     def check_mcp(boo: bool):
         Config.mcp['enable'] = boo
         ConfigLoader.save_config()
+
+    def _cell(self, row, column):
+        item = self.mcp_table.item(row, column)
+        return item.text().strip() if item is not None else ""
+
+    def save(self):
+        """把整张表写回配置。
+
+        平时改单元格就已经随手落盘了（和 `change_data` 一样），这个方法给外部脚本
+        或"改动没落上"的时候用；参数按空格切，跟表里显示的一致。
+        """
+        servers = [
+            {
+                "server": self._cell(row, 0),
+                "args": self._cell(row, 1).split(' '),
+                "command": self._cell(row, 2),
+            }
+            for row in range(self.mcp_table.rowCount())
+        ]
+        Config.mcp['mcp'] = servers
+        ConfigLoader.save_config()
+        notify(f"已保存 {len(servers)} 个 MCP 服务器", "success", 3000)
 
     def add_data(self, server, args, command):
         row = self.mcp_table.rowCount()
@@ -591,74 +724,120 @@ class MCP(QWidget):
 
 class Cooperation(QWidget):
     """多模型协作：主模型出稿/定稿，配在表里的模型按角色给意见。"""
+
     MODES = (("review", "评审改稿"), ("parallel", "并行汇总"))
 
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerSwitch, HackerTable, HackerLabel, HackerButton, HackerComboBox, HackerSlider, HackerLineEdit
 
-        HackerLabel("开启多模型协作", self).setGeometry(20, 10, 200, 30)
-        self.enable_switch = HackerSwitch(parent=self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(8)
+
+        columns = QHBoxLayout()
+        columns.setSpacing(10)
+
+        # -- 左栏：开关三件套 + 可用模型（搜索 + 列表 + 加入按钮） ----------------
+        left = QVBoxLayout()
+        left.setSpacing(8)
+
+        self.enable_switch = BreezeSwitch(parent=self)
         self.enable_switch.setChecked(bool(Config.coop["enable"]))
-        self.enable_switch.setGeometry(220, 5, 80, 30)
         self.enable_switch.stateChanged.connect(self.check_enable)
+        left.addWidget(BreezeCard(
+            "开启多模型协作",
+            self.enable_switch,
+            "主模型之外再叫几个模型帮忙",
+            parent=self,
+        ))
 
-        HackerLabel("协作模式", self).setGeometry(20, 50, 160, 30)
-        self.mode_combo = HackerComboBox(self)
+        self.mode_combo = BreezeComboBox(parent=self)
         self.mode_combo.addItems([label for _, label in self.MODES])
         self.mode_combo.setCurrentIndex(max(0, [key for key, _ in self.MODES].index(self._mode())))
-        self.mode_combo.setGeometry(180, 45, 200, 30)
         self.mode_combo.currentIndexChanged.connect(self.check_mode)
+        left.addWidget(BreezeCard(
+            "协作模式",
+            self.mode_combo,
+            "评审改稿：逐个提意见；并行汇总：一起回答",
+            parent=self,
+        ))
 
-        HackerLabel("评审轮数", self).setGeometry(20, 90, 160, 30)
-        self.rounds_slider = HackerSlider(Qt.Orientation.Horizontal, self)
+        self.rounds_slider = BreezeSlider(Qt.Orientation.Horizontal, self)
         self.rounds_slider.setMinimum(1)
         self.rounds_slider.setMaximum(3)
         self.rounds_slider.setValue(int(Config.coop.get("rounds") or 1))
-        self.rounds_slider.setGeometry(180, 95, 200, 30)
         self.rounds_slider.valueChanged.connect(self.check_rounds)
+        rounds_card = BreezeCard(
+            f"评审轮数（{self.rounds_slider.value()} 轮）",
+            self.rounds_slider,
+            "轮数越多改得越细，也越慢",
+            parent=self,
+            stacked=True,
+        )
+        self.rounds_slider.valueChanged.connect(
+            lambda: rounds_card.set_title(f"评审轮数（{self.rounds_slider.value()} 轮）")
+        )
+        left.addWidget(rounds_card)
 
-        self.model_search = HackerLineEdit("搜索模型…", parent=self)
-        self.model_search.setGeometry(20, 140, 280, 30)
+        # 数量放在标题右边：模型几十个的时候一眼能看出筛掉了多少
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(8)
+        head.addWidget(_section("可用模型（双击加入协作）", self), 1)
+        self.available_label = _count_chip(self)
+        head.addWidget(self.available_label, 0)
+        left.addLayout(head)
+
+        self.model_search = BreezeLineEdit("搜索模型…", parent=self)
         self.model_search.textChanged.connect(self.filter_models)
+        left.addWidget(self.model_search)
 
-        # 可用模型计数：搜索时显示"匹配 N / 共 M"，一眼看得出筛选掉多少
-        # （以前 filter_models 里算了 total 却没地方显示，refresh 还直接 setText 到一个不存在的属性）
-        self.available_label = HackerLabel("", self)
-        self.available_label.setGeometry(20, 172, 280, 20)
-
-        self.model_table = HackerTable(parent=self)
-        self.model_table.setGeometry(20, 196, 280, 182)
+        self.model_table = BreezeTable(parent=self)
         self.model_table.setHorizontalHeaderLabels(["模型", "来源"])
+        self.model_table.horizontalHeader().setStretchLastSection(False)
         self.model_table.setColumnWidth(0, 190)
+        self.model_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.model_table.setColumnWidth(1, 80)
-        self.model_table.setEditTriggers(HackerTable.EditTrigger.NoEditTriggers)
+        self.model_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model_table.cellDoubleClicked.connect(lambda *_args: self.add_selected())
+        left.addWidget(self.model_table, 1)
 
-        join_button = HackerButton("加入协作 →", parent=self)
+        join_button = BreezeButton("加入协作 →", parent=self)
         join_button.set_border()
-        join_button.setGeometry(20, 392, 130, 28)
         join_button.clicked.connect(self.add_selected)
+        left.addWidget(join_button)
 
-        HackerLabel("协作成员（主模型之外，按角色给意见）", self).setGeometry(315, 130, 305, 24)
+        columns.addLayout(left, 1)
 
-        self.agent_table = HackerTable(parent=self)
-        self.agent_table.setGeometry(315, 156, 305, 222)
+        # -- 右栏：协作成员表 + 一排操作 ---------------------------------------
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        right.addWidget(_section("协作成员（主模型之外，按角色给意见）", self))
+
+        self.agent_table = BreezeTable(parent=self)
         self.agent_table.setHorizontalHeaderLabels(["模型", "角色名", "提示词"])
         self.agent_table.setColumnWidth(0, 95)
         self.agent_table.setColumnWidth(1, 85)
         self.agent_table.setColumnWidth(2, 115)
         self.agent_table.itemChanged.connect(self.change_data)
+        right.addWidget(self.agent_table, 1)
 
-        for index, (label, slot) in enumerate((
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        for label, slot in (
             ("添加空行", self.add_agent),
             ("删除选中", self.remove_agent),
             ("保存协作", self.save_agents),
-        )):
-            button = HackerButton(label, parent=self)
-            button.set_border()
-            button.setGeometry(315 + index * 100, 384, 95, 28)
+        ):
+            button = BreezeButton(label, parent=self)
+            if label == "保存协作":
+                button.set_border()
             button.clicked.connect(slot)
+            buttons.addWidget(button)
+        right.addLayout(buttons)
+
+        columns.addLayout(right, 1)
+        root.addLayout(columns, 1)
 
         self.refresh()
 
@@ -679,10 +858,7 @@ class Cooperation(QWidget):
         self.agent_table.blockSignals(False)
 
         self.models = self._available_models()
-        keys = self._available_models()
         self.filter_models(self.model_search.text())
-        if not keys:
-            self.available_label.setText("（还没有可用模型，先去「新增 LLM」加一个）")
 
     @staticmethod
     def _available_models() -> list:
@@ -697,6 +873,15 @@ class Cooperation(QWidget):
             seen.add(key)
             unique.append((key, model, source))
         return unique
+
+    @staticmethod
+    def _count_text(matched: int, total: int, keyword: str = "") -> str:
+        """数量文案：没筛就说总数，筛了就说"匹配 X / 共 Y"，一个模型都没有时给指路。"""
+        if not total:
+            return "（还没有可用模型，先去「新增 LLM」加一个）"
+        if keyword:
+            return f"匹配 {matched} / 共 {total}"
+        return f"{total} 个模型"
 
     def filter_models(self, keyword: str):
         """按关键字筛可用模型：模型几十个的时候靠它找，而不是挤成一行字。"""
@@ -716,14 +901,8 @@ class Cooperation(QWidget):
         table.blockSignals(False)
         table.rows = rows
 
-        # 计数和表格行数是同一份数据算出来的，永远不会对不上
-        total = len(self.models)
-        if not total:
-            self.available_label.setText("（还没有可用模型，先去「新增 LLM」加一个）")
-        elif keyword:
-            self.available_label.setText(f"匹配 {len(rows)} / 共 {total}")
-        else:
-            self.available_label.setText(f"{total} 个模型")
+        # 数量文案跟着列表走，别让"共 N"和表里实际行数对不上
+        self.available_label.setText(self._count_text(len(rows), len(self.models), keyword))
 
     def add_selected(self):
         """把列表里选中的模型加成协作成员。"""
@@ -844,37 +1023,45 @@ class Cooperation(QWidget):
         else:
             notify(f"协作配置已保存：主模型 + {len(agents)} 个协作模型", "success", 3000)
 
+    def save(self):
+        """按契约暴露的短名字：落盘协作成员（和 `save_agents` 同一个动作）。"""
+        self.save_agents()
+
 
 class Skills(QWidget):
     """技能：一段可以随时套在提问外面的提示词，聊天窗里按 /名字 或点「技能」使用。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerTable, HackerLabel, HackerButton
 
-        HackerLabel("技能列表（聊天时打 /名字，或点聊天窗的「技能」按钮）", self).setGeometry(20, 10, 560, 30)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(8)
 
-        self.skill_table = HackerTable(parent=self)
-        self.skill_table.setGeometry(20, 46, 600, 300)
+        root.addWidget(_section("技能列表（聊天时打 /名字，或点聊天窗的「技能」按钮）", self))
+
+        self.skill_table = BreezeTable(parent=self)
         self.skill_table.setHorizontalHeaderLabels(["技能名", "说明", "提示词"])
         self.skill_table.setColumnWidth(0, 110)
         self.skill_table.setColumnWidth(1, 140)
         self.skill_table.setColumnWidth(2, 330)
         self.skill_table.itemChanged.connect(self.change_data)
+        root.addWidget(self.skill_table, 1)
 
-        add_button = HackerButton("添加技能", parent=self)
-        add_button.set_border()
-        add_button.setGeometry(20, 358, 100, 30)
-        add_button.clicked.connect(self.add_skill)
-
-        remove_button = HackerButton("删除选中", parent=self)
-        remove_button.set_border()
-        remove_button.setGeometry(130, 358, 100, 30)
-        remove_button.clicked.connect(self.remove_skill)
-
-        save_button = HackerButton("保存技能", parent=self)
-        save_button.set_border()
-        save_button.setGeometry(240, 358, 100, 30)
-        save_button.clicked.connect(self.save_skills)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        for label, slot in (
+            ("添加技能", self.add_skill),
+            ("删除选中", self.remove_skill),
+            ("保存技能", self.save_skills),
+        ):
+            button = BreezeButton(label, parent=self)
+            if label == "保存技能":
+                button.set_border()
+            button.clicked.connect(slot)
+            buttons.addWidget(button)
+        buttons.addStretch()
+        root.addLayout(buttons)
 
         self.refresh()
 
@@ -973,30 +1160,46 @@ class Skills(QWidget):
         else:
             notify(f"已保存 {len(skills)} 个技能：{'、'.join(item['name'] for item in skills)}", "success", 3000)
 
+    def save(self):
+        """按契约暴露的短名字：落盘技能列表（和 `save_skills` 同一个动作）。"""
+        self.save_skills()
+
 
 class LLMPage(QWidget):
+    """LLM 设置总页：六个页签，先配模型再调行为。"""
+
     def __init__(self, parent):
         super().__init__(parent)
-        from . import HackerLabel, HackerTabWidget
-
         self.setObjectName("LLM")
-        self.setWindowTitle("大语言模型设置")
-        self.window_title = HackerLabel(self.windowTitle(), self)
-        self.window_title.set_center()
-        self.window_title.setGeometry(0, 0, self.width(), 30)
+        self.setWindowTitle("LLM 设置")
+        self.setStyleSheet(f"QWidget#LLM {{ background: {SURFACE}; }}")
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 40, 20, 20)
-        self.tab_widget = HackerTabWidget(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
+
+        self.window_title = PageTitle(self.windowTitle())
+        root.addWidget(self.window_title)
+        root.addWidget(PageHint("模型会进聊天列表；记忆、知识库、MCP、协作与技能在下面几页里调。"))
+
+        self.tab_widget = BreezeTabWidget(self)
         self.tab_widget.addTab(Basic(self), "新增 LLM")
         self.tab_widget.addTab(Memory(self), "记忆 配置")
         self.tab_widget.addTab(RAG(self), "RAG 配置")
         self.tab_widget.addTab(MCP(self), "MCP 设置")
         self.tab_widget.addTab(Cooperation(self), "协作 设置")
         self.tab_widget.addTab(Skills(self), "技能 Skills")
-        layout.addWidget(self.tab_widget)
-        self.setLayout(layout)
+        root.addWidget(self.tab_widget, 1)
 
-    def resizeEvent(self, event, /):
-        super().resizeEvent(event)
-        self.window_title.setGeometry(0, 0, self.width(), 30)
+
+__all__ = [
+    "Basic",
+    "BasicWidgetScroll",
+    "Cooperation",
+    "LLMPage",
+    "MCP",
+    "Memory",
+    "RAG",
+    "RAGWidgetScroll",
+    "Skills",
+]

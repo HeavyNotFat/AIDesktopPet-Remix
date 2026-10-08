@@ -1,11 +1,3 @@
-"""手动验证：桌宠右键菜单的插件条目（一层平铺）。
-
-自动化用例在 ``tests/test_plugin_menu.py``；这个脚本是真窗口手测用的——
-它会真弹一个菜单，方便肉眼确认插件条目是一条一条平铺、左边带各自插件图标、
-名字是「插件名 · 菜单名」，以及点下去能真的触发插件。
-
-    .venv\\Scripts\\python.exe tools\\manual\\verify_plugin_menu.py
-"""
 
 import os
 import sys

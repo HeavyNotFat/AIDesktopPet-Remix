@@ -23,7 +23,8 @@ import re
 import sys
 
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".idea", "build", "dist",
-             ".ci-tmp", ".tmp", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+             ".ci-tmp", ".tmp", ".pytest_cache", ".ruff_cache", ".mypy_cache",
+             ".PluginDevOld"}  # 旧 PyQt5 工程，不属于本仓库产物
 
 # 自己这个脚本的 docstring 就是用法说明，别清理它
 SKIP_FILES = {pathlib.Path(__file__).resolve()}

@@ -1,5 +1,11 @@
 {
-   "models": {},
+   "models": {
+      "DeepseekV4F": {
+         "name": "deepseek-flash",
+         "apikey": "sk-ebedd615381d46b7b2ceacf8df819547",
+         "baseurl": "https://api.deepseek.com"
+      }
+   },
    "memory": {
       "shortterm": true,
       "longterm": true
@@ -69,5 +75,5 @@
    "opacity": 1,
    "size": 110,
    "rotate": 0,
-   "theme": "hacker"
+   "theme": "breeze"
 }

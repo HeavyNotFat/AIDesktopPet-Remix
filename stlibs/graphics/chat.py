@@ -1,11 +1,12 @@
 from .. import SharingData, Config
 from .. import analyze_signature, get_model_lists, get_translation
+from .theme_label import theme_label
 
 
 class Chat(SharingData.theme.Window):
     def __init__(self):
         super().__init__()
-        self.setTitle(f"AI桌宠 · 重置版 | 聊天 | Hacker(黑客)样式")
+        self.setTitle(f"AI桌宠 · 重置版 | 聊天 | {theme_label()}")
         self.model_widgets = {}
         self.init_model()
 

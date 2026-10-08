@@ -1,13 +1,3 @@
-"""桌宠的拖拽状态机：菜单弹出来之后不能再跟着鼠标漂。
-
-历史 bug：右键菜单是 ``Qt.Popup``，弹出后鼠标事件归它管，桌宠收不到那一下
-``release``，``_dragging`` 就留在 True；之后鼠标随手在桌宠上移一下（没按任何
-键）桌宠就跟着光标跑，看起来就是"点别处桌宠就漂移"。
-
-``core.py`` 是"导入即执行"的（起 SDK 服务、起网页聊天线程、建窗口），所以这里
-用 AST 只取 ``DesktopPetRemix`` 的那份真实源码，和真的 ``shader.static.PublicShader``
-拼成一个测试用桌宠，两边都是线上代码。
-"""
 
 import ast
 import os
@@ -368,8 +358,13 @@ def test_menu_opening_wipes_the_leftover_drag_state(make_pet, monkeypatch):
 
 
 def test_real_context_menu_wipes_host_drag_state_on_open_and_close(make_pet, monkeypatch):
-    """走真实路径：show_context_menu 建真的 HackerMenu，开与关都要清干净桌宠状态。"""
-    from stlibs.themes import hacker
+    """走真实路径：show_context_menu 建真菜单，开与关都要清干净桌宠状态。
+
+    ``show_context_menu`` 是拿 ``SharingData.theme.Menu`` 造菜单的，所以补丁要打在
+    当前主题上（不能写死 hacker——那样换个主题跑这条用例就假失败了）。
+    """
+    theme = stlibs.SharingData.theme
+    menu_class = theme.Menu
 
     pet = make_pet()
     pet._dragging = True
@@ -378,16 +373,16 @@ def test_real_context_menu_wipes_host_drag_state_on_open_and_close(make_pet, mon
     pet.drag_start_position = QPoint(1, 1)
 
     created = []
-    original_init = hacker.HackerMenu.__init__
+    original_init = menu_class.__init__
 
     def spy_init(self, parent=None):
         original_init(self, parent)
         created.append(self)
 
-    monkeypatch.setattr(hacker.HackerMenu, "__init__", spy_init)
+    monkeypatch.setattr(menu_class, "__init__", spy_init)
     # exec 会阻塞在模态循环里，而且真弹 Popup 会留下 grab（后面的菜单用例就废了）
-    monkeypatch.setattr(hacker.HackerMenu, "show", lambda self: QtWidgets.QWidget.setVisible(self, True))
-    monkeypatch.setattr(hacker.HackerMenu, "exec", lambda self, pos=None: self.show())
+    monkeypatch.setattr(menu_class, "show", lambda self: QtWidgets.QWidget.setVisible(self, True))
+    monkeypatch.setattr(menu_class, "exec", lambda self, pos=None: self.show())
 
     pet.show_context_menu(QPoint(10, 10))
     QtWidgets.QApplication.processEvents()

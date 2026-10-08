@@ -1,10 +1,3 @@
-"""生成两个插件图标（128×128 PNG，透明底）。
-
-* 养成系统：绿描边饭碗 + 三缕热气 + 碗沿一颗小红心（呼应"喂食涨好感"）
-* 桌宠扭蛋机：绿描边扭蛋胶囊（上下两色壳）+ 中间四角星 + 壳缝高光（呼应"抽卡出货"）
-
-用法：python tools/manual/make_plugin_icons.py
-"""
 
 import math
 import os
@@ -20,8 +13,6 @@ GREEN = (0, 255, 0, 255)
 GREEN_DIM = (0, 180, 0, 255)
 DARK = (8, 20, 8, 235)
 RED = (255, 70, 90, 255)
-GOLD = (255, 205, 60, 255)
-WHITE = (235, 255, 235, 255)
 
 
 def canvas():
@@ -144,71 +135,9 @@ def bowl_icon(path):
     finish(image, path)
 
 
-def four_point_star(draw, cx, cy, outer, inner, color):
-    """四角星（扭蛋出货的那颗星）。"""
-    points = []
-    for index in range(8):
-        radius = outer if index % 2 == 0 else inner
-        rad = math.radians(index * 45 - 90)
-        points.append((cx + radius * math.cos(rad), cy + radius * math.sin(rad)))
-    draw.polygon(points, fill=color)
-
-
-def capsule_icon(path):
-    """扭蛋胶囊：上下两色壳 + 中间一道缝 + 缝心一颗四角星 + 壳上高光。
-
-    画法：整颗胶囊先铺成上壳色，再把"下半壳"按同一个外形一次性裁着画上去。
-    早先是上下两个圆角矩形各画各的，圆角对不齐，胶囊两侧会露出黑角。
-    """
-    image, draw = canvas()
-    unit = SS
-
-    left, top, right, bottom = scaler(22), scaler(10), scaler(106), scaler(118)
-    radius = scaler(41)
-    seam = scaler(64)
-    box = [left, top, right, bottom]
-
-    # 整颗胶囊 = 上壳色
-    draw.rounded_rectangle(box, radius=radius, fill=(16, 112, 28, 245))
-
-    # 下半壳：裁剪到胶囊外形里再画，左右两侧就不会溢出成直角
-    mask = Image.new("L", image.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle(box, radius=radius, fill=255)
-
-    lower = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    ImageDraw.Draw(lower).rectangle([0, seam + 1, image.width, image.height], fill=(12, 26, 14, 240))
-    lower.putalpha(Image.composite(lower.getchannel("A"), Image.new("L", image.size, 0), mask))
-    image.alpha_composite(lower)
-    draw = ImageDraw.Draw(image)
-
-    # 缝：横贯一条，两端收在壳里
-    draw.line([(left + 9 * unit, seam), (right - 9 * unit, seam)], fill=GREEN, width=3 * unit)
-    # 轮廓最后描一遍，保证外形干净
-    draw.rounded_rectangle(box, radius=radius, outline=GREEN, width=4 * unit)
-
-    # 上半壳的斜向高光（塑料壳反光），位置避开缝和星
-    draw.line(
-        [(scaler(38), scaler(50)), (scaler(58), scaler(28))],
-        fill=(225, 255, 225, 150),
-        width=3 * unit,
-    )
-    draw.line(
-        [(scaler(44), scaler(53)), (scaler(62), scaler(33))],
-        fill=(225, 255, 225, 90),
-        width=2 * unit,
-    )
-
-    # 正中间那颗四角星：出货的象征，压在缝上
-    four_point_star(draw, scaler(64), scaler(64), scaler(24), scaler(8), GOLD)
-    four_point_star(draw, scaler(64), scaler(64), scaler(14), scaler(4.5), WHITE)
-
-    finish(image, path)
-
-
 def main():
     targets = [
         (os.path.join(OUT_ROOT, "cultivation_system", "icon.png"), bowl_icon),
-        (os.path.join(OUT_ROOT, "lucky_pet", "icon.png"), capsule_icon),
     ]
     print("生成插件图标：")
     for path, builder in targets:

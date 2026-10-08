@@ -1,8 +1,3 @@
-"""hacker 主题的基础控件：标签、输入框、下拉框、按钮、开关、卡片、表格、页签、滚动区。
-
-它们彼此不依赖，设置页（`llm.py` / `general.py` / `animation.py` / `settings.py` / `plugins.py`）
-和插件面板都直接拿这些类拼界面。
-"""
 
 from PySide6.QtWidgets import (
     QAbstractItemView,

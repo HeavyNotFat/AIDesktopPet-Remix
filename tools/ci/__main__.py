@@ -43,7 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         prog="adpci",
         description="ADPRemix UI / 架构质量门禁（静态分析，无第三方依赖）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        epilog=(
+            "检查项按「分类/名字」选择，也可以只写分类或 前缀*（例如 theme/*）。\n"
+            "默认全部跑一遍；--strict 时 warning 也算失败，--fail-on 可以指定门槛。\n"
+            "用法示例：python -m tools.ci ui/* --no-color --quiet"
+        ),
     )
     parser.add_argument("checks", nargs="*", help="要跑的检查 id / 分类（支持 ui/* 形式），默认全部")
     parser.add_argument("--root", type=Path, default=None, help="仓库根目录，默认自动探测")

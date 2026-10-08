@@ -217,3 +217,48 @@ def test_reporter_text_limit(mini_repo):
     report = run(root=root, only=["hygiene/bare-except"])
     assert len(report.findings) == 3
     assert "另有 1 条问题未显示" in reporters.render_text(report, limit=2)
+
+
+# --- 文件头部不许写模块 docstring（见 AGENTS.md） ---------------------------
+def test_module_docstring_is_flagged(mini_repo):
+    root = mini_repo({
+        "pkg/with_header.py": '"""这个文件干什么的。"""\n\nVALUE = 1\n',
+        "pkg/without_header.py": "# 说明写在注释里\nVALUE = 2\n",
+    })
+    from tools.ci import run
+
+    report = run(root=root, only=["hygiene/module-docstring"])
+    findings = report.findings
+
+    assert len(findings) == 1, [f.message for f in findings]
+    assert findings[0].location.path == "pkg/with_header.py"
+    assert findings[0].location.line == 1
+    assert findings[0].severity is Severity.ERROR
+
+
+def test_class_and_function_docstrings_are_not_flagged(mini_repo):
+    """只拦"文件开头那一大段"，类/函数自己的 docstring 照常写。"""
+    root = mini_repo({
+        "pkg/ok.py": (
+            "# 模块级说明用注释\n"
+            "class Thing:\n"
+            '    """类的说明。"""\n'
+            "\n"
+            "    def run(self):\n"
+            '        """方法的说明。"""\n'
+            "        return 1\n"
+        ),
+    })
+    from tools.ci import run
+
+    assert run(root=root, only=["hygiene/module-docstring"]).findings == []
+
+
+def test_real_repo_has_no_module_docstrings(repo_root):
+    """本仓库自己必须干净（清理过一遍，这条防回退）。"""
+    from tools.ci import run
+
+    report = run(root=repo_root, only=["hygiene/module-docstring"])
+
+    assert report.crashes == [], [r.crash for r in report.crashes]
+    assert report.findings == [], [str(f.location) for f in report.findings]

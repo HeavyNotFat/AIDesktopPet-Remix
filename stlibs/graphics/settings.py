@@ -1,5 +1,6 @@
 from .. import SharingData
 from .. import analyze_signature
+from .theme_label import theme_label
 
 from PySide6.QtCore import Qt, Signal
 
@@ -11,7 +12,7 @@ class Settings(SharingData.theme.Window):
 
     def __init__(self):
         super().__init__()
-        self.setTitle(f"AI桌宠 · 重置版 | 设置 | Hacker(黑客)样式")
+        self.setTitle(f"AI桌宠 · 重置版 | 设置 | {theme_label()}")
 
         general_page = SharingData.theme.general.GeneralPage(self)
         general_page.opacity_changed.connect(lambda value: self.general_changed.emit({"opacity": value}))

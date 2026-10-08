@@ -1,7 +1,8 @@
 # 养成系统（移植版）
 
 从 `.PluginDevOld/cultivation_system`（PyQt5 + qfluentwidgets 时代）搬过来的，现在是
-本仓库插件系统里的一个 Python 插件，界面换成当前主题（hacker）的控件。
+本仓库插件系统里的一个 Python 插件，界面**跟着当前主题走**：控件用主题的 `Label`/`Button`，
+配色从 `stlibs.graphics.palette.palette()` 取，换主题（hacker ↔ breeze）时面板跟着变样。
 
 ## 玩法
 
@@ -47,3 +48,7 @@ python -m pytest tests/test_cultivation.py -q     # 数值逻辑（不依赖 Qt�
 
 `cultivation_model.py` 是纯逻辑（`PetState`），`cultivation_window.py` 只负责显示与转发点击，
 `main.py` 只做 hook 装配 —— 想改数值就只动第一个文件。
+
+界面配色不要在插件里写死：主题包声明 `PALETTE`（`stlibs/themes/base.py::ThemePalette`），
+插件通过 `stlibs.graphics.palette.palette()` 拿语义色（`surface` / `border` / `text` / `tint("level")`）。
+主题没声明时会退回默认那套深色，所以插件不会因为新主题而报错、老主题也不会变样。

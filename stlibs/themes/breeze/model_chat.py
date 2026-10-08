@@ -4,8 +4,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ... import SharingData, derfer
 from ...ai import cloud, local
 from ..base import CombinedMeta, ModelChatABS
-
-from .feedback import HackerNotify
+from .feedback import BreezeNotify
 
 # 模型名 → LLM 实例：同一个模型被多个聊天页共用一份（含记忆与函数调用）
 
@@ -57,7 +56,8 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title = SharingData.theme.Label("AI TERMINAL")
+        # 页头用主题自己的标签：浅色主题下不再有"终端"那一套说法
+        title = SharingData.theme.Label("AI 助手")
         title.setFixedHeight(30)
         layout.addWidget(title)
 
@@ -150,7 +150,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         except Exception:  # noqa: BLE001
             return
 
-        HackerNotify(
+        BreezeNotify(
             f"{model} 是纯文本模型，看不了图片（换成带 vision 的模型，"
             "或用文字描述图片内容）",
             "warning",
@@ -177,21 +177,21 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         agent = event.get("agent") or "协作模型"
 
         if stage == "draft":
-            HackerNotify("多模型协作：主模型正在出初稿…", "info", 2000)
+            BreezeNotify("多模型协作：主模型正在出初稿…", "info", 2000)
         elif stage == "review_start":
-            HackerNotify(f"多模型协作：{agent} 正在评审…", "info", 2000)
+            BreezeNotify(f"多模型协作：{agent} 正在评审…", "info", 2000)
         elif stage == "review_done":
-            HackerNotify(f"{agent} 评审完成", "info", 1500)
+            BreezeNotify(f"{agent} 评审完成", "info", 1500)
         elif stage == "agent_start":
-            HackerNotify(f"多模型协作：{agent} 正在回答…", "info", 2000)
+            BreezeNotify(f"多模型协作：{agent} 正在回答…", "info", 2000)
         elif stage == "agent_done":
-            HackerNotify(f"{agent} 回答完成", "info", 1500)
+            BreezeNotify(f"{agent} 回答完成", "info", 1500)
         elif stage == "final":
-            HackerNotify("多模型协作：主模型正在定稿…", "info", 2000)
+            BreezeNotify("多模型协作：主模型正在定稿…", "info", 2000)
         elif stage == "agent_error":
-            HackerNotify(f"{agent} 协作失败：{event.get('detail', '未知错误')}", "error", 4000)
+            BreezeNotify(f"{agent} 协作失败：{event.get('detail', '未知错误')}", "error", 4000)
         elif stage == "empty":
-            HackerNotify(
+            BreezeNotify(
                 f"{event.get('detail', '协作没有生效')}（协作设置里检查模型与开关）",
                 "warning",
                 3500,

@@ -37,6 +37,34 @@ def check_parse_error(ctx) -> Iterator[Finding]:
         )
 
 
+MODULE_DOCSTRING_EXEMPT = ("tools/manual/strip_doc_headers.py",)
+
+
+def check_module_docstring(ctx) -> Iterator[Finding]:
+    """文件头部不许写模块 docstring（见 AGENTS.md 的第一条硬规则）。
+
+    类/函数自己的 docstring 与 ``#`` 注释照常写，这里只拦"文件开头那一大段"：
+    判定就是模块 body 的第一条语句是不是字符串常量。
+    """
+    for src in ctx.sources.files:
+        if src.rel in MODULE_DOCSTRING_EXEMPT:
+            continue
+        body = src.tree.body
+        if not body:
+            continue
+        first = body[0]
+        if not (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            continue
+        yield Finding(
+            check="hygiene/module-docstring",
+            severity=Severity.ERROR,
+            message="文件头部不允许模块 docstring（`\"\"\"...\"\"\"`）",
+            location=Location(src.rel, first.lineno),
+            hint="删掉它；模块级的说明写进 `#` 注释或 STRUCTURE.md，类/函数说明写进各自的 docstring",
+        )
+
+
 def check_bare_except(ctx) -> Iterator[Finding]:
     for src, node in ctx.sources.iter_nodes(ast.ExceptHandler):
         if node.type is not None:

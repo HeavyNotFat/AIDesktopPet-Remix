@@ -1,55 +1,37 @@
+
 from __future__ import annotations
 
 from cultivation_model import FOODS_DIR, PetState
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
-from PySide6.QtWidgets import QWidget, QProgressBar, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QLabel
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
-BAR_STYLE = """
-QProgressBar {
-    background: rgba(0, 0, 0, 170);
-    border: 1px solid rgba(0, 255, 0, 90);
-    border-radius: 7px;
-    height: 20px;
-    text-align: center;
-    color: #d8ffd8;
-    font-size: 11px;
-}
-QProgressBar::chunk { background: %s; border-radius: 6px; }
-"""
-
-PANEL_STYLE = """
-QFrame#panel {
-    background: rgba(0, 0, 0, 110);
-    border: 1px solid rgba(0, 255, 0, 90);
-    border-radius: 10px;
-}
-QFrame#panel QLabel { background: transparent; color: #00FF88; }
-"""
-
-TILE_STYLE = """
-QFrame#tile {
-    background: rgba(0, 255, 0, 18);
-    border: 1px solid rgba(0, 255, 0, 70);
-    border-radius: 9px;
-}
-QFrame#tile:hover {
-    background: rgba(0, 255, 0, 40);
-    border: 1px solid #00FF00;
-}
-"""
-
-WINDOW_STYLE = """
-QWidget { background: #16181c; color: #d8ffd8; }
-QLabel { background: transparent; color: #00FF88; }
-QScrollArea { border: none; background: transparent; }
-"""
+from stlibs import SharingData
+from stlibs.graphics.palette import palette
 
 SHOP_COLS = 3
 SHOP_IMAGE = 72
 BAG_COLS = 2
 BAG_IMAGE = 58
+
+
+def _theme():
+    """当前主题包（插件宿主一定绑好了；拿不到就回退 hacker）。"""
+    theme = getattr(SharingData, "theme", None)
+    if theme is not None:
+        return theme
+    from stlibs.themes import hacker
+
+    return hacker
 
 
 def _pet_name() -> str:
@@ -61,20 +43,70 @@ def _pet_name() -> str:
         return "桌宠"
 
 
-def _food_pixmap(name: str, size: int) -> QPixmap:
-    """食物图；图不在就现画一个绿框，别让格子空着。"""
+def bar_style(colors, key: str) -> str:
+    """进度条样式：底色/描边取主题，填充色按语义（等级 / 好感 / 饥饿）。"""
+    bright, soft = colors.tint(key)
+    return f"""
+    QProgressBar {{
+        background: {colors.track};
+        border: 1px solid {colors.border};
+        border-radius: 7px;
+        height: 20px;
+        text-align: center;
+        color: {colors.text};
+        font-size: 11px;
+    }}
+    QProgressBar::chunk {{
+        background: {bright};
+        border-radius: 6px;
+    }}
+    """
+
+
+def panel_style(colors) -> str:
+    return f"""
+    QFrame#panel {{
+        background: {colors.surface};
+        border: 1px solid {colors.border};
+        border-radius: {colors.radius}px;
+    }}
+    QFrame#panel QLabel {{ background: transparent; color: {colors.text}; }}
+    """
+
+
+def tile_style(colors) -> str:
+    return f"""
+    QFrame#tile {{
+        background: {colors.surface_soft};
+        border: 1px solid {colors.border};
+        border-radius: {colors.radius_small + 3}px;
+    }}
+    QFrame#tile:hover {{
+        background: {colors.hover};
+        border: 1px solid {colors.border_strong};
+    }}
+    QFrame#tile QLabel {{ background: transparent; color: {colors.text}; }}
+    """
+
+
+def _food_pixmap(name: str, size: int, colors=None) -> QPixmap:
+    """食物图；图不在就按主题色现画一个，别让格子空着。"""
     path = FOODS_DIR / f"{name}.png"
     if path.exists():
         pixmap = QPixmap(str(path))
         if not pixmap.isNull():
             return pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
+    colors = colors or palette()
     fallback = QPixmap(size, size)
     fallback.fill(Qt.transparent)
     painter = QPainter(fallback)
     painter.setRenderHint(QPainter.Antialiasing)
-    painter.setPen(QPen(QColor("#00FF00"), 1))
-    painter.setBrush(QColor(0, 255, 0, 40))
+
+    fill = QColor(colors.primary)
+    fill.setAlpha(40)
+    painter.setPen(QPen(QColor(colors.primary), 1))
+    painter.setBrush(fill)
     painter.drawRoundedRect(1, 1, size - 2, size - 2, 8, 8)
     painter.end()
     return fallback
@@ -90,8 +122,10 @@ class FoodTile(QFrame):
 
     def __init__(self, name: str, detail: str, image_size: int, parent: QWidget, on_click=None):
         super().__init__(parent)
+        colors = palette()
+
         self.setObjectName("tile")
-        self.setStyleSheet(TILE_STYLE)
+        self.setStyleSheet(tile_style(colors))
         self.setCursor(Qt.PointingHandCursor)
         self.name = name
         self.on_click = on_click
@@ -102,16 +136,18 @@ class FoodTile(QFrame):
 
         self.image_label = QLabel(self)
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setPixmap(_food_pixmap(name, image_size))
+        self.image_label.setPixmap(_food_pixmap(name, image_size, colors))
         self.image_label.setFixedHeight(image_size)
         layout.addWidget(self.image_label)
 
         self.name_label = QLabel(name, self)
         self.name_label.setAlignment(Qt.AlignCenter)
+        self.name_label.setStyleSheet(f"color: {colors.text}; background: transparent;")
         layout.addWidget(self.name_label)
 
         self.detail_label = QLabel(detail, self)
         self.detail_label.setAlignment(Qt.AlignCenter)
+        self.detail_label.setStyleSheet(f"color: {colors.text_dim}; background: transparent;")
         layout.addWidget(self.detail_label)
 
         layout.addStretch(1)
@@ -133,67 +169,72 @@ class CultivationWindow(QWidget):
     """上面状态、左边商店、右边背包（背包横着排）。"""
 
     def __init__(self, api, state: PetState, on_action=None):
-        from stlibs.themes import hacker
-
         super().__init__(None)
         self.api = api
         self.state = state
         self.on_action = on_action or (lambda action, payload=None: None)
+        self.colors = palette()
+        self.theme = _theme()
 
         self.setWindowTitle(f"养成系统 · {_pet_name()}")
         self.resize(720, 660)
-        self.setStyleSheet(WINDOW_STYLE)
+        self.setStyleSheet(self.colors.sheet("QWidget"))
 
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 12, 14, 12)
         root.setSpacing(10)
 
-        root.addWidget(self._build_status(hacker))
-        root.addLayout(self._build_columns(hacker), 1)
-        root.addLayout(self._build_actions(hacker))
+        root.addWidget(self._build_status())
+        root.addLayout(self._build_columns(), 1)
+        root.addLayout(self._build_actions())
 
         self.refresh()
 
-    def _build_status(self, hacker) -> QFrame:
+    # -- 构建 ---------------------------------------------------------------
+    def _label(self, text: str, parent: QWidget) -> QLabel:
+        """主题的标签控件：换主题时字体/配色自动跟着变。"""
+        return self.theme.Label(text, parent)
+
+    def _build_status(self) -> QFrame:
         panel = QFrame(self)
         panel.setObjectName("panel")
-        panel.setStyleSheet(PANEL_STYLE)
+        panel.setStyleSheet(panel_style(self.colors))
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 12)
         layout.setSpacing(6)
 
         head = QHBoxLayout()
-        self.title = hacker.Label("养成系统", panel)
+        self.title = self._label("养成系统", panel)
         head.addWidget(self.title)
         head.addStretch(1)
-        self.coin_label = hacker.Label("", panel)
+        self.coin_label = self._label("", panel)
         head.addWidget(self.coin_label)
         layout.addLayout(head)
 
-        self.status_label = hacker.Label("", panel)
+        self.status_label = self._label("", panel)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        self.level_bar = self._bar(panel, "#ffd166")
-        self.favor_bar = self._bar(panel, "#ff6b6b")
-        self.hungry_bar = self._bar(panel, "#a0522d")
+        self.level_bar = self._bar(panel, "level")
+        self.favor_bar = self._bar(panel, "favor")
+        self.hungry_bar = self._bar(panel, "hungry")
         for bar in (self.level_bar, self.favor_bar, self.hungry_bar):
             layout.addWidget(bar)
 
         return panel
 
-    def _build_columns(self, hacker) -> QHBoxLayout:
+    def _build_columns(self) -> QHBoxLayout:
         columns = QHBoxLayout()
         columns.setSpacing(10)
 
-        shop_panel, shop_layout = self._panel(hacker, "商店（点一下购买）")
+        shop_panel, shop_layout = self._panel("商店（点一下购买）")
         self.shop_holder = self._grid_holder(shop_panel, SHOP_COLS)
         shop_layout.addWidget(self.shop_holder)
         shop_layout.addStretch(1)
         columns.addWidget(shop_panel, 3)
 
-        bag_panel, bag_layout = self._panel(hacker, "背包（点一下吃掉）")
+        bag_panel, bag_layout = self._panel("背包（点一下吃掉）")
         self.bag_holder = self._grid_holder(bag_panel, BAG_COLS)
         bag_layout.addWidget(self.bag_holder)
         bag_layout.addStretch(1)
@@ -202,18 +243,18 @@ class CultivationWindow(QWidget):
         self.shop_panel, self.bag_panel = shop_panel, bag_panel
         return columns
 
-    def _panel(self, hacker, title: str):
+    def _panel(self, title: str):
         panel = QFrame(self)
         panel.setObjectName("panel")
-        panel.setStyleSheet(PANEL_STYLE)
+        panel.setStyleSheet(panel_style(self.colors))
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 12)
         layout.setSpacing(8)
-        layout.addWidget(hacker.Label(title, panel))
+        layout.addWidget(self._label(title, panel))
         return panel, layout
 
-    def _build_actions(self, hacker) -> QHBoxLayout:
+    def _build_actions(self) -> QHBoxLayout:
         actions = QHBoxLayout()
         actions.setSpacing(8)
         for label, action in (
@@ -221,7 +262,7 @@ class CultivationWindow(QWidget):
             ("刷新", "refresh"),
             ("关闭", "close"),
         ):
-            button = hacker.Button(label, parent=self)
+            button = self.theme.Button(label, parent=self)
             button.set_border()
             button.setMinimumHeight(34)
             button.clicked.connect(lambda _checked=False, name=action: self.on_action(name))
@@ -239,13 +280,14 @@ class CultivationWindow(QWidget):
         holder.columns = columns
         return holder
 
-    def _bar(self, parent: QWidget, color: str) -> QProgressBar:
+    def _bar(self, parent: QWidget, key: str) -> QProgressBar:
         bar = QProgressBar(parent)
-        bar.setStyleSheet(BAR_STYLE % color)
+        bar.setStyleSheet(bar_style(self.colors, key))
         bar.setTextVisible(True)
         bar.setFixedHeight(20)
         return bar
 
+    # -- 刷新 ---------------------------------------------------------------
     def refresh(self):
         state = self.state
         self.coin_label.setText(f"金币 {state.coin}")
@@ -275,8 +317,6 @@ class CultivationWindow(QWidget):
         self._fill(self.shop_holder, {name: 1 for name in state.foods}, "buy")
 
     def _fill(self, holder: QWidget, items: dict, action: str, empty: str = ""):
-        from stlibs.themes import hacker
-
         grid = holder.grid
         while grid.count():
             item = grid.takeAt(0)
@@ -291,7 +331,7 @@ class CultivationWindow(QWidget):
 
         if not items:
             if empty:
-                hint = hacker.Label(empty, holder)
+                hint = self._label(empty, holder)
                 hint.setWordWrap(True)
                 grid.addWidget(hint, 0, 0, 1, columns)
             return
@@ -324,4 +364,14 @@ class CultivationWindow(QWidget):
         self.raise_()
 
 
-__all__ = ["BAR_STYLE", "BAG_COLS", "PANEL_STYLE", "SHOP_COLS", "TILE_STYLE", "WINDOW_STYLE", "FoodTile", "CultivationWindow"]
+__all__ = [
+    "BAG_COLS",
+    "BAG_IMAGE",
+    "SHOP_COLS",
+    "SHOP_IMAGE",
+    "CultivationWindow",
+    "FoodTile",
+    "bar_style",
+    "panel_style",
+    "tile_style",
+]

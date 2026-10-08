@@ -23,6 +23,9 @@ def isolated_config(tmp_path, monkeypatch):
         {"name": "翻译", "description": "翻译成中文", "prompt": "只输出译文"},
         {"name": "总结", "description": "提炼要点", "prompt": "三条要点"},
     ], raising=False)
+    # 模型列表也要隔离：记忆页把它和本地模型拼在一起显示，
+    # 而 Config.models 是进程级全局——不隔离的话用例结果取决于跑之前谁动过它
+    monkeypatch.setattr(stlibs.Config, "models", {}, raising=False)
     yield stlibs.Config
 
 
@@ -702,6 +705,36 @@ def test_sending_document_shows_chip_in_bubble(qapp, isolated_config):
 
     labels = [child.text() for child in chat.bubbles[-1].findChildren(QtWidgets.QLabel)]
     assert any("说明.md" in text and "已读入正文" in text for text in labels)
+
+
+@pytest.mark.parametrize("theme_name", ["hacker", "breeze"])
+def test_removing_one_attachment_takes_its_chip_away(qapp, isolated_config, theme_name):
+    """回归：动态属性取回来的是副本，只比 `is` 的话 chip 会赖着不走（僵尸 chip）。
+
+    两个主题都要过——这是主题各自实现的删除逻辑，不是共用的。
+    """
+    import stlibs
+    from stlibs.ai import attachment as attachment_api
+
+    previous = stlibs.SharingData.theme
+    stlibs.SharingData.theme = stlibs.load_theme(theme_name)
+    try:
+        chat = stlibs.SharingData.theme.ChatWidget()
+        first = attachment_api.from_bytes(b"aaa", "第一个.md")
+        second = attachment_api.from_bytes(b"bbb", "第二个.md")
+        chat.add_attachment(first)
+        chat.add_attachment(second)
+        assert chat.attachment_layout.count() == 2
+
+        chat.remove_attachment(first)
+
+        assert len(chat.attachments) == 1
+        assert chat.attachment_layout.count() == 1, "删了附件，对应的 chip 也得跟着消失"
+        remaining = chat.attachment_layout.itemAt(0).widget()
+        assert remaining.property("attachment") == second
+        chat.deleteLater()
+    finally:
+        stlibs.SharingData.theme = previous
 
 
 def test_empty_message_without_attachments_does_nothing(qapp, isolated_config):

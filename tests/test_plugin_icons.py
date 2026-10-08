@@ -1,4 +1,3 @@
-"""插件图标：清单里的自定义图 + 没有图时的字母徽章回退。"""
 
 import os
 
@@ -140,7 +139,7 @@ def test_badge_color_is_stable_and_varied():
 
 @pytest.mark.parametrize("name,plugin_id,expected", [
     ("养成系统", "cultivation_system", "养"),
-    ("桌宠扭蛋机", "lucky_pet", "桌"),
+    ("桌宠天气", "weather", "桌"),
     ("Hello Plugin", "hello", "H"),
     ("2fast", "two", "2"),
     ("", "plain_id", "P"),
