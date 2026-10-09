@@ -7,12 +7,11 @@ from mcp.types import TextContent
 
 
 class MCP:
-    """MCP 客户端管理器（线程安全单例）"""
+    """MCP 客户端管理器（线程安全单例）。"""
     _instance = None
     _instance_lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
-        # 双重检查锁，保证多线程下只创建一个实例
         if cls._instance is None:
             with cls._instance_lock:
                 if cls._instance is None:
@@ -39,12 +38,10 @@ class MCP:
             self._thread = threading.Thread(target=self._start_loop, name="MCP-Loop", daemon=True, )
             self._thread.start()
 
-            # 确保事件循环已经真正启动
             asyncio.run_coroutine_threadsafe(self._noop(), self._loop).result()
 
             self._closed = False
 
-            # 最后再标记初始化完成
             self._initialized = True
 
             print("[MCP] 全局 MCP 管理器初始化完成")
@@ -232,14 +229,13 @@ class MCP:
 
     @classmethod
     def reset_instance(cls):
-        """彻底关闭并重置单例，主要用于程序退出或测试。"""
+        """彻底关闭并重置单例，用于程序退出或测试。"""
         with cls._instance_lock:
             instance = cls._instance
 
             if instance is None:
                 return
 
-            # 先把全局引用拿掉
             cls._instance = None
 
         try:

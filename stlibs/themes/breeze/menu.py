@@ -29,12 +29,12 @@ from .theme import (
     font_css,
 )
 
-# 条目左边图标统一按这个尺寸取（插件图标、主题图标都走这里）
+# 条目左边图标统一按这个尺寸取
 MENU_ICON = 20
 
 
 class Action(QAction):
-    """主题契约里的 Action：``(text, parent, icon)``，和 Qt 的 QAction 同源。"""
+    """主题契约里的 Action，参数是 (text, parent, icon)。"""
 
     def __init__(self, text, parent=None, icon: QIcon = None):
         super().__init__(text, parent)
@@ -43,7 +43,7 @@ class Action(QAction):
 
 
 def menu_icon_pixmap(icon, size: int = MENU_ICON):
-    """QIcon / QPixmap / 图片路径 → 画菜单用的 QPixmap；认不出来就返回 None。"""
+    """QIcon / QPixmap / 路径 转成菜单用的 QPixmap，认不出返回 None。"""
     if isinstance(icon, QPixmap):
         pixmap = icon
     elif isinstance(icon, QIcon):
@@ -66,7 +66,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
     ROW_HEIGHT = 34
     PADDING = 8
-    SHADOW_MARGIN = 2   # 卡片外面留一点边，圆角描边不会被窗口边缘切掉
+    SHADOW_MARGIN = 2   # 卡片外面留一点边，圆角描边不会被窗边切掉
     HOVER_BG = ACCENT_SOFT
 
     def __init__(self, parent=None):
@@ -82,11 +82,10 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.hacker_font.setPointSize(10)
 
         self.box = QWidget(self)
-        # objectName 要带主题前缀：`#id` 选择器是按名字命中的，
-        # 两个主题都用 "box" 的话样式会互相打到（CI 的 ui/object-name 会拦）
+        # objectName 要带主题前缀，否则两个主题的样式会互相打到
         self.box.setObjectName("breezeMenuBox")
 
-        # 顶部/底部内边距：让条目两侧的圆角高亮不至于贴着卡片边
+        # 顶部/底部内边距：让条目的圆角高亮不贴着卡片边
         self.layout = QVBoxLayout(self.box)
         self.layout.setSpacing(2)
         self.layout.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
@@ -110,7 +109,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
             }}
         """)
 
-    # -- 装配 ---------------------------------------------------------------
+    # 装配
     def addAction(self, action):
         self._actions.append(action)
         self._items.append(('action', action))
@@ -170,9 +169,9 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
             separator.setFixedWidth(self._max_width)
         self.adjustSize()
 
-    # -- 绘制 ---------------------------------------------------------------
+    # 绘制
     def _render_row(self, entry, width: int, hovered: bool) -> QPixmap:
-        """把一条菜单项画成一张位图（悬停整行铺浅蓝底）。"""
+        """把一条菜单项画成一张位图。"""
         height = entry['label'].height() or self.ROW_HEIGHT
         pixmap = QPixmap(max(1, int(width)), int(height))
         pixmap.fill(Qt.transparent)
@@ -209,7 +208,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         return width
 
     def _apply_width(self):
-        """把每条 item 拉到同一宽度（= 最宽那条），保证一行铺满、高亮不留空。"""
+        """把每条 item 拉到最宽那条，一行铺满、高亮不留空。"""
         for entry in self._action_items:
             entry['width'] = self._measure(entry['text'], entry['pixmap'])
             self._max_width = max(self._max_width, entry['width'])
@@ -220,9 +219,9 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
         self.box.setFixedWidth(self._max_width + self.PADDING * 2)
         self.adjustSize()
-    # -- 生命周期 -----------------------------------------------------------
+    # 生命周期
     def _announce_closed(self):
-        """通知宿主"菜单收起来了"（hide 与 close 可能都来一遍，去重）。"""
+        """通知宿主菜单收起来了，hide 与 close 只发一次。"""
         if self._closed_announced:
             return
         self._closed_announced = True
@@ -237,7 +236,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         super().closeEvent(event)
 
     def menu_actions(self):
-        """已经加进来的 QAction（条目是自己画的，Qt 的 actions() 拿不到）。"""
+        """已经加进来的 QAction（Qt 的 actions() 拿不到）。"""
         return list(self._actions)
 
     def _emit(self, action):
@@ -247,11 +246,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.close()
 
     def exec(self, pos=None):
-        """弹出来。
-
-        宽度要在这里**显式**收敛：弹出窗有自己的默认尺寸（200x…），``show()`` 不会
-        按内容缩回去，得先量一遍再 ``resize(minimumSizeHint())``，否则右边会拖一条空边。
-        """
+        """弹出菜单，宽度按内容收敛。"""
         if pos is None:
             pos = QCursor.pos()
         self._closed_announced = False  # 重新弹出来，下一次关闭要再通知一遍
@@ -263,7 +258,7 @@ class BreezeMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
 
 
 def draw_badge(glyph: str, size: int = 64, color: str = PRIMARY, background: str = PRIMARY_SOFT) -> QPixmap:
-    """画一个圆角小徽章（标题栏图标、页面角标都用得上）。"""
+    """画一个圆角小徽章（标题栏图标、页面角标用）。"""
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)

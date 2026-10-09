@@ -9,6 +9,7 @@ from .. import api as api_module
 from .. import manifest as manifest_module
 from ..api import PluginAPI, PluginError
 from ..manifest import ManifestError, PluginManifest
+from ..pages import PluginPages
 from . import python_plugin
 
 DEFAULT_DIR = "./plugins"
@@ -45,11 +46,7 @@ class MenuItem:
 
 @dataclass
 class MenuGroup:
-    """右键菜单里一个插件那一组：标题取插件清单的 menu（默认插件名），items 是它注册的条目。
-
-    ``icon`` 是这一组菜单标题左边那枚图（QPixmap）；宿主在不方便构造 Qt 对象时
-    不填它就行（比如纯逻辑测试里），菜单会退化成只有文字。
-    """
+    """右键菜单里一个插件那一组：标题、条目和 QPixmap 图标。"""
     plugin: str
     title: str
     items: list = field(default_factory=list)
@@ -73,6 +70,8 @@ class PluginManager:
 
     infos: dict = field(default_factory=dict)
     problems: list = field(default_factory=list)
+    # 插件注册的设置页
+    pages: PluginPages = None
     _apis: dict = field(default_factory=dict)
     _hooks: dict = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
@@ -81,6 +80,8 @@ class PluginManager:
 
     def __post_init__(self):
         self.directory = str(self.directory or DEFAULT_DIR)
+        if self.pages is None:
+            self.pages = PluginPages(self)
 
     @staticmethod
     def _config() -> dict:
@@ -194,6 +195,9 @@ class PluginManager:
         return info
 
     def unload(self, plugin_id: str) -> bool:
+        # 卸载/重载后不许留下孤儿页面
+        self.pages.remove_plugin(plugin_id)
+
         with self._lock:
             hook_table = self._hooks.pop(plugin_id, None)
             plugin_api = self._apis.pop(plugin_id, None)
@@ -323,6 +327,33 @@ class PluginManager:
                 result[name] = {"plugin": plugin_id, "help": help_text}
         return result
 
+    def settings_pages(self) -> list:
+        """插件注册的设置页信息（设置窗与 SDK 都用它）。"""
+        return self.pages.public()
+
+    def settings_action(self, plugin_id: str, page_key: str, action: str, value=None, key: str | None = None):
+        """设置页控件动了：值落盘后派发给 on_settings_action。"""
+        if key:
+            try:
+                self.set_setting(plugin_id, key, value)
+            except Exception as exc:  # noqa: BLE001 - 存不下来也要通知插件
+                print(f"[plugin:{plugin_id}] 设置没存下来：{exc}")
+
+        payload = {"page": page_key, "action": action or key or "", "key": key or "", "value": value}
+        result = self._call(plugin_id, api_module.SETTINGS_ACTION, payload)
+        if isinstance(result, str) and result.strip():
+            self._say(result.strip())
+        return result
+
+    @staticmethod
+    def _say(text: str):
+        try:
+            from ... import notify
+
+            notify(text, "info")
+        except Exception:  # noqa: BLE001 - 没有界面时就算了
+            pass
+
     def system_prompts(self) -> list:
         if self._prompts_cache:
             return list(self._prompts_cache)
@@ -350,11 +381,7 @@ class PluginManager:
         self._prompts_cache = []
 
     def menu_groups(self) -> list:
-        """插件注册的菜单项，按插件分组（右键菜单一层子菜单一组）。
-
-        顺序 = 插件加载顺序（order 小的在前），组内顺序 = 插件注册顺序。
-        组标题取清单的 ``menu``（没写就是插件名），图标取 ``icon``（没有就是字母徽章）。
-        """
+        """插件注册的菜单项，按插件分组成一层子菜单。"""
         with self._lock:
             apis = list(self._apis.items())
             tables = list(self._hooks.items())
@@ -382,7 +409,7 @@ class PluginManager:
         return list(groups.values())
 
     def menu_items(self) -> list:
-        """扁平的菜单项列表（保留老接口：SDK/探针/测试都还在用它）。"""
+        """扁平的菜单项列表（SDK/探针/测试还在用）。"""
         return [item for group in self.menu_groups() for item in group.items]
 
     def menu_title(self, plugin_id: str) -> str:
@@ -515,6 +542,7 @@ class PluginManager:
             "plugins": [info.public() for info in self.infos.values()],
             "problems": list(self.problems),
             "commands": self.commands(),
+            "pages": self.settings_pages(),
         }
 
 

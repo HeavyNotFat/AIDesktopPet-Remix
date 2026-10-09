@@ -75,7 +75,7 @@
       const figure = document.createElement('figure');
       figure.className = 'att-img';
       const img = document.createElement('img');
-      // 当前这轮有原图就显示原图，历史记录里只有缩略图
+      // 有原图就用原图，否则用缩略图
       img.src = (live && item.preview) || item.thumb || item.preview || '';
       img.alt = item.name || '图片';
       img.loading = 'lazy';
@@ -154,7 +154,7 @@
   }
 
   function modelSeesImages() {
-    // 后端只在明确知道时给 vision；不知道（云端/查不到）就不拦
+    // 后端没明确标记 vision 时不做拦截
     const current = state.models.find(m => m.value === state.model);
     return !current || current.vision !== false;
   }

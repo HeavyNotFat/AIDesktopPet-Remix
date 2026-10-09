@@ -36,7 +36,7 @@ from .window import PageHint, PageTitle
 
 
 def _section(text: str, parent=None) -> BreezeLabel:
-    """小节标题：主色偏深的粗体小字，用来给一栏内容起名（页面里不进卡片）。"""
+    """小节标题：主色偏深的粗体小字。"""
     label = BreezeLabel(text, parent)
     label.setStyleSheet(
         f"QLabel {{ background: transparent; border: none; color: {PRIMARY_DEEP}; {font_css(13, weight=600)} }}"
@@ -45,7 +45,7 @@ def _section(text: str, parent=None) -> BreezeLabel:
 
 
 def _count_chip(parent=None) -> BreezeLabel:
-    """数量小胶囊：浅雾蓝底 + 雾蓝字，挂在"可用模型"标题右边。"""
+    """数量小胶囊：浅雾蓝底 + 雾蓝字。"""
     chip = BreezeLabel("", parent)
     chip.setStyleSheet(f"""
         QLabel {{
@@ -61,7 +61,7 @@ def _count_chip(parent=None) -> BreezeLabel:
 
 
 class BasicWidgetScroll(QWidget):
-    """「新增 LLM」页的表单：别名 / 模型名 / Key / Base URL，加完立刻进聊天列表。"""
+    """「新增 LLM」页的表单：别名 / 模型名 / Key / URL。"""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -143,7 +143,7 @@ class BasicWidgetScroll(QWidget):
         self.reload_existing()
 
     def _build_remove_row(self):
-        # 上下排的卡片里独占一行：下拉框自己撑开，按钮固定宽
+        # 下拉框撑开、按钮固定宽
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -222,7 +222,7 @@ class BasicWidgetScroll(QWidget):
 
 
 class Basic(QWidget):
-    """「新增 LLM」页：表单放进滚动区，窗口拉小也不会挤没。"""
+    """「新增 LLM」页：表单放进滚动区。"""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -266,7 +266,7 @@ class Memory(QWidget):
             parent=self,
         ))
 
-        # 选模型这一行直接挂在页面上（别再套一层容器）：外面按页面坐标找这个下拉框
+        # 选模型这一行直接挂在页面上，别套一层容器
         picker = QHBoxLayout()
         picker.setContentsMargins(0, 0, 0, 0)
         picker.setSpacing(8)
@@ -284,7 +284,7 @@ class Memory(QWidget):
         self.reload_models()
 
     def showEvent(self, event, /):
-        """每次切到这一页都重新扫一遍模型：刚在「新增 LLM」里加的模型立刻能选。"""
+        """每次切到这一页都重新扫一遍模型。"""
         super().showEvent(event)
         self.reload_models()
 
@@ -298,7 +298,7 @@ class Memory(QWidget):
         return seen
 
     def reload_models(self):
-        """重新扫描模型：新加的模型立刻出现在下拉里（选中项尽量保留）。"""
+        """重新扫描模型（选中项尽量保留）。"""
         selected = self.model_selector.currentText()
         self.models = self.model_names()
 
@@ -315,15 +315,11 @@ class Memory(QWidget):
         self.show_model(self.model_selector.currentText())
 
     def refresh(self):
-        """按契约暴露的短名字：和 `reload_models` 一回事（重新扫一遍模型）。"""
+        """按契约暴露的短名字，和 reload_models 一回事。"""
         self.reload_models()
 
     def show_model(self, model: str):
-        """切到某个模型：只刷新展示区，不再给每个模型建控件。
-
-        以前这里是 "每个模型建一个展示项塞进页签"，改成下拉之后那些控件已经没用了；
-        继续创建它们会盖在整页上（看得见两个输入框、控件点不动）。
-        """
+        """切到某个模型时刷新展示区。"""
         if not model:
             return
 
@@ -339,7 +335,7 @@ class Memory(QWidget):
         return []
 
     def _receive(self, data: list):
-        """聊天那边推过来的记忆更新：只认当前选中的模型。"""
+        """聊天那边推过来的记忆更新，只认当前选中的模型。"""
         if not isinstance(data, (list, tuple)) or len(data) < 2:
             return
         model, messages = data[0], data[1]
@@ -377,7 +373,7 @@ class RAGWidgetScroll(QWidget):
             parent=self,
         ))
 
-        # 启用？
+        # 启用 RAG
         enable_rag_switch = BreezeSwitch(parent=self)
         enable_rag_switch.setChecked(Config.rag['enable'])
         enable_rag_switch.stateChanged.connect(self.check_enable)
@@ -388,7 +384,7 @@ class RAGWidgetScroll(QWidget):
             parent=self,
         ))
 
-        # 启用BM25
+        # BM25 检索
         enable_bm25_switch = BreezeSwitch(parent=self)
         enable_bm25_switch.setChecked(Config.rag['bm25_enable'])
         enable_bm25_switch.stateChanged.connect(self.check_bm25_enable)
@@ -399,7 +395,7 @@ class RAGWidgetScroll(QWidget):
             parent=self,
         ))
 
-        # 压缩启用
+        # 压缩 RAG
         compressed_rag_switch = BreezeSwitch(parent=self)
         compressed_rag_switch.setChecked(Config.rag['compressed_enable'])
         compressed_rag_switch.stateChanged.connect(self.check_compressed_enable)
@@ -433,7 +429,6 @@ class RAGWidgetScroll(QWidget):
         layout.addWidget(BreezeCard(
             "RAG引擎",
             rag_engine,
-            # "Chroma轻量，Lance多元，Milvus海量。"
             "Chroma 轻量，Lance多元",
             parent=self,
         ))
@@ -521,11 +516,11 @@ class RAGWidgetScroll(QWidget):
 
     @staticmethod
     def _collections() -> list[str]:
-        """./resources/rag 下的知识库；chroma_db 是引擎自己建的目录，不算知识库。"""
+        """./resources/rag 下的知识库，chroma_db 由引擎自建。"""
         try:
             entries = os.listdir("./resources/rag")
         except OSError:
-            # 目录不在（打包、换过工作目录）时返回空表，不能连累整页打不开
+            # 目录不在（打包、换过工作目录）时返回空表
             return []
         return [name for name in entries if name != "chroma_db"]
 
@@ -589,7 +584,7 @@ class RAGWidgetScroll(QWidget):
 
 
 class RAG(QWidget):
-    """RAG 页：配置项放进滚动区（项多，屏幕矮的时候要能滚）。"""
+    """RAG 页：配置项放进滚动区。"""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -676,11 +671,7 @@ class MCP(QWidget):
         return item.text().strip() if item is not None else ""
 
     def save(self):
-        """把整张表写回配置。
-
-        平时改单元格就已经随手落盘了（和 `change_data` 一样），这个方法给外部脚本
-        或"改动没落上"的时候用；参数按空格切，跟表里显示的一致。
-        """
+        """把整张 MCP 表写回配置。"""
         servers = [
             {
                 "server": self._cell(row, 0),
@@ -701,7 +692,7 @@ class MCP(QWidget):
         self.mcp_table.setItem(row, 2, QTableWidgetItem(command))
 
     def add_mcp(self):
-        # 空行也得建出单元格，否则那一行是点不进去编辑的
+        # 空行也得建出单元格，否则那一行点不进去编辑
         row = self.mcp_table.rowCount()
         self.mcp_table.blockSignals(True)
         self.mcp_table.insertRow(row)
@@ -716,7 +707,7 @@ class MCP(QWidget):
         # 删除表格
         row = self.mcp_table.currentRow()
         if row < 0:
-            return  # 没有选中行时 pop(-1) 会误删最后一条
+            return  # 没选中行时 pop(-1) 会误删最后一条
         self.mcp_table.removeRow(row)
         Config.mcp['mcp'].pop(row)
         ConfigLoader.save_config()
@@ -737,7 +728,7 @@ class Cooperation(QWidget):
         columns = QHBoxLayout()
         columns.setSpacing(10)
 
-        # -- 左栏：开关三件套 + 可用模型（搜索 + 列表 + 加入按钮） ----------------
+        # 左栏：开关三件套 + 可用模型（搜索 + 列表 + 加入按钮）
         left = QVBoxLayout()
         left.setSpacing(8)
 
@@ -779,7 +770,7 @@ class Cooperation(QWidget):
         )
         left.addWidget(rounds_card)
 
-        # 数量放在标题右边：模型几十个的时候一眼能看出筛掉了多少
+        # 数量放在标题右边，一眼能看出筛掉了多少
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
         head.setSpacing(8)
@@ -809,7 +800,7 @@ class Cooperation(QWidget):
 
         columns.addLayout(left, 1)
 
-        # -- 右栏：协作成员表 + 一排操作 ---------------------------------------
+        # 右栏：协作成员表 + 一排操作
         right = QVBoxLayout()
         right.setSpacing(8)
         right.addWidget(_section("协作成员（主模型之外，按角色给意见）", self))
@@ -850,7 +841,7 @@ class Cooperation(QWidget):
         self.refresh()
 
     def refresh(self):
-        """切到这个页签时重新读配置：刚添加的模型立刻能选。"""
+        """切到这个页签时重新读配置。"""
         self.agent_table.blockSignals(True)
         self.agent_table.setRowCount(0)
         for agent in Config.coop.get("agents") or []:
@@ -876,7 +867,7 @@ class Cooperation(QWidget):
 
     @staticmethod
     def _count_text(matched: int, total: int, keyword: str = "") -> str:
-        """数量文案：没筛就说总数，筛了就说"匹配 X / 共 Y"，一个模型都没有时给指路。"""
+        """数量文案：总数或匹配数，没有模型时给指路。"""
         if not total:
             return "（还没有可用模型，先去「新增 LLM」加一个）"
         if keyword:
@@ -884,7 +875,7 @@ class Cooperation(QWidget):
         return f"{total} 个模型"
 
     def filter_models(self, keyword: str):
-        """按关键字筛可用模型：模型几十个的时候靠它找，而不是挤成一行字。"""
+        """按关键字筛可用模型。"""
         keyword = (keyword or "").strip().lower()
         rows = [row for row in self.models
                 if not keyword or keyword in row[0].lower() or keyword in row[1].lower()]
@@ -901,7 +892,7 @@ class Cooperation(QWidget):
         table.blockSignals(False)
         table.rows = rows
 
-        # 数量文案跟着列表走，别让"共 N"和表里实际行数对不上
+        # 数量文案跟着列表走，别和表里实际行数对不上
         self.available_label.setText(self._count_text(len(rows), len(self.models), keyword))
 
     def add_selected(self):
@@ -981,7 +972,7 @@ class Cooperation(QWidget):
 
     def add_agent(self):
         row = self.agent_table.rowCount()
-        # 建行时 setItem 会触发 itemChanged，先静音免得重复追加一条
+        # 建行时 setItem 会触发 itemChanged，先静音免得重复追加
         self.agent_table.blockSignals(True)
         self.add_row("", "", "")
         self.agent_table.blockSignals(False)
@@ -1024,12 +1015,12 @@ class Cooperation(QWidget):
             notify(f"协作配置已保存：主模型 + {len(agents)} 个协作模型", "success", 3000)
 
     def save(self):
-        """按契约暴露的短名字：落盘协作成员（和 `save_agents` 同一个动作）。"""
+        """按契约暴露的短名字，落盘协作成员。"""
         self.save_agents()
 
 
 class Skills(QWidget):
-    """技能：一段可以随时套在提问外面的提示词，聊天窗里按 /名字 或点「技能」使用。"""
+    """技能：可以套在提问外面的提示词，聊天时按 /名字 使用。"""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -1161,12 +1152,12 @@ class Skills(QWidget):
             notify(f"已保存 {len(skills)} 个技能：{'、'.join(item['name'] for item in skills)}", "success", 3000)
 
     def save(self):
-        """按契约暴露的短名字：落盘技能列表（和 `save_skills` 同一个动作）。"""
+        """按契约暴露的短名字，落盘技能列表。"""
         self.save_skills()
 
 
 class LLMPage(QWidget):
-    """LLM 设置总页：六个页签，先配模型再调行为。"""
+    """LLM 设置总页：六个页签。"""
 
     def __init__(self, parent):
         super().__init__(parent)

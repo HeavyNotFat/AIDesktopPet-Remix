@@ -26,7 +26,7 @@ GLYPHS = {"info": "i", "success": "✓", "warning": "!", "error": "×"}
 
 
 class BreezeNotify(QFrame):
-    """操作反馈条：优先贴在当前窗口顶部，没有窗口时才浮到屏幕右下角。"""
+    """操作反馈条：贴在当前窗口顶部，没有窗口时才浮到屏幕右下角。"""
 
     LEVELS = LEVEL_COLORS
     MARGIN = 16
@@ -40,10 +40,10 @@ class BreezeNotify(QFrame):
         if QApplication.instance() is None:
             raise RuntimeError("没有 QApplication，无法显示提示")
 
-        # 提示条经常不是主窗口的子控件，得自己保证字体装好了（否则中文变方框）
+        # 提示条经常不是主窗口的子控件，自己保证字体装好了
         install_ui_font()
 
-        # parent 传什么都行：这里统一解析成"要贴进去的窗口"，解析不到才当浮层
+        # parent 传什么都行，统一解析成要贴进去的窗口
         parent = self._resolve_host(parent)
         super().__init__(parent)
 
@@ -133,10 +133,7 @@ class BreezeNotify(QFrame):
         return max(self.MIN_WIDTH, min(self.MAX_WIDTH, self._host.width() - 2 * self.MARGIN))
 
     def _place(self):
-        """贴窗口顶部（或屏幕右下角）：后到的排在已有的**下面**，读起来才是从上到下。
-
-        进来时 self 已经进过 `_stack` 了，所以算高度要把自己排除掉。
-        """
+        """把提示条贴到窗口顶部，后到的排在已有的下面。"""
         others = [
             item for item in type(self)._stack
             if item is not self and item._host is self._host and item.isVisible()

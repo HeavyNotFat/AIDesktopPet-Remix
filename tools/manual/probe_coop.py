@@ -13,7 +13,7 @@ def main():
     lead_model = argv[0] if argv else "glm4:latest"
     members = argv[1:] or [lead_model]
 
-    # 联调只关心协作本身，别去拉 MCP、也别建 RAG 索引
+    # 联调只跑协作，关掉 MCP 与 RAG 索引
     stlibs.Config.mcp["enable"] = False
     stlibs.Config.rag["enable"] = False
     stlibs.Config.memory["longterm"] = False

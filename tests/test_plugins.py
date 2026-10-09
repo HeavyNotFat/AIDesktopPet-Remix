@@ -698,3 +698,37 @@ def test_menu_groups_do_not_need_qt(plugins_root):
 
     assert len(groups) == 1
     assert groups[0].title == "alpha"
+
+
+@needs_node
+def test_javascript_plugin_adds_settings_page(plugins_root):
+    """JS 插件走 node 桥注册设置页：表单按 JSON 传，动作回调也回到插件里。"""
+    write_plugin(plugins_root, "jspage", '''
+        module.exports = {
+          on_load(api) {
+            api.addSettingsPage('JS 设置', [
+              {type: 'switch', key: 'loud', label: '大声', default: true},
+              {type: 'button', action: 'ping', label: '打个招呼'}
+            ], 'js-page', 10);
+          },
+          on_settings_action(api, ctx) {
+            if (ctx.action === 'ping') return 'pong';
+            return '改了 ' + ctx.key;
+          }
+        };
+    ''', language="javascript")
+    manager = make_manager(plugins_root)
+    manager.load_all()
+
+    spec = manager.pages.find("jspage", "js-page")
+    assert spec is not None, "JS 插件没把页面注册进来"
+    assert spec.order == 10
+    assert [(row.type, row.key) for row in spec.rows] == [("switch", "loud"), ("button", "")]
+
+    assert manager.settings_action("jspage", "js-page", "ping") == "pong"
+
+    assert manager.settings_action("jspage", "js-page", "loud", False, key="loud") == "改了 loud"
+    assert stlibs.Config.plugins["settings"]["jspage"]["loud"] is False
+
+    manager.unload("jspage")
+    assert manager.pages.pages("jspage") == []

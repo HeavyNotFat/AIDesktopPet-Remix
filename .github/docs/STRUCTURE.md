@@ -8,7 +8,7 @@
 AI 桌宠：Live2D / 静态序列帧形象 + 本地（Ollama）或云端（OpenAI 兼容）大模型，
 对外提供 **桌面聊天窗**、**网页聊天**（FastAPI + SSE）、**插件系统**（Python / JavaScript）、
 **UDP SDK**（外部程序控制桌宠）四条入口，另有 RAG 知识库、MCP 工具调用、长期记忆、
-多模型协作与一套 55 项的自研 CI 门禁。
+多模型协作与一套 57 项的自研 CI 门禁。
 
 ## 1. 代码规模
 
@@ -16,9 +16,10 @@ AI 桌宠：Live2D / 静态序列帧形象 + 本地（Ollama）或云端（OpenA
 |:------------------------|----:|------:|------:|:-----------------------------------|
 | `resources/`（配置/模型/知识库） |  93 | 74378 | 71.4% | 绝大部分是 Live2D 模型 JSON 与知识库语料，不是手写代码 |
 | `stlibs/`（核心库）          |  58 | 10742 | 10.3% | AI、主题、插件、SDK、网页聊天服务                |
-| `tests/`（测试）            |  27 |  8082 |  7.8% | 536 个用例                            |
-| `tools/`（CI 门禁与手工脚本）    |  25 |  4907 |  4.7% | 55 项检查 + 联调/出图脚本                   |
-| 根目录（入口/文档/配置）           |  19 |  1825 |  1.8% | `main.py`、`core.py`、README、CI.md   |
+| `tests/`（测试）            |  29 |  8700 |  8.2% | 663 个用例                            |
+| `tools/`（CI 门禁与手工脚本）    |  26 |  4907 |  4.7% | 57 项检查 + 联调/出图脚本                   |
+| 根目录（入口/配置）             |  17 |  1700 |  1.7% | `main.py`、`core.py`、README、AGENTS.md |
+| `docs/`（项目文档）           |   6 |  1600 |  1.5% | API / CI / 结构 / 功能详解 / 人设 / 截图   |
 | `resources/web/`（前端）    |  12 |  1524 |  1.5% | 网页聊天单页（原生 JS）                      |
 | `plugins/`（示例与养成插件）     |  19 |  1162 |  1.1% | 插件作者参考实现                           |
 | `shader/`（渲染）           |   3 |  1110 |  1.1% | OpenGL 画布 + 两种形象                   |
@@ -35,8 +36,16 @@ ADPRemix/
 ├── requirements.txt           运行依赖（PySide6 / live2d-py / ollama / fastapi / chromadb …）
 ├── pyproject.toml             打包元数据 + ruff + pytest + 自研门禁 [tool.adpci] 配置
 ├── .github/workflows/         ci.yml（门禁/ruff/编译/测试矩阵）、release.yml（发布前门禁 + Windows 打包）
-├── README.md / CI.md          功能总览与部署 / 质量门禁与「怎么测」
-├── PROMPT.md                  猫娘人设提示词草稿（与 resources/prompts.json 的 general 同源）
+├── README.md                  项目主页：功能总览、部署、文档索引（根目录只留它 + AGENTS.md）
+├── AGENTS.md                  AI 协作者规则（注释规矩、文档位置、插件 UI 分类…）
+├── docs/                      项目文档（除各目录 README.md 外的 .md 都在这儿）
+│   ├── README.md              文档总目录
+│   ├── API.md                 网页聊天 HTTP 接口
+│   ├── CI.md                  质量门禁与「怎么测」
+│   ├── STRUCTURE.md           本文件：结构与职责地图
+│   ├── FEATURES.md            功能详解（记忆/协作/技能/附件/插件/养成/SDK）
+│   ├── PROMPT.md              猫娘人设提示词草稿（与 resources/prompts.json 的 general 同源）
+│   └── showcase/              README 与文档里的界面截图
 │
 ├── shader/                    桌宠本体（窗口 + 渲染）
 │   ├── __init__.py            OpenGL 画布基类：GLSL 3.30 程序、VAO、离屏 FBO、透明度/旋转 uniform
@@ -70,7 +79,8 @@ ADPRemix/
 │   │   └── breeze/            清新主题「轻风」（浅色卡片 + 薄荷绿/雾蓝），见 §4.5
 │   ├── graphics/              窗口装配层
 │   │   ├── chat.py            聊天窗：主题 Window + 按「本地/API」分类的模型页导航
-│   │   ├── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）
+│   │   ├── settings.py        设置窗：6 个设置页（Ctrl+1..5、Ctrl+0）+「插件」分类（宿主插件页 + 插件注册的页面）
+│   │   ├── plugin_page.py     插件页渲染：声明式表单 → 当前主题的控件；builder 页面直接挂
 │   │   └── menu.py            插件右键菜单装配：所有条目一层平铺、每条带自己插件的图标
 │   ├── derfer/__init__.py     线程边界与音频：LLMAICallback(QThread) + 音频解码/播放
 │   ├── mproc/onlinechat/      网页聊天服务端（FastAPI）
@@ -81,11 +91,13 @@ ADPRemix/
 │   │   └── __main__.py        单独起服务（不需要 Qt）
 │   ├── plugins/               插件系统（宿主侧）
 │   │   ├── __init__.py        对外导出
-│   │   ├── api.py             插件 API 门面（日志/提示/设置/存储/菜单/命令/提示词/动作表情/主线程回调）+ hook 常量
+│   │   ├── api.py             插件 API 门面（日志/提示/设置/存储/菜单/命令/提示词/动作表情/设置页/主线程回调）+ hook 常量
+│   │   ├── errors.py          PluginError（插件参数不对、加载失败都抛它）
+│   │   ├── pages.py           设置页注册表：页面规格 + 声明式表单校验（不依赖 Qt，可单测）
 │   │   ├── icons.py           插件图标：自定义图解码 + 字母徽章兜底（带缓存与无 GUI 守卫）
-│   │   ├── manifest.py        plugin.json 解析与校验（含 icon / menu）
+│   │   ├── manifest.py        plugin.json 解析与校验（含 icon / menu / settings）
 │   │   └── manager/           管理子包
-│   │       ├── core.py        PluginManager：发现/加载/派发/卸载/事件/能力聚合/菜单分组
+│   │       ├── core.py        PluginManager：发现/加载/派发/卸载/事件/能力聚合/菜单分组/设置页
 │   │       ├── python_plugin.py Python 入口导入 + hook 表（签名自适应）
 │   │       ├── js_plugin.py   node 子进程桥（一行一个 JSON 的同步协议）
 │   │       ├── runtime.js     跑在 node 里的那一半
@@ -120,11 +132,11 @@ ADPRemix/
 │   └── web/onlinechat/        网页聊天前端（index.html + css + 10 个 js 模块）
 │
 ├── tools/
-│   ├── ci/                    自研门禁（零第三方依赖，AST 静态分析）55 项检查
+│   ├── ci/                    自研门禁（零第三方依赖，AST 静态分析）57 项检查
 │   └── manual/                手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、
 │                              make_plugin_icons（画插件图标）、strip_doc_headers
 │
-└── tests/                     602 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
+└── tests/                     663 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
 ```
 
 ## 3. 启动链路
@@ -225,7 +237,11 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 `stlibs/graphics/`（装配，与主题无关）：
 
 * `chat.py`：聊天窗 = 主题 Window + 左侧「本地 / API」两分类下的模型页导航；提供 `add_model/find_model/reload_models`。
-* `settings.py`：设置窗 = 6 页（常规 / LLM / 语音 / 动画 / 插件 / 设置），把子页信号中转成窗口级信号。
+* `settings.py`：设置窗 = 6 页（常规 / LLM / 语音 / 动画 / 插件 / 设置），把子页信号中转成窗口级信号；
+  「插件」分类里另有插件自己注册的页面（见 §4.7），窗口负责挂载/重建/摘除。
+* `plugin_page.py`：插件设置页的渲染。声明式表单用**当前主题的控件类**（`Label`/`LineEdit`/`Switch`/
+  `ComboBox`/`CardWidget`/`ScrollArea`）画出来，颜色取 `palette()`；插件给了 `builder` 就直接用它的 QWidget，
+  `builder` 抛异常时渲染成一张写着原因的页面（不会把设置窗带崩）。
 * `menu.py`：插件右键菜单的装配（所有插件的条目**一层平铺**，每条带自己插件的图标、标签是「插件名 · 菜单名」）+ 点击回调转发。
 * `palette.py`：**插件用的语义配色**。主题包可以导出一个 `PALETTE = ThemePalette(...)`（见 `themes/base.py`），
   插件用 `palette()` 取 `surface` / `border` / `text` / `tint("level")` 这类语义色，而不是把某套主题的色号抄进插件；
@@ -236,19 +252,19 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 | 文件               | 内容                                                                                                                                                                        |
 |:-----------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `__init__.py`    | 契约门面：把下面各模块的实现重新导出 + 14 个映射别名（`Window`/`Menu`/`Button`/`ChatWidget`/`ModelChat`…）+ `IconList()` 实例。新增控件加到对应模块再从这儿 import，别再往里堆实现 |
+| `__init__.py`    | 契约门面：把下面各模块的实现重新导出 + 映射别名（`Window`/`Menu`/`Button`/`Switch`/`ChatWidget`/`ModelChat`…）+ `IconList()` 实例。新增控件加到对应模块再从这儿 import，别再往里堆实现 |
 | `primitives.py`  | 基础控件：`HackerLabel`/`HackerButton`/`HackerLineEdit`/`HackerTextEdit`/`HackerComboBox`/`HackerSlider`/`HackerSwitch`/`HackerCard`/`HackerTable`/`HackerTabWidget`/`HackerScrollArea` |
 | `menu.py`        | 自绘右键菜单 `HackerMenu`（每条一张 QPixmap，一行铺满 + 整行高亮，**一层平铺、没有子菜单**）+ `Action` + `menu_icon_pixmap` |
 | `chrome.py`      | 主窗口零件：`_HackerTitleBar`、`_CodeRain` 代码雨、侧栏 `_HackerCategory`/`_HackerNavButton`，外加动画名映射表与 `prompts` |
 | `feedback.py`    | 操作反馈条 `HackerNotify`（贴窗口顶部，多级配色 + 堆叠 + 进出场动画）                                                                                                                              |
 | `chat.py`        | 聊天区：`HackerChatBubble`（复制/播放/技能标签/附件）、`HackerChatWidget`（消息区 + 技能栏 + 附件栏 + 输入行）、`HackerAttachmentChip`、`_ChatInputEdit`（回车发送、Ctrl+V 图片转附件） |
-| `window.py`      | 主窗口 `HackerWindow`（标题栏/导航/堆叠页/快捷键）+ 菜单图标集 `IconList`                                                                                                                       |
+| `window.py`      | 主窗口 `HackerWindow`（标题栏/导航/堆叠页/快捷键，导航项可带图标）+ 菜单图标集 `IconList`                                                                                                                       |
 | `model_chat.py`  | 单模型聊天页 `ModelChat`（LLM 缓存 `cache_llm_class`、函数线程、插件改写、技能与插件提示词合并、协作提示）                                                                                                      |
 | `llm.py`         | LLM 设置页六 Tab：新增 LLM / 记忆（模型下拉 + JSON 视图）/ RAG / MCP / 协作 / 技能                                                                                                                |
 | `general.py`     | 常规设置：名字、形象、透明度、大小、旋转                                                                                                                                                      |
 | `animation.py`   | 动画页：Live2D 动作/表情面板、坐标录入、智能与 AI 控制开关                                                                                                                                         |
 | `settings.py`    | 设置页外壳：主题下拉（`available_themes()`）                                                                                                                                            |
-| `plugins.py`     | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标                                                                                                                          |
+| `plugins.py`     | 插件管理页（展示层，逻辑在 `plugins/manager/panel.py`）；表格首列是插件图标。插件自己注册的设置页挂在同一个「插件」分类下，但由 `graphics/plugin_page.py` 渲染，不在这里 |
 | `tts.py` / `recognition.py` | 语音页占位 / 空文件（未实现）                                                                                                                                          |
 
 `stlibs/themes/breeze/`（清新主题「轻风」，浅色外观，与 hacker 结构一一对应）：
@@ -303,8 +319,14 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 * 一个插件 = 一个目录 + `plugin.json` + 入口文件；Python 跑在进程内（完全信任），JavaScript 跑在 node 子进程
   （一行一个 JSON 的同步协议，`fs.readSync(0)` × 专用读线程）。
-* Hook：`on_load` / `on_unload` / `on_chat_send` / `on_chat_reply` / `on_system_prompt` / `on_command` / `on_event`。
-* API：日志、提示、设置、私有存储、菜单项、命令注册、系统提示词、动作表情、`send_to_chat`、`run_on_ui`。
+* Hook：`on_load` / `on_unload` / `on_chat_send` / `on_chat_reply` / `on_system_prompt` / `on_command` /
+  `on_event` / `on_settings_action`。
+* API：日志、提示、设置、私有存储、菜单项、命令注册、系统提示词、动作表情、`send_to_chat`、`run_on_ui`、
+  设置页（`add_settings_page` / `remove_settings_page` / `settings_pages` / `refresh_settings_page`）。
+* 设置页：插件只能往设置窗的 **「插件」分类**里加页面——`stlibs/plugins/pages.py` 记账（页面规格 + 声明式
+  表单校验，不依赖 Qt），`stlibs/graphics/settings.py` 负责挂载/重建/摘除，`stlibs/graphics/plugin_page.py`
+  用**当前主题的控件**把表单渲染出来。带 `key` 的行改完直接写进 `plugins.settings.<id>.<key>`，并回调插件的
+  `on_settings_action`；插件卸载/重载时注册表通知设置窗把页面摘掉，不留孤儿。
 * 图标：清单 `icon` 指插件目录内的相对路径（png/svg/jpg/webp/ico/bmp），没有或文件不在时由 `icons.py`
   按插件名生成字母/汉字徽章（颜色由 id 哈希决定，进程级缓存）；没有 QGuiApplication 时一律返回空图标
   （Qt 在这种情况下构造 `QPixmap` 会**直接终止进程**，不是抛异常）。设置页表格首列与插件菜单条目共用它。
@@ -333,15 +355,15 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 
 ### 4.10 工具链与测试
 
-* `tools/ci/`：零第三方依赖的 AST 门禁，55 项检查分 8 类
-  （abstract 6 / ui 14 / theme 11 / config 4 / resource 6 / web 6 / hygiene 4 / import 3），
+* `tools/ci/`：零第三方依赖的 AST 门禁，57 项检查分 9 类
+  （abstract 6 / ui 14 / theme 11 / config 4 / resource 6 / web 6 / hygiene 5 / docs 2 / import 3），
   支持 `# ci: ignore[=id]` 内联抑制、5 种输出格式（text/json/markdown/github/sarif）。
   用法：`python -m tools.ci [检查id|分类|前缀*] [--strict] [--format …]`。
 * `tools/manual/`：真机联调脚本（附件/协作/养成/插件/技能/网页聊天各一个）、
   `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件菜单、养成面板、聊天窗）、
   `shoot_theme.py <主题名>` 出某个主题的对照图（主窗口 / LLM 页 / 聊天窗 / 右键菜单 / 提示条），
   `make_plugin_icons.py` 用 Pillow 画插件图标、`strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
-* `tests/`：602 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
+* `tests/`：663 个用例。`tests/ci/` 是门禁自身的测试；UI 类用例走离屏 Qt；
   前端 js 用例用 node 跑真实脚本（`test_web_*.py`）；`conftest.py` 统一把临时目录收敛到 `.ci-tmp/`。
 
 ### 4.11 CI/CD
@@ -386,8 +408,10 @@ Chat 窗口 → ModelChat._send_message
 | 主题映射名 / 新增主题能力         | `_ThemeTypingProtocol` + `themes/base.py` + 主题包尾别名 + `tools/ci/contract.py`                         |
 | 配置项增删                  | `stlibs/__init__.py::_BaseModelConfig` + `resources/configure.json` + 设置页 UI（CI `config/schema` 会拦） |
 | 网页接口 / 前端 id / JS 命名空间 | 后端路由 + `index.html` + 对应 js（CI `web/*` 六项会拦）                                                        |
-| 插件 API 增删              | `stlibs/plugins/api.py` + `runtime.js`（JS 侧）+ `plugins/README.md` + 两个示例                            |
+| 插件 API 增删              | `stlibs/plugins/api.py` + `runtime.js`（JS 侧）+ `plugins/README.md` + 示例插件                      |
+| 插件设置页 API / 表单行类型增删     | `stlibs/plugins/pages.py` + `api.py` + `runtime.js` + `graphics/plugin_page.py` + `plugins/README.md` + `tests/test_plugin_settings_*.py` |
 | 插件清单字段增删              | `stlibs/plugins/manifest.py` + `plugins/README.md` 的 plugin.json 段 + 设置页插件表（列宽很紧，加列要一起调）             |
+| 文档增删 / 挪位置             | `docs/`（除各目录 `README.md`）+ `docs/README.md` 的目录表 + 引用它的 `README.md` / `docs/*.md`                 |
 | SDK 方法增删               | `stlibs/sdk/methods.py` + `METHOD_HELP` + 客户端方法 + `stlibs/sdk/README.md`（`mcp_servers/sdk` 若也要用需同步） |
 | 新增资源文件                 | 放进 `resources/` 并确认代码里的路径字面量（CI `resource/missing` 会拦）                                              |
 
@@ -399,6 +423,7 @@ Chat 窗口 → ModelChat._send_message
 |:-------------------------------------------------------------------|:----------------------------------------------------------------------|:-------------------------------------------------------|
 | `stlibs/ai/local.py::LLM.complete()` 调用不存在的 `self._call_chat(...)` | 本地模型参与协作时必然 `AttributeError` → review 模式"主模型没有给出初稿"、parallel 全员失败（静默） | 改为走与 `chat()` 同一条 `function_call.run()` 链路，且不碰记忆；补回归测试 |
 | `shader/live2d.py::emit_sdk_event()` 是空实现（只剩 docstring）            | 只有 Live2D 形象时 `pet_click` 到不了 SDK 订阅者                                 | 补齐为 `stlibs.emit_sdk_event(name, data)`                |
+| `tests/test_sdk.py` 里 `set_config("opacity", "80")` 改了全局 `Config` 不还原   | 之后任何建设置窗的用例都会在 `setValue("80")` 上 `TypeError`（换个执行顺序就炸）             | 用例里 monkeypatch 还原原值（AGENTS.md 的"用例各自收干净全局状态"）         |
 
 ### 7.2 已核实、尚未修
 

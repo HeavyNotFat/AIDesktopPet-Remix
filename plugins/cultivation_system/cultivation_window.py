@@ -25,7 +25,7 @@ BAG_IMAGE = 58
 
 
 def _theme():
-    """当前主题包（插件宿主一定绑好了；拿不到就回退 hacker）。"""
+    """当前主题包，拿不到就回退 hacker。"""
     theme = getattr(SharingData, "theme", None)
     if theme is not None:
         return theme
@@ -44,7 +44,7 @@ def _pet_name() -> str:
 
 
 def bar_style(colors, key: str) -> str:
-    """进度条样式：底色/描边取主题，填充色按语义（等级 / 好感 / 饥饿）。"""
+    """进度条样式：底色/描边取主题，填充色按语义。"""
     bright, soft = colors.tint(key)
     return f"""
     QProgressBar {{
@@ -90,7 +90,7 @@ def tile_style(colors) -> str:
 
 
 def _food_pixmap(name: str, size: int, colors=None) -> QPixmap:
-    """食物图；图不在就按主题色现画一个，别让格子空着。"""
+    """食物图，图不在就按主题色现画一个。"""
     path = FOODS_DIR / f"{name}.png"
     if path.exists():
         pixmap = QPixmap(str(path))
@@ -113,12 +113,12 @@ def _food_pixmap(name: str, size: int, colors=None) -> QPixmap:
 
 
 def _food_icon(name: str, size: int = 28) -> QIcon:
-    """给按钮用的图标形式（兼容旧调用）。"""
+    """按钮用的图标。"""
     return QIcon(_food_pixmap(name, size))
 
 
 class FoodTile(QFrame):
-    """一格食物：上面大图，下面名字与价格（或数量）。整格可点。"""
+    """一格食物：大图 + 名字与价格，整格可点。"""
 
     def __init__(self, name: str, detail: str, image_size: int, parent: QWidget, on_click=None):
         super().__init__(parent)
@@ -166,7 +166,7 @@ class FoodTile(QFrame):
 
 
 class CultivationWindow(QWidget):
-    """上面状态、左边商店、右边背包（背包横着排）。"""
+    """上面状态、左边商店、右边背包。"""
 
     def __init__(self, api, state: PetState, on_action=None):
         super().__init__(None)
@@ -190,9 +190,8 @@ class CultivationWindow(QWidget):
 
         self.refresh()
 
-    # -- 构建 ---------------------------------------------------------------
     def _label(self, text: str, parent: QWidget) -> QLabel:
-        """主题的标签控件：换主题时字体/配色自动跟着变。"""
+        """主题的标签控件。"""
         return self.theme.Label(text, parent)
 
     def _build_status(self) -> QFrame:
@@ -287,7 +286,6 @@ class CultivationWindow(QWidget):
         bar.setFixedHeight(20)
         return bar
 
-    # -- 刷新 ---------------------------------------------------------------
     def refresh(self):
         state = self.state
         self.coin_label.setText(f"金币 {state.coin}")

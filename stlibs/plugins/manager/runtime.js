@@ -1,6 +1,6 @@
-// JavaScript 插件运行时：stdin 收 JSON 行，stdout 回 JSON 行。
-// 同步读写是故意的 —— 插件里 api.storage.get() 这类调用必须能直接拿到结果。
 'use strict';
+
+// JavaScript 插件运行时：stdin 收 JSON 行，stdout 回 JSON 行，同步读写。
 
 const fs = require('fs');
 const path = require('path');
@@ -69,6 +69,13 @@ function buildApi() {
     storageAll: () => callApi('storage_all'),
 
     addMenuItem: (label, action) => callApi('add_menu_item', String(label), action || null),
+    addSettingsPage: (title, form, key, order) => callApi(
+      'add_settings_page', String(title), form || null, null, key || null,
+      order === undefined ? 100 : order
+    ),
+    removeSettingsPage: key => callApi('remove_settings_page', key === undefined ? null : key),
+    settingsPages: () => callApi('settings_pages'),
+    refreshSettingsPage: key => callApi('refresh_settings_page', key === undefined ? null : key),
     registerCommand: (name, help) => callApi('register_command', String(name), help || ''),
     appendSystemPrompt: text => callApi('append_system_prompt', String(text)),
     clearSystemPrompt: () => callApi('clear_system_prompt'),

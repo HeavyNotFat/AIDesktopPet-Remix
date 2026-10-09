@@ -118,7 +118,7 @@ def _exports(ctx) -> tuple[dict[str, set[str]], dict[str, str]]:
 def _object_keys(body: str) -> set[str]:
     keys = set(re.findall(r"([A-Za-z_$][\w$]*)\s*:", body))
     keys |= set(re.findall(r"(?:^|[,{\s])([A-Za-z_$][\w$]*)\s*(?=[,}]|$)", body))
-    # 取值器/设值器也是导出：{ get pending() {...} } 一样能被 QW.x.pending 取到
+    # 取值器/设值器也算导出（get/set 形式）
     keys |= set(re.findall(r"\b(?:get|set)\s+([A-Za-z_$][\w$]*)\s*\(", body))
     return {key for key in keys if key}
 

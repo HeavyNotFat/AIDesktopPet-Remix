@@ -86,7 +86,7 @@ class BreezeBubbleAction(QToolButton):
 
 
 class BreezeChatBubble(QFrame):
-    """一条消息气泡：用户靠右（主色浅底），助手靠左（白底），都带大圆角。"""
+    """一条消息气泡：用户靠右（主色浅底），助手靠左（白底）。"""
 
     MAX_WIDTH_RATIO = 0.60
 
@@ -97,7 +97,7 @@ class BreezeChatBubble(QFrame):
         self.skill_name: str = ""
         self.image_labels: list = []
 
-        # 样式按 objectName 选：类名选择器会连带命中子控件，白底卡片很容易被刷掉
+        # 样式按 objectName 选，类名选择器会连带命中子控件
         self.setObjectName("BreezeBubble")
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
 
@@ -133,7 +133,7 @@ class BreezeChatBubble(QFrame):
         self._update_style()
 
     def _build_actions(self):
-        """回复底下的一条小动作栏：默认只有复制，有音频时多一个播放。"""
+        """回复底下的小动作栏：复制，有音频时多一个播放。"""
         self.actions = QWidget(self)
         self.actions_layout = QHBoxLayout(self.actions)
         self.actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -165,7 +165,7 @@ class BreezeChatBubble(QFrame):
         BreezeNotify("已复制这条回复", "success", 1600)
 
     def attach_audio(self, data: str):
-        """挂上语音但**不自动播**，等用户点播放。"""
+        """挂上语音，等用户点播放。"""
         self.audio_data = data
         self.play_button.setVisible(True)
         self.actions.setVisible(True)
@@ -201,7 +201,7 @@ class BreezeChatBubble(QFrame):
         self.layout.addWidget(self.image_label)
 
     def add_attachments(self, attachments):
-        """图片放缩略图，文档放一个小药丸标签（名字 + 大小 + 读取情况）。"""
+        """图片放缩略图，文档放药丸标签（名字 + 大小 + 读取情况）。"""
         from ...ai import human_size
 
         for item in attachments or []:
@@ -338,8 +338,7 @@ class _ChatInputEdit(BreezeTextEdit):
             self.parent_._send_message()
             return
 
-        # Ctrl+V / Shift+Insert 得在这里拦：QTextEdit 的 paste() 不会走 insertFromMimeData
-        # 那个虚函数（实测 Qt 6.11 里图片会被当成富文本资源塞进文档，界面上什么也看不到）
+        # Ctrl+V / Shift+Insert 得在这里拦，QTextEdit 的 paste() 不走 insertFromMimeData
         if self._is_paste_key(event) and self._paste_as_attachment():
             return
 
@@ -365,7 +364,7 @@ class _ChatInputEdit(BreezeTextEdit):
         return bool(self.parent_.attach_from_mime(source))
 
     def canInsertFromMimeData(self, source):
-        """图片/文件交给聊天窗当附件：这里一律拒绝，免得被插成看不见的文档资源。"""
+        """图片/文件交给聊天窗当附件，这里一律拒绝。"""
         if hasattr(self.parent_, "can_attach_mime") and self.parent_.can_attach_mime(source):
             return False
         return super().canInsertFromMimeData(source)
@@ -378,7 +377,7 @@ class _ChatInputEdit(BreezeTextEdit):
 
 
 class BreezeChatWidget(QWidget):
-    # (正文, 附件列表)：附件跟着信号走，避免发送方清空后接收方拿到空列表
+    # (正文, 附件列表)：附件跟着信号走，避免被发送方清空
     userInputSignal = Signal(str, list)
 
     def __init__(self, parent=None):
@@ -438,7 +437,7 @@ class BreezeChatWidget(QWidget):
         input_layout.addWidget(self.send_button)
         main_layout.addLayout(input_layout)
 
-        # 只有"发送"是主行动：实心主色，附件/技能保持浅色描边
+        # 只有"发送"是主行动：实心主色
         self.send_button.set_border()
         self.send_button.clicked.connect(self._send_message)
 
@@ -451,7 +450,7 @@ class BreezeChatWidget(QWidget):
             event.acceptProposedAction()
 
     def _build_skill_bar(self):
-        """当前技能提示条：没启用技能时整条藏起来，不占位置。"""
+        """当前技能提示条，没启用技能时整条藏起来。"""
         self.skill_bar = QWidget()
         layout = QHBoxLayout(self.skill_bar)
         layout.setContentsMargins(14, 6, 14, 0)
@@ -494,7 +493,7 @@ class BreezeChatWidget(QWidget):
             self.skill_button.setText("技能")
 
     def build_skill_menu(self):
-        """菜单每次重建：设置页里刚加的技能不用重启就能选到。"""
+        """菜单每次重建，设置页里刚加的技能不用重启就能选到。"""
         from ... import get_translation
 
         menu = BreezeMenu(self)
@@ -561,11 +560,7 @@ class BreezeChatWidget(QWidget):
 
     @staticmethod
     def _is_same_attachment(chip: "BreezeAttachmentChip", attachment: dict) -> bool:
-        """chip 上挂的是不是这份附件。
-
-        动态属性取回来的是 Python 对象的副本，只比 `is` 永远不成立，
-        chip 就会赖在附件栏里（看着像没删掉），所以退一步再比内容。
-        """
+        """chip 上挂的是不是这份附件。"""
         stored = chip.property("attachment")
         return stored is attachment or stored == attachment
 
@@ -592,7 +587,7 @@ class BreezeChatWidget(QWidget):
         return added
 
     def can_attach_mime(self, source) -> bool:
-        """这份剪切板/拖拽内容能不能当附件（不产生副作用，Qt 会先问这个）。"""
+        """这份剪切板/拖拽内容能不能当附件。"""
         if source is None:
             return False
         if source.hasImage():
@@ -606,11 +601,7 @@ class BreezeChatWidget(QWidget):
         return [url.toLocalFile() for url in source.urls() if url.isLocalFile() and url.toLocalFile()]
 
     def _clipboard_pixmap(self, source):
-        """剪切板里的图片可能是 QImage 也可能是 QPixmap，统一成 QPixmap。
-
-        （实测：系统剪切板给的是 QImage，只有代码里 setImageData(QPixmap) 才是 QPixmap——
-        以前只判 QPixmap，所以真实 Ctrl+V 一张图都加不进来。）
-        """
+        """剪切板里的图片统一成 QPixmap。"""
         if source is None or not source.hasImage():
             return None
 
@@ -675,7 +666,7 @@ class BreezeChatWidget(QWidget):
         from ... import run_plugin_command
         from ...ai import parse_skill
 
-        # 插件命令：/名字 参数（技能优先，认不出来再看插件有没有注册这个命令）
+        # 插件命令：/名字 参数（技能优先，认不出来再看插件）
         handled, result = run_plugin_command(text)
         if handled:
             self.input_edit.clear()
@@ -694,7 +685,7 @@ class BreezeChatWidget(QWidget):
 
         pending = self.take_attachments()
         self.add_user_msg(text, skill=self.active_skill, attachments=pending)
-        # 附件要跟着信号一起走：ModelChat 那边再取一次的话已经被这里清空了
+        # 附件跟着信号一起走，ModelChat 那边再取一次就空了
         self.userInputSignal.emit(text, pending)
         self.input_edit.clear()
         self.input_edit.setFocus()

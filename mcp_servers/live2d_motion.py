@@ -33,7 +33,6 @@ def play_live2d_motion(
         _cat_idx[_item] = _cat_idx.get(_cat, 0)
         _cat_idx[_cat] = _cat_idx[_item] + 1
 
-    # 模糊匹配
     matches = get_close_matches(motion, motions)
     if matches:
         motion = matches[0]

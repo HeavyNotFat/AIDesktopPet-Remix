@@ -31,7 +31,7 @@ from .theme import (
 
 
 class IconList(IconListABS):
-    """菜单图标集：设置 / 聊天 / 关闭，三张都现画（圆角方块 + 字形）。"""
+    """菜单图标集：设置 / 聊天 / 关闭，三张都现画。"""
 
     SETTING = None
     CHAT = None
@@ -119,7 +119,7 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setFixedSize(940, 640)
-        # base_sheet 会顺手把自带中文字体装上（离屏/无系统字体时全靠它）
+        # base_sheet 会顺手把自带中文字体装上
         self.setStyleSheet(base_sheet())
 
         self.matrix_bg = _CodeRain(self)
@@ -179,7 +179,7 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
         body.addWidget(self.pages, 1)
         main_layout.addLayout(body)
 
-    # -- 契约要求的方法 -----------------------------------------------------
+    # 契约要求的方法
     def create_category(self, category: str, position: str = "top") -> _Category:
         if position not in ("top", "bottom"):
             raise ValueError("position must be 'top' or 'bottom'")
@@ -203,13 +203,14 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
         shortcut_keys: tuple[int, ...] | None = None,
         position: str = "top",
         category: str | None = None,
+        icon=None,
     ):
         if position not in ("top", "bottom"):
             raise ValueError("position must be 'top' or 'bottom'")
 
         shortcut_text = self.__format_shortcut(shortcut_keys) if shortcut_keys else None
 
-        button = _NavButton(text, shortcut_text)
+        button = _NavButton(text, shortcut_text, icon)
         button.clicked.connect(lambda w=widget: self._set_active(w))
 
         if category is not None:
@@ -250,7 +251,7 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
         widget.setParent(None)
 
     def remove_category(self, category: str):
-        """移除一个分类头（里面的条目要用 removeNavigation 先摘掉）。"""
+        """移除一个分类头，条目要先用 removeNavigation 摘掉。"""
         widget = self.categories.pop(category, None)
         if widget is None:
             return False
@@ -260,9 +261,9 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
         widget.deleteLater()
         return True
 
-    # -- 主题自己的方法 -----------------------------------------------------
+    # 主题自己的方法
     def setEnableBorder(self, enabled):
-        """桌宠"贴边隐藏"时把窗口描边收掉，看着像没边框。"""
+        """桌宠贴边隐藏时把窗口描边收掉。"""
         border = f"1px solid {BORDER}" if enabled else "1px solid transparent"
         self.nav_scroll.setStyleSheet(f"""
             QScrollArea {{
@@ -314,7 +315,7 @@ class BreezeWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
 
 
 class PageTitle(QLabel):
-    """各设置页顶部那条标题（页面自己拼界面时用）。"""
+    """各设置页顶部那条标题。"""
 
     def __init__(self, text: str = "", parent=None):
         super().__init__(text, parent)

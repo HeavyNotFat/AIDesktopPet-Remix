@@ -2,13 +2,16 @@
 
 一个插件 = 插件目录下的一个文件夹，里面必须有 `plugin.json` 和入口文件。
 支持 **Python**（进程内）和 **JavaScript**（node 子进程）。
-设置页 →「插件」里可以启用/停用、重载、打开插件目录。
+设置页 →「插件」里可以启用/停用、重载、打开插件目录；插件自己注册的设置页也挂在同一个
+**「插件」分类**下（见下面的「设置页导航项」）。
 
 宿主侧的实现都在 `stlibs/plugins/` 下，按"作者看的"和"宿主怎么管"分成两层：
 
 ```
 stlibs/plugins/
 ├── api.py            插件能用到的那套 API（本文件下面那张表）
+├── errors.py         PluginError（参数不对、加载失败都抛它）
+├── pages.py          设置页导航项的注册表（不依赖 Qt）
 ├── manifest.py       plugin.json 的解析与校验
 └── manager/          管插件的那一摊
     ├── core.py           PluginManager：发现 / 加载 / 派发 hook / 卸载
@@ -17,6 +20,9 @@ stlibs/plugins/
     ├── runtime.js        跑在 node 里的那一半
     └── panel.py          设置页「插件」页背后的逻辑（不依赖 Qt）
 ```
+
+声明式设置页由 `stlibs/graphics/plugin_page.py` 渲染成控件（用当前主题的控件类，
+所以换主题时插件页跟着变）。
 
 宿主入口是 `stlibs.plugin_manager()`；单例本体在 `stlibs.plugins.manager.core.manager`
 （`stlibs.plugins.manager` 是子包，别拿它当单例用）。
@@ -48,7 +54,7 @@ stlibs/plugins/
   ],
   // 只是声明，便于阅读；不填也能跑
   "settings": [
-    // 可选：会显示在管理页/可被 api.get_setting 读取
+    // 可选：api.get_setting 读它；add_settings_page 不写 form 时按它自动生成设置页
     {
       "key": "suffix",
       "label": "后缀",
@@ -151,7 +157,117 @@ api.play_motion("摸摸头", 0)
 api.send_to_chat("后台跑完了", "assistant")
 ```
 
-### 4. 增强 Hook 的注册
+### 4. 设置页导航项
+
+- **接口地址：** `api.add_settings_page` / `api.remove_settings_page` / `api.settings_pages` / `api.refresh_settings_page`
+- **用途：** 在**设置窗 →「插件」分类**下加一页自己的界面（改参数、按按钮）。挂载、排序、卸载
+  都由宿主负责：插件不用碰分类、不用自己开窗口；插件被停用/重载时它的页面会自动摘掉。
+- **请求参数：**
+
+| 参数名 | 必填 | 示例值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `title` | 是 | `养成设置` | 导航项文字（显示成「插件名 · 标题」） |
+| `form` | 否 | `[{"type": "switch", ...}]` | 声明式表单，两种语言都能用（见下张表） |
+| `builder` | 否 | `build_page` | **Python 专用**：调用后返回 `QWidget` 的函数 |
+| `key` | 否 | `settings` | 页面标识；同一个插件里重名＝覆盖旧页 |
+| `order` | 否 | `100` | 同一插件内多页的排序，小的在前 |
+| `hint` | 否 | `改完立刻生效` | 页面顶部的一行说明 |
+
+`form` 与 `builder` 都不给时，宿主按 `plugin.json` 里声明的 `settings` 自动生成表单。
+
+#### 表单行（`form` 的每一项）
+
+| `type` | 必填字段 | 说明 |
+| :--- | :--- | :--- |
+| `text` | `key` | 单行输入框 |
+| `password` | `key` | 密码输入框（值按**明文**存在 `configure.json` 里） |
+| `number` | `key` | 数字输入框，可给 `min` / `max`，超出会夹回来 |
+| `switch` | `key` | 开关 |
+| `select` | `key`、`options` | 下拉框；`options` 支持 `"文本"` / `["值", "文本"]` / `{"value": …, "label": …}` |
+| `button` | `action` | 按钮，点了触发 `on_settings_action` |
+| `label` / `hint` | `text` | 一行正文 / 一行灰色说明 |
+
+公共字段：`label`（卡片标题）、`hint`（卡片下的说明）、`default`（没存过设置时的初始值）、
+`placeholder`（输入框占位符）。单页最多 64 行、每行最多 64 个下拉项，看不懂的行会被跳过。
+
+#### 值怎么存、怎么回传
+
+* 带 `key` 的行改完会**立刻写进** `resources/configure.json` 的 `plugins.settings.<插件id>.<key>`，
+  插件侧用 `api.get_setting(key, 默认值)` 直接读，不用自己存；
+* 每次改动都会调一次插件的 `on_settings_action(api, ctx)`：
+
+| `ctx` 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `page` | String | 页面 key |
+| `action` | String | 这一行的 `action`（没写就是行的 `key`） |
+| `key` | String | 改动对应的设置名；按钮是空串 |
+| `value` | Any | 新值；按钮是 `null` |
+
+回调里返回字符串会弹一条提示条；想让页面重新读一遍值，调 `api.refresh_settings_page(key)`。
+
+#### 返回值解析
+
+```python
+api.add_settings_page(...)      # -> "settings"（页面 key，之后用它刷新/摘除）
+api.settings_pages()            # -> [{"key": "settings", "title": "养成设置", "form": [...]}]
+api.refresh_settings_page()     # -> 被重建的页数
+api.remove_settings_page()      # -> 被摘掉的页数（不传 key 就是全部）
+```
+
+JavaScript 同名同义（驼峰）：`api.addSettingsPage(title, form, key, order)`、
+`api.removeSettingsPage(key)`、`api.settingsPages()`、`api.refreshSettingsPage(key)`。
+
+**Python：声明式表单 + 按钮**
+
+```python
+def on_load(api):
+    api.add_settings_page("养成设置", key="settings", hint="改完立刻生效", form=[
+        {"type": "number", "key": "click_coin", "label": "点一下最多给几枚金币", "default": 5, "min": 1, "max": 50},
+        {"type": "switch", "key": "mood_prompt", "label": "饿了时提醒 AI", "default": True},
+        {"type": "button", "action": "open", "label": "打开面板"},
+    ])
+
+
+def on_settings_action(api, ctx):
+    if ctx["action"] == "open":
+        api.notify("面板打开了")
+        return "面板打开了"
+```
+
+**Python：自己画界面（builder）**
+
+```python
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+
+def build_page(parent=None):
+    page = QWidget(parent)
+    QVBoxLayout(page).addWidget(QLabel("这里想怎么画就怎么画"))
+    return page
+
+
+def on_load(api):
+    api.add_settings_page("我的界面", builder=build_page, key="custom")
+```
+
+**JavaScript：只能声明式表单**
+
+```js
+module.exports = {
+    on_load(api) {
+        api.addSettingsPage('我的设置', [
+            {type: 'text', key: 'suffix', label: '后缀', default: '喵'},
+            {type: 'button', action: 'hello', label: '打个招呼'}
+        ], 'settings');
+    },
+    on_settings_action(api, ctx) {
+        if (ctx.action === 'hello') return '你好！';
+        return null;
+    }
+};
+```
+
+### 5. 增强 Hook 的注册
 
 - **接口地址：** `api.register_command` / `api.append_system_prompt` / `api.run_on_ui`
 - **用途：** 注册聊天命令、往系统提示词里加一段、把回调丢回 Qt 主线程（Python 专用）。
@@ -185,6 +301,7 @@ Python 也允许写成 `def on_load():` 这种不要参数的形式。
 | `on_chat_reply(api, ctx)` | 模型回复完成后 | 字符串=替换回复；None/空=不改 |
 | `on_system_prompt(api)` | 每轮拼系统提示词时 | 字符串=追加一段（本地与网页聊天都会带上） |
 | `on_command(api, ctx)` | 聊天里 `/命令` 或菜单项被点 | 字符串=作为回复显示 |
+| `on_settings_action(api, ctx)` | 设置页里的控件动了 | 字符串=弹一条提示条 |
 | `on_event(api, ctx)` | 宿主事件（`pet_click`、`chat_finished`） | 无 |
 
 `ctx` 字段：
@@ -199,6 +316,10 @@ Python 也允许写成 `def on_load():` 这种不要参数的形式。
 | | `text` | String | 整条输入 |
 | `on_event` | `name` | String | 事件名：`pet_click` / `chat_finished` |
 | | `data` | Object | 事件数据 |
+| `on_settings_action` | `page` | String | 页面 key（`add_settings_page` 的返回值） |
+| | `action` | String | 行的 `action`（没写就是行的 `key`） |
+| | `key` | String | 改动对应的设置名；按钮是空串 |
+| | `value` | Any | 新值；按钮是 `null` |
 
 ## 最小模板
 
@@ -208,6 +329,10 @@ Python 也允许写成 `def on_load():` 这种不要参数的形式。
 def on_load(api):
     api.add_menu_item("打个招呼", "greet")
     api.register_command("统计")
+    # 设置窗「插件 → 我的插件 · 打个招呼设置」里的一页
+    api.add_settings_page("打个招呼设置", form=[
+        {"type": "text", "key": "suffix", "label": "后缀", "default": "喵"},
+    ])
 
 
 def on_chat_reply(api, ctx):
@@ -219,6 +344,10 @@ def on_command(api, ctx):
         api.notify("你好！")
         return "打个招呼"
     return f"参数是 {ctx['args']}"
+
+
+def on_settings_action(api, ctx):
+    return f"{ctx['key']} 改成了 {ctx['value']}"
 ```
 
 **JavaScript**
@@ -228,6 +357,9 @@ module.exports = {
     on_load(api) {
         api.addMenuItem('打个招呼', 'greet');
         api.registerCommand('统计');
+        api.addSettingsPage('打个招呼设置', [
+            {type: 'text', key: 'suffix', label: '后缀', default: '喵'}
+        ], 'greet-settings');
     },
     on_chat_reply(api, ctx) {
         return ctx.text + '（来自我的插件）';
@@ -238,6 +370,9 @@ module.exports = {
             return '打个招呼';
         }
         return '参数是 ' + ctx.args;
+    },
+    on_settings_action(api, ctx) {
+        return ctx.key + ' 改成了 ' + ctx.value;
     }
 };
 ```
@@ -246,7 +381,10 @@ module.exports = {
 
 * 日志：控制台里所有插件输出都带 `[plugin:<id>]` 前缀；hook 抛异常会记在插件状态里，
   管理页的「状态」列会显示 `运行出错：…`；
-* 改完代码不用重启：管理页选中该行 →「重载插件」；
+* 改完代码不用重启：管理页选中该行 →「重载插件」；重载会把它的设置页摘掉再加回来，
+  设置页里的值存在 `configure.json` 里，不会跟着丢；
+* 设置页排错：页面挂不上先看「插件」分类里有没有这一项（页面标题是「插件名 · 标题」），
+  声明式表单写错行会被静默跳过，`builder` 抛异常会显示成一张写着原因的页面；
 * JavaScript 插件需要 node（`ADP_NODE` 环境变量可以指定路径）；找不到 node 时它会显示加载失败，
   不影响 Python 插件；
 * 单个 hook 卡住会被超时掐掉（默认 3 秒，`configure.json` 的 `plugins.timeout` 可调），

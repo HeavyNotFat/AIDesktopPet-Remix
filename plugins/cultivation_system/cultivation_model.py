@@ -17,7 +17,7 @@ FULL_PROMPT = "你现在吃得很饱、心情也不错（好感 {favor}），回
 
 
 def default_state() -> dict:
-    # 初始饥饿给 60/100：老插件一上来就是满的，得等一分多钟才能喂第一口
+    # 初始饥饿 60/100
     return {
         "coin": 0,
         "foods": [],
@@ -48,7 +48,7 @@ class PetState:
         self.next_decay_at = self._next_decay_time()
 
     def _storage_get(self, key, default=None):
-        """三种 storage 形态都认：dict、插件的 PluginAPI、带 get/set 的包装。"""
+        """兼容 dict、PluginAPI、get/set 三种 storage。"""
         if self.storage is None:
             return default
         if isinstance(self.storage, dict):
@@ -117,7 +117,7 @@ class PetState:
         )
 
     def add_level_exp(self, amount: int) -> list:
-        """加经验；返回一串升级提示（可能连着升好几级）。"""
+        """加经验；返回升级提示列表。"""
         events = []
         if amount == 0:
             return events
@@ -173,7 +173,7 @@ class PetState:
         return events
 
     def feed_hungry(self, amount: int) -> bool:
-        """喂食时加饥饿值；吃饱了就不吃（返回 False）。"""
+        """喂食加饥饿值；吃饱返回 False。"""
         hungry = self.hungry
         target = hungry["hungry"] + amount
         if target >= hungry["current"]:
@@ -182,7 +182,7 @@ class PetState:
         return True
 
     def decay_hungry(self, amount: int = 1) -> bool:
-        """饿一点；已经见底返回 True（该喊饿了）。"""
+        """掉一点饥饿值；见底返回 True。"""
         hungry = self.hungry
         hungry["hungry"] = max(0, hungry["hungry"] - max(0, amount))
         return hungry["hungry"] <= 0

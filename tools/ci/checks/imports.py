@@ -164,7 +164,7 @@ def _imported_third_party(ctx) -> dict[str, Location]:
 
 
 def _project_top_level(ctx) -> set[str]:
-    """项目自己的顶层包/模块名（从索引推导，避免硬编码漏项）。"""
+    """项目自己的顶层包/模块名。"""
     names = {module.split(".")[0] for module in ctx.sources.modules}
     names.update({"core", "main"})
     return names

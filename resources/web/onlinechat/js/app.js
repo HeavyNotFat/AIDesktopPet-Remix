@@ -26,7 +26,7 @@
   function deleteChat(id) {
     if (state.pending && state.pending.chatId === id) state.pending.controller.abort();
     QW.store.removeChat(id);
-    // 顺手释放后台该会话独占的 LLM 实例
+    // 释放后台该会话独占的 LLM 实例
     QW.api.resetSession(id);
     refresh();
   }
@@ -36,7 +36,7 @@
     chat.updated = Date.now();
     QW.store.saveChats();
     refresh();
-    // 缓存命中不调模型，但得把这一轮补进服务端记忆，否则追问会断上下文
+    // 缓存命中不调模型，但要把这一轮补进服务端记忆。
     QW.api.recall(model, question, entry.answer, chat.id);
   }
 
@@ -59,7 +59,7 @@
     dom.input.value = '';
     QW.render.autosize();
 
-    // 带附件时不走本地缓存：同样的文字配不同的图，答案不是一回事
+    // 带附件时不走本地缓存。
     const cached = payload.length ? null : QW.cache.get(model, question);
     if (cached) {
       pushCached(chat, cached, model, question);
@@ -83,7 +83,7 @@
     } catch (e) {
       const partial = e.partial || streamed;
       if (e.name === 'AbortError') {
-        // 用户点了停止：把已经收到的部分留下来，别白等一场
+        // 用户点了停止：保留已收到的部分。
         if (partial) chat.messages.push({ role: 'assistant', content: partial, stopped: true });
       } else {
         if (partial) chat.messages.push({ role: 'assistant', content: partial, stopped: true });
@@ -129,7 +129,7 @@
       state.model = keep || (models.some(m => m.value === saved) ? saved : models[0].value);
       QW.modelPicker.render();
     } catch (e) {
-      if (quiet) return;   // 静默刷新失败就留着旧列表，别把界面搞成错误态
+      if (quiet) return;   // 静默刷新失败时保留旧列表
       state.models = [];
       state.model = null;
       QW.modelPicker.showError(e.message);

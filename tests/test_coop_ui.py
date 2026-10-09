@@ -18,7 +18,7 @@ def qapp():
 
 @pytest.fixture
 def isolated_config(tmp_path, monkeypatch):
-    """把落盘目标挪到临时目录、模型表清空，别动仓库里的 configure.json。"""
+    """模型表清空、落盘挪到临时目录，别动仓库里的 configure.json。"""
     monkeypatch.setattr(stlibs, "CONFIG_PATH", str(tmp_path / "configure.json"))
     monkeypatch.setattr(stlibs.Config, "models", {}, raising=False)
     monkeypatch.setattr(stlibs.Config, "coop", {
@@ -384,7 +384,7 @@ def test_remove_llm_without_selection_is_safe(qapp, isolated_config, notify_spy)
 
 
 def test_delete_row_is_not_squeezed(qapp, isolated_config):
-    """删除这一行以前是竖排，被 HackerCard 压到 30px 高，两个控件都变形。"""
+    """回归：删除这一行曾被 HackerCard 压到 30px，两个控件都变形。"""
     isolated_config.models["甲"] = {"name": "m", "apikey": "k", "baseurl": "u"}
     page = _basic_page(qapp)
     page.resize(700, 520)
@@ -403,7 +403,7 @@ def test_delete_row_is_not_squeezed(qapp, isolated_config):
 
 
 def test_real_chat_window_picks_up_new_model(qapp, monkeypatch, isolated_config):
-    """用真主题窗口跑一遍：新增配置后左侧列表要立刻多出一项，且不重复叠加。"""
+    """用真主题窗口跑：新增配置后左侧列表要多一项且不重复。"""
     import importlib
     import sys
 

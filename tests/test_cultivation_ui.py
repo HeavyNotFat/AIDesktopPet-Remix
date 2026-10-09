@@ -236,7 +236,7 @@ def _panel_with_theme(qapp, theme_name):
 
 
 def test_panel_follows_the_current_theme(qapp):
-    """同一个面板在深色/浅色主题下的配色必须不一样（以前是写死的绿色）。"""
+    """回归：同一个面板在深色/浅色主题下的配色必须不一样。"""
     dark = _panel_with_theme(qapp, "hacker")
     light = _panel_with_theme(qapp, "breeze")
 
@@ -252,7 +252,7 @@ def test_panel_follows_the_current_theme(qapp):
 
 
 def test_panel_uses_theme_widgets(qapp):
-    """控件本身也要是当前主题的（字体/内边距跟着变，不是自绘 QLabel）。"""
+    """控件也要是当前主题的，不是自绘 QLabel。"""
     window = _panel_with_theme(qapp, "breeze")
     try:
         assert type(window.title).__module__.startswith("stlibs.themes.breeze"), \
@@ -262,7 +262,7 @@ def test_panel_uses_theme_widgets(qapp):
 
 
 def test_theme_palette_declares_what_plugins_need():
-    """插件只用语义名取色：PALETTE 得给全，不然面板会掉回默认深色。"""
+    """插件只用语义名取色：PALETTE 得给全。"""
     import stlibs
     from stlibs.graphics.palette import palette
     from stlibs.themes.base import ThemePalette

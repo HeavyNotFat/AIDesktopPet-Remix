@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 OUT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "plugins"))
 SIZE = 128
-SS = 4  # 超采样倍数：先画 4 倍再缩回来，边缘才不会有锯齿
+SS = 4  # 超采样倍数：先画 4 倍再缩回来，避免锯齿
 
 GREEN = (0, 255, 0, 255)
 GREEN_DIM = (0, 180, 0, 255)
@@ -31,7 +31,7 @@ def scaler(value):
 
 
 def polyline(draw, points, color, width, round_caps=True):
-    """圆头折线：segments 之间不留斜接尖角。"""
+    """圆头折线。"""
     draw.line(points, fill=color, width=width, joint="curve")
     if not round_caps:
         return
@@ -41,12 +41,12 @@ def polyline(draw, points, color, width, round_caps=True):
 
 
 def heart_shape(draw, cx, cy, size, color):
-    """用多边形画的心：两个圆瓣 + 一个尖底，比两圆一三角更饱满。"""
+    """用参数方程画的心形多边形。"""
     half = size / 2
     points = []
     for index in range(121):
         t = math.pi * 2 * index / 120
-        # 经典心形参数方程，y 取负号是因为屏幕坐标向下
+        # 心形参数方程，y 取负号是因为屏幕坐标向下
         x = 16 * math.sin(t) ** 3
         y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
         points.append((cx + x * half / 17.0, cy + y * half / 17.0))
@@ -54,11 +54,11 @@ def heart_shape(draw, cx, cy, size, color):
 
 
 def bowl_icon(path):
-    """饭碗：碗身 + 碗里的饭 + 三缕 S 形热气 + 右上角一颗小红心。"""
+    """画饭碗图标：碗身、饭、热气、小红心。"""
     image, draw = canvas()
     unit = SS  # 1 个"设计像素"
 
-    # 三缕热气：S 形（圆头折线拼出来，不会有斜接尖角）
+    # 三缕热气：S 形
     for offset in (-20, 0, 20):
         x0 = scaler(64 + offset)
         step = scaler(6)
@@ -89,7 +89,7 @@ def bowl_icon(path):
         width=4 * unit,
     )
 
-    # 碗里的饭：贴着碗沿的一条浅色弧，说明这碗是满的
+    # 碗里的饭：贴着碗沿的一条浅色弧
     draw.pieslice(
         [scaler(rim_left + 3), scaler(rim_y - 9), scaler(rim_right - 3), scaler(rim_y + 9)],
         start=0,
@@ -97,7 +97,7 @@ def bowl_icon(path):
         fill=(60, 200, 90, 210),
     )
 
-    # 碗沿：一根粗横线 + 两端圆头，看着像瓷碗的边
+    # 碗沿：粗横线 + 两端圆头
     polyline(
         draw,
         [(scaler(rim_left), scaler(rim_y)), (scaler(rim_right), scaler(rim_y))],
@@ -121,7 +121,7 @@ def bowl_icon(path):
         round_caps=False,
     )
 
-    # 右上角的小红心：喂食涨好感（挪到角上，不跟碗沿打架）
+    # 右上角的小红心：喂食涨好感
     heart_x, heart_y, badge_r = 100, 28, 15
     draw.ellipse(
         [scaler(heart_x - badge_r), scaler(heart_y - badge_r),

@@ -38,7 +38,7 @@ class ModelTarget:
     model: str
     api_key: str | None = None
     base_url: str | None = None
-    # 本地模型能不能看图（True/False）；云端或查不到是 None
+    # 本地模型能不能看图；云端或查不到是 None
     vision: bool | None = None
 
     @property
@@ -46,7 +46,7 @@ class ModelTarget:
         return self.backend == BACKEND_CLOUD
 
     def public(self) -> dict[str, str]:
-        """返回给前端的结构（``api.js`` 的 ``normalizeModel`` 认 label/value）。"""
+        """返回给前端的结构。"""
         data = {"value": self.value, "label": self.label, "backend": self.backend}
         if self.vision is not None:
             data["vision"] = self.vision
@@ -121,8 +121,7 @@ class ModelRegistry:
         with self._lock:
             stale = not self._targets or (time.monotonic() - self._loaded_at) > self._ttl
         if stale:
-            # 刷新失败（例如 Ollama 没起来）不应该让整个接口 500，
-            # 保留上一次可用快照即可。
+            # 刷新失败（比如 Ollama 没起来）就保留上一次快照
             try:
                 self.refresh()
             except Exception:  # noqa: BLE001 - 注册表降级，保留旧快照
@@ -131,7 +130,7 @@ class ModelRegistry:
             return OrderedDict(self._targets)
 
     def invalidate(self) -> None:
-        """让下一次 snapshot() 重新扫描（配置刚改过，不想等 TTL）。"""
+        """让下一次 snapshot() 重新扫描，不等 TTL。"""
         with self._lock:
             self._loaded_at = 0.0
 
@@ -139,7 +138,7 @@ class ModelRegistry:
         return self.snapshot().get(value)
 
     def resolve(self, value: str) -> ModelTarget:
-        """解析模型 id，找不到时抛 :class:`UnknownModelError`。"""
+        """解析模型 id，找不到就抛 UnknownModelError。"""
         targets = self.snapshot()
         target = targets.get(value)
         if target is None:

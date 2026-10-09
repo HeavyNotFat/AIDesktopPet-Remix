@@ -105,7 +105,7 @@ class HackerChatBubble(QFrame):
         self._update_style()
 
     def _build_actions(self):
-        """回复底下的一条小动作栏：默认只有复制，有音频时多一个播放。"""
+        """回复底下的动作栏：默认只有复制，有音频时多一个播放。"""
         self.actions = QWidget(self)
         self.actions_layout = QHBoxLayout(self.actions)
         self.actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -137,7 +137,7 @@ class HackerChatBubble(QFrame):
         HackerNotify("已复制这条回复", "success", 1600)
 
     def attach_audio(self, data: str):
-        """挂上语音但**不自动播**，等用户点播放。"""
+        """挂上语音但不自动播，等用户点播放。"""
         self.audio_data = data
         self.play_button.setVisible(True)
         self.actions.setVisible(True)
@@ -182,7 +182,7 @@ class HackerChatBubble(QFrame):
         self.layout.addWidget(self.image_label)
 
     def add_attachments(self, attachments):
-        """图片放缩略图，文档放一个小标签（名字 + 大小 + 读取情况）。"""
+        """图片放缩略图，文档放一个小标签。"""
         from ...ai import human_size
 
         for item in attachments or []:
@@ -309,8 +309,7 @@ class _ChatInputEdit(HackerTextEdit):
             self.parent_._send_message()
             return
 
-        # Ctrl+V / Shift+Insert 得在这里拦：QTextEdit 的 paste() 不会走 insertFromMimeData
-        # 那个虚函数（实测 Qt 6.11 里图片会被当成富文本资源塞进文档，界面上什么也看不到）
+        # Ctrl+V / Shift+Insert 得在这里拦，QTextEdit 的 paste() 不会走 insertFromMimeData
         if self._is_paste_key(event) and self._paste_as_attachment():
             return
 
@@ -321,7 +320,7 @@ class _ChatInputEdit(HackerTextEdit):
         modifiers = event.modifiers()
         if event.key() == Qt.Key.Key_Insert and modifiers & Qt.KeyboardModifier.ShiftModifier:
             return True
-        # Ctrl+Shift+V 是"粘贴为纯文本"，别抢
+        # Ctrl+Shift+V 是粘贴为纯文本，别抢
         return (
             event.key() == Qt.Key.Key_V
             and bool(modifiers & Qt.KeyboardModifier.ControlModifier)
@@ -336,7 +335,7 @@ class _ChatInputEdit(HackerTextEdit):
         return bool(self.parent_.attach_from_mime(source))
 
     def canInsertFromMimeData(self, source):
-        """图片/文件交给聊天窗当附件：这里一律拒绝，免得被插成看不见的文档资源。"""
+        """图片和文件交给聊天窗当附件，这里一律拒绝。"""
         if hasattr(self.parent_, "can_attach_mime") and self.parent_.can_attach_mime(source):
             return False
         return super().canInsertFromMimeData(source)
@@ -349,7 +348,7 @@ class _ChatInputEdit(HackerTextEdit):
 
 
 class HackerChatWidget(QWidget):
-    # (正文, 附件列表)：附件跟着信号走，避免发送方清空后接收方拿到空列表
+    # (正文, 附件列表)：附件跟着信号走，免得接收方拿到空列表
     userInputSignal = Signal(str, list)
 
     def __init__(self, parent=None):
@@ -456,7 +455,7 @@ class HackerChatWidget(QWidget):
             self.skill_button.setText("技能")
 
     def build_skill_menu(self):
-        """菜单每次重建：设置页里刚加的技能不用重启就能选到。"""
+        """菜单每次重建，设置页里刚加的技能不用重启就能选到。"""
         from ... import get_translation
 
         menu = HackerMenu(self)
@@ -523,11 +522,7 @@ class HackerChatWidget(QWidget):
 
     @staticmethod
     def _is_same_attachment(chip: "HackerAttachmentChip", attachment: dict) -> bool:
-        """chip 上挂的是不是这份附件。
-
-        动态属性取回来的是 Python 对象的副本，只比 `is` 永远不成立，
-        chip 就会赖在附件栏里（看着像没删掉），所以退一步再比内容。
-        """
+        """chip 上挂的是不是这份附件（动态属性取回来的是副本，只比 is 不成立）。"""
         stored = chip.property("attachment")
         return stored is attachment or stored == attachment
 
@@ -554,7 +549,7 @@ class HackerChatWidget(QWidget):
         return added
 
     def can_attach_mime(self, source) -> bool:
-        """这份剪切板/拖拽内容能不能当附件（不产生副作用，Qt 会先问这个）。"""
+        """这份剪切板或拖拽内容能不能当附件，不产生副作用。"""
         if source is None:
             return False
         if source.hasImage():
@@ -568,11 +563,7 @@ class HackerChatWidget(QWidget):
         return [url.toLocalFile() for url in source.urls() if url.isLocalFile() and url.toLocalFile()]
 
     def _clipboard_pixmap(self, source):
-        """剪切板里的图片可能是 QImage 也可能是 QPixmap，统一成 QPixmap。
-
-        （实测：系统剪切板给的是 QImage，只有代码里 setImageData(QPixmap) 才是 QPixmap——
-        以前只判 QPixmap，所以真实 Ctrl+V 一张图都加不进来。）
-        """
+        """剪切板里的图片可能是 QImage 也可能是 QPixmap，统一成 QPixmap。"""
         if source is None or not source.hasImage():
             return None
 
@@ -589,7 +580,7 @@ class HackerChatWidget(QWidget):
         return data if isinstance(data, QPixmap) and not data.isNull() else None
 
     def attach_from_mime(self, source) -> bool:
-        """剪切板/拖拽进来的东西：图片优先，其次是文件路径。"""
+        """剪切板或拖拽进来的东西，图片优先，其次是文件路径。"""
         if source is None:
             return False
 
@@ -637,7 +628,7 @@ class HackerChatWidget(QWidget):
         from ... import run_plugin_command
         from ...ai import parse_skill
 
-        # 插件命令：/名字 参数（技能优先，认不出来再看插件有没有注册这个命令）
+        # 插件命令：/名字 参数，认不出来再当技能
         handled, result = run_plugin_command(text)
         if handled:
             self.input_edit.clear()
@@ -650,13 +641,13 @@ class HackerChatWidget(QWidget):
         if skill:
             self.set_skill(skill)
         if not text and not self.attachments:
-            # 只打了 /技能名：当成切换技能，不发送
+            # 只打了 /技能名，当成切换技能，不发送
             self.input_edit.clear()
             return
 
         pending = self.take_attachments()
         self.add_user_msg(text, skill=self.active_skill, attachments=pending)
-        # 附件要跟着信号一起走：ModelChat 那边再取一次的话已经被这里清空了
+        # 附件跟着信号走，ModelChat 再取一次时已经被这里清空了
         self.userInputSignal.emit(text, pending)
         self.input_edit.clear()
         self.input_edit.setFocus()

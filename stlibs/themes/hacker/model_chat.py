@@ -7,13 +7,9 @@ from ..base import CombinedMeta, ModelChatABS
 
 from .feedback import HackerNotify
 
-# 模型名 → LLM 实例：同一个模型被多个聊天页共用一份（含记忆与函数调用）
-
-
+# 模型名 → LLM 实例：同一个模型被多个聊天页共用一份
 cache_llm_class = {}
 
-
-# BASE
 
 class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
     def __init__(
@@ -36,7 +32,6 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
             if model in cache_llm_class.keys():
                 self.ai_llm = cache_llm_class[model]
             else:
-                # noinspection PyTypeChecker
                 self.ai_llm = cloud.LLM(model, api_key, base_url)
                 cache_llm_class[model] = self.ai_llm
 
@@ -121,10 +116,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
 
     @staticmethod
     def _combined_prompt(skill) -> str | None:
-        """技能提示词 + 插件要求的系统提示词，一起当成 system 段注入。
-
-        都没有就返回 None —— 别给 LLM 传一个没意义的空串。
-        """
+        """技能提示词 + 插件要求的系统提示词，一起当 system 注入。"""
         from ... import plugin_prompts
 
         parts = []
@@ -135,10 +127,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         return "\n\n".join(parts) if parts else None
 
     def _warn_if_blind(self, attachments):
-        """带了图片但模型看不见图时直说 —— 否则用户只会以为"AI 没收到图片"。
-
-        提示只是锦上添花，任何异常都不能挡住发送。
-        """
+        """带了图片但模型看不见图时给出提示。"""
         from ...ai import attachment as attachment_api
 
         try:
@@ -158,7 +147,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         )
 
     def on_tool_event(self, event: dict):
-        """音频挂到当前气泡上等用户点播放；其它事件先忽略（MCP 工具的结果还是走文本）。"""
+        """音频挂到当前气泡上等用户点播放，其它事件先忽略。"""
         if event.get("type") != "audio":
             return
         data = event.get("data")

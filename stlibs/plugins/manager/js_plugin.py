@@ -17,7 +17,7 @@ DEFAULT_TIMEOUT = 3.0
 
 
 class NodeMissingError(PluginError):
-    """找不到 node —— JS 插件直接标记为不可用，而不是静默失效。"""
+    """找不到 node：JS 插件直接标记为不可用。"""
 
 def find_node() -> str | None:
     env = os.getenv("ADP_NODE") or os.getenv("NODE_EXE")
@@ -54,7 +54,7 @@ class JsPluginProcess:
         env.setdefault("ADP_PLUGIN_ID", manifest.id)
 
         self.process = subprocess.Popen(
-            # 入口要给绝对路径：cwd 已经是插件目录，相对路径会被 node 再拼一次
+            # entry 必须是绝对路径：cwd 是插件目录，node 会再拼一次相对路径
             [self.node, str(RUNTIME_JS.resolve()), str(manifest.entry_path.resolve())],
             cwd=str(manifest.path),
             stdin=subprocess.PIPE,
@@ -211,7 +211,7 @@ class JsHooks:
         self.process = process
 
     def has(self, hook: str) -> bool:
-        # 子进程里有没有实现要跑起来才知道，交给它自己判断（没实现返回 null）
+        # 子进程里有没有实现跑起来才知道，交给它自己判断
         return True
 
     def call(self, hook: str, payload=None):

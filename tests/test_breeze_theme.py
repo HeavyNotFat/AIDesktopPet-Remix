@@ -12,10 +12,10 @@ import stlibs  # noqa: E402
 
 THEME_NAME = "breeze"
 
-# 契约里的 15 个映射（与 stlibs/__init__.py::_ThemeTypingProtocol 同步）
+# 契约里的 16 个映射，与 _ThemeTypingProtocol 同步
 MAPPINGS = (
     "Window", "Button", "Label", "Menu", "Action", "Notify", "ScrollArea", "TextEdit",
-    "LineEdit", "Slider", "ComboBox", "CardWidget", "ChatWidget", "ChatBubble", "ModelChat",
+    "LineEdit", "Slider", "Switch", "ComboBox", "CardWidget", "ChatWidget", "ChatBubble", "ModelChat",
 )
 # 6 个子模块，每个都要有设置窗会去取的页面类
 SUBMODULE_PAGES = {
@@ -36,12 +36,7 @@ def qapp():
 
 @pytest.fixture(scope="module")
 def theme(qapp):
-    """拿 breeze 主题包做断言，但**不能把 SharingData.theme 留成 breeze**。
-
-    其它用例（比如 test_coop_ui 的提示条断言）是按"当前主题 = hacker"写的，
-    这里如果改了全局主题又不还原，就会把别人的用例带崩——本文件里凡是会间接
-    触发 `stlibs.notify()` 的用例（构造页面、提示条）都会走到全局主题。
-    """
+    """装上 breeze 主题做断言，用完必须还原 SharingData.theme。"""
     previous = stlibs.SharingData.theme
     stlibs.SharingData.theme = stlibs.load_theme(THEME_NAME)
     yield stlibs.SharingData.theme
@@ -85,7 +80,7 @@ def test_menu_is_flat_without_submenus(theme):
 
 
 def test_chat_widget_contract(theme):
-    """graphics/chat.py 与 ModelChat 通过这几个方法跟聊天窗打交道。"""
+    """graphics/chat.py 靠这几个方法跟聊天窗打交道。"""
     for member in ("userInputSignal", "add_user_msg", "add_assistant_msg", "disable_send_button",
                    "enable_send_button", "update_bubble_widths", "scroll_to_bottom", "clear_messages"):
         assert hasattr(theme.ChatWidget, member), f"ChatWidget 缺 {member}"
@@ -151,8 +146,7 @@ def test_notify_can_be_constructed(theme, qapp):
     assert note is not None
     assert note.isVisible() or note.parent() is None
 
-    # 用完必须收干净：提示条是全局堆叠的，留着会让后面按"当前主题"写的用例
-    # （比如 test_coop_ui 的提示条断言）看到别的主题的窗口
+    # 用完必须收干净：提示条是全局堆叠的，留着会污染后面按"当前主题"写的用例
     note.dismiss()
     for pending in list(theme.Notify._stack):
         pending.hide()

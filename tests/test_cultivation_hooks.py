@@ -35,6 +35,14 @@ class FakeAPI:
         self.menu_items.append((label, action or label))
         return action
 
+    def add_settings_page(self, title, form=None, builder=None, key=None, order=100, hint=""):
+        self.settings_pages = getattr(self, "settings_pages", [])
+        self.settings_pages.append((title, key))
+        return key
+
+    def remove_settings_page(self, key=None):
+        return 0
+
     def register_command(self, name, help_text=""):
         self.commands[name] = help_text
         return name
@@ -59,7 +67,7 @@ class FakeAPI:
 
 
 def load_plugin_module():
-    """按插件加载器的方式导入 main.py（模块名唯一，避免和别的插件撞）。"""
+    """按加载器的方式导入 main.py，模块名唯一。"""
     spec = importlib.util.spec_from_file_location(MODULE_NAME, PLUGIN_DIR / "main.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[MODULE_NAME] = module

@@ -271,7 +271,12 @@ with SDKClient("127.0.0.1", 9000) as client:
          "version": "1.0.0", "enabled": true, "loaded": true, "error": "", "calls": 3}
     ],
     "problems": [],
-    "commands": ["统计", "js统计"]
+    "commands": ["统计", "js统计"],
+    "pages": [
+        {"plugin": "cultivation_system", "key": "settings", "id": "cultivation_system:settings",
+         "title": "养成设置", "hint": "", "order": 100, "builder": false,
+         "form": [{"type": "number", "key": "click_coin", "label": "点一下最多给几枚金币", "default": 5}]}
+    ]
 }
 ```
 
@@ -283,6 +288,10 @@ with SDKClient("127.0.0.1", 9000) as client:
 | `plugins[].calls` | Integer | 被调用的次数 |
 | `problems` | Array | 清单坏了、入口找不到之类的目录级问题 |
 | `commands` | Array | 已注册的聊天命令名 |
+| `pages[].plugin` / `key` / `id` | String | 设置页属于哪个插件、页面 key、全局唯一 id |
+| `pages[].title` / `hint` | String | 设置页标题与说明（设置窗「插件」分类下的导航项） |
+| `pages[].builder` | Boolean | 页面是不是插件自己画的（`true` 时 `form` 为空） |
+| `pages[].form` | Array | 声明式表单的行；字段见 [`plugins/README.md`](../../plugins/README.md#4-设置页导航项) |
 | `result` | String | `trigger_plugin_action` 返回插件给出的文本 |
 
 ### 10. 记忆

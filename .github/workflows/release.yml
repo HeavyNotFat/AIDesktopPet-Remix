@@ -1,6 +1,6 @@
 name: Release
 
-# 打 tag（v1.2.3）时：先过一遍完整门禁，再打包并发布 Release
+# 打 tag 时：先过一遍完整门禁，再打包并发布 Release
 on:
   push:
     tags: ['v*']
@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 jobs:
-  # 发布前必须先过门禁：UI 冲突 / 抽象契约 / 主题映射有问题就不许发版
+  # 发布前先过门禁，不通过就不发版
   gate:
     name: 发布前门禁
     runs-on: ubuntu-latest

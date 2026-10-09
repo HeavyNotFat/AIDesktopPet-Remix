@@ -306,7 +306,7 @@ def test_call_chat_rejects_unknown_signature():
 
 
 def test_call_chat_accepts_kwargs_only_signature():
-    """``chat(**kwargs)`` 之类能吞任意关键字的实现也要能用。"""
+    """``chat(**kwargs)`` 这种能吞任意关键字的实现也要能用。"""
     class KwargsOnly:
         def __init__(self):
             self.got = None
@@ -419,7 +419,7 @@ def test_registry_survives_provider_failure():
 
 # 不再复用桌面端实例（回归防线）
 def test_onlinechat_never_touches_desktop_llm_cache():
-    """用 AST 而不是字符串匹配：文档里可以提旧写法，代码里不许出现。"""
+    """用 AST 而不是字符串匹配，免得文档里的旧写法被误判。"""
     forbidden = {"cache_llm_class", "return_llm_class", "SharingData"}
     for path in ONLINECHAT_DIR.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -667,8 +667,7 @@ def test_stream_validates_model_and_session_up_front(patched_registry):
     with pytest.raises(registry_api.UnknownModelError):
         pool.stream("nope", "hi", "s1")
 
-    # 会话实例被回收但还挂在池子的窗口期（TTL/LRU/reset 与请求撞车）：
-    # 必须在返回迭代器之前就抛错，不能让 SSE 先发 200 再报错
+    # 会话已回收但还挂在池子里时，必须在返回迭代器之前抛错，不能先发 200
     session = pool._acquire("s2", patched_registry.resolve("alpha"))
     session.close()
     with pytest.raises(oc_llm.SessionClosedError):

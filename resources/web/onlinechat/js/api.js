@@ -88,7 +88,7 @@
     return pick(data, ANSWER_KEYS) || JSON.stringify(data, null, 2);
   }
 
-  // 流式：后台按 SSE 推 delta，这里边收边回调；返回完整回答。
+  // 流式读取回答，边收边回调，返回完整文本。
   async function chatStream(model, question, sessionId, signal, onDelta, attachments) {
     const res = await fetch(API_BASE + '/chat/stream', {
       method: 'POST',
@@ -146,7 +146,7 @@
     return answer;
   }
 
-  // 删除对话时让后台丢掉对应的 LLM 实例与上下文记忆。
+  // 删除对话时让后台丢掉该会话的 LLM 实例与上下文。
   async function resetSession(sessionId) {
     if (!sessionId) return null;
     try {
@@ -156,7 +156,7 @@
     }
   }
 
-  // 命中本地缓存时，把这一轮补记进服务端记忆（不调用模型）。
+  // 命中本地缓存时，把这一轮补记进服务端记忆。
   async function recall(model, question, answer, sessionId) {
     try {
       return await post('/chat/recall', {

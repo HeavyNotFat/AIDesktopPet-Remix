@@ -58,7 +58,7 @@ def is_readable_text(name, mime="") -> bool:
 
 
 def extract_docx(data: bytes) -> str:
-    """装了 python-docx 就抽正文，没装就返回空串（不影响其它功能）。"""
+    """装了 python-docx 就抽正文，没装就返回空串。"""
     try:
         import io
 
@@ -68,7 +68,7 @@ def extract_docx(data: bytes) -> str:
 
     try:
         document = docx.Document(io.BytesIO(data))
-    except Exception:  # noqa: BLE001 - 坏文件不该把上传流程带崩
+    except Exception:  # noqa: BLE001
         return ""
 
     lines = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
@@ -90,7 +90,7 @@ def decode_text(data: bytes) -> str:
 
 
 def build(name, data: bytes, mime="") -> dict:
-    """把一段字节变成附件字典；超大、读不出内容都会在 note 里说明。"""
+    """把一段字节变成附件字典；超大或读不出内容会在 note 里说明。"""
     name = os.path.basename(str(name or "")).strip() or "未命名"
     mime = str(mime or "") or (mimetypes.guess_type(name)[0] or "")
     kind = kind_of(name, mime)
@@ -156,7 +156,7 @@ def from_base64(data: str, name: str, mime="") -> dict:
 
 
 def normalize(items) -> list:
-    """接受字典或路径，统一成附件列表（去重、限量、跳过坏数据）。"""
+    """接受字典或路径，统一成附件列表。"""
     result = []
     seen = set()
     for item in items or []:
@@ -202,7 +202,7 @@ def data_url(attachment) -> str:
 
 
 def describe(attachments) -> str:
-    """文档正文拼成一段上下文；图片不用（模型看得见）。"""
+    """把文档正文拼成一段上下文。"""
     blocks = []
     for item in attachments or []:
         text = (item.get("text") or "").strip()
@@ -225,7 +225,7 @@ def with_document_context(text, attachments) -> str:
 
 
 def summarize(attachments) -> str:
-    """给提示/日志用的一行描述。"""
+    """给提示或日志用的一行描述。"""
     parts = []
     for item in attachments or []:
         mark = "图片" if item.get("kind") == "image" else "文件"
@@ -255,7 +255,7 @@ def openai_message(text, attachments) -> dict:
 
 
 def compact_for_display(value, keep=48):
-    """记忆面板用的：把 base64 换成占位符，别让界面里塞几 MB 的字符串。"""
+    """记忆面板用：把 base64 换成占位符，别让界面塞几 MB 字符串。"""
     def shorten(text: str) -> str:
         if len(text) <= keep * 2:
             return text
@@ -288,7 +288,7 @@ def vision_capability(model: str, use_cache: bool = True):
         capabilities = info.get("capabilities") if isinstance(info, dict) else getattr(info, "capabilities", None)
         if capabilities is not None:
             result = "vision" in [str(item).lower() for item in capabilities]
-    except Exception:  # noqa: BLE001 - 查不到就当未知，不影响发消息
+    except Exception:  # noqa: BLE001
         result = None
 
     if result is not None:
@@ -297,5 +297,5 @@ def vision_capability(model: str, use_cache: bool = True):
 
 
 def can_see_images(model: str) -> bool:
-    """明确不支持看图才返回 False（未知按支持处理，避免误报）。"""
+    """只有明确不支持看图才返回 False，未知按支持处理。"""
     return vision_capability(model) is not False

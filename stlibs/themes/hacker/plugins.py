@@ -74,7 +74,7 @@ class PluginsWidgetScroll(QWidget):
         self.detail.setText(self.panel.hint())
 
     def _apply_icon_size(self):
-        """图标列按 ICON_CELL_SIZE 显示（默认 16px 太小，看不清自定义图）。"""
+        """图标列按 ICON_CELL_SIZE 显示，默认 16px 看不清自定义图。"""
         self.table.setIconSize(QSize(ICON_CELL_SIZE, ICON_CELL_SIZE))
 
     def _selected_id(self):
@@ -124,7 +124,7 @@ class PluginsPage(QWidget):
         self.window_title.setGeometry(0, 0, self.width(), 30)
 
     def refresh(self):
-        """重新扫描插件目录（设置窗打开时、手动刷新时都会走）。"""
+        """重新扫描插件目录。"""
         return self.card.refresh()
 
 

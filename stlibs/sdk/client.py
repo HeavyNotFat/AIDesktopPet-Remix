@@ -92,7 +92,7 @@ class SDKClient(base.UDPBase):
         self.close()
 
     def subscribe(self, event="*"):
-        """订阅事件（``'*'`` 表示全部）；订阅后 ``on(name, handler)`` 或 ``wait_event`` 收。"""
+        """订阅事件（``'*'`` 表示全部）。"""
         return self._subscribe(event, "subscribe")
 
     def unsubscribe(self, event="*"):
@@ -119,7 +119,7 @@ class SDKClient(base.UDPBase):
         return box["response"].get("result")
 
     def on(self, event, handler):
-        """注册事件回调：``handler(data, message)``；``event='*'`` 收全部。"""
+        """注册事件回调：``handler(data, message)``。"""
         with self._lock:
             self._handlers.setdefault(event, []).append(handler)
         return handler
@@ -133,7 +133,7 @@ class SDKClient(base.UDPBase):
                 self._handlers[event] = [item for item in handlers if item is not handler]
 
     def wait_event(self, name=None, timeout=5.0):
-        """等一条事件（测试/脚本化用），返回事件字典或 None。"""
+        """等一条事件，返回事件字典或 None。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             for index, message in enumerate(self._events):

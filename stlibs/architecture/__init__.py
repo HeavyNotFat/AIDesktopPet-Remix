@@ -1,5 +1,5 @@
-# Live2D
 try:
+    # 优先 v3，部分机器只能跑 v2
     import live2d.v3 as live2d
     from .addon import v3 as addon
 except (OSError, SystemError, ImportError):

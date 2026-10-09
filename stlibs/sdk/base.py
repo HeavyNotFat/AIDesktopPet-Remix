@@ -31,7 +31,7 @@ class SDKRemoteError(SDKError):
 
 
 class SDKMethodError(SDKError):
-    """方法内部拒绝了这个请求（参数不对、界面没起来等）。"""
+    """方法内部拒绝了这个请求（参数不对、界面没起来）。"""
     code = "method_error"
 
 

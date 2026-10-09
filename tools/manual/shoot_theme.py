@@ -41,8 +41,7 @@ app = QApplication([])
 
 stlibs.SharingData.theme = stlibs.load_theme(THEME)
 
-# 先把自带中文字体装上：有些控件（提示条、气泡）不是主窗口的子控件，
-# 不会走 base_sheet()，离屏出图时会因为没有中文字形而画成方框
+# 先装上自带中文字体，否则离屏出的图里控件会画成方框
 from stlibs.themes.breeze.theme import install_ui_font  # noqa: E402
 
 print("字体族：", install_ui_font() or "（装不上，用系统默认）")
@@ -58,7 +57,7 @@ print(f"主题：{getattr(theme, 'THEME_LABEL', '?')}({THEME})")
 
 
 def shot(name, widget):
-    # 先把挂起的布局/样式跑完，否则刚 addWidget 的控件还没尺寸，截出来是空的
+    # 先跑完挂起的布局/样式，否则刚 addWidget 的控件还没尺寸
     for _ in range(4):
         app.processEvents()
     widget.grab().save(os.path.join(OUT_DIR, name))
@@ -82,7 +81,7 @@ def shoot_window():
     window.show()
     shot("window-settings.png", window)
 
-    # 每个设置页都出一张：卡片布局出问题（被压扁、文字被盖）在图上最直观
+    # 每个设置页各出一张图，看卡片布局有没有问题
     for name, factory, file_name in (
         ("LLM 设置", lambda: theme.llm.LLMPage(window), "window-llm.png"),
         ("动画设置", lambda: theme.animation.AnimationPage(window), "window-animation.png"),
@@ -105,7 +104,7 @@ def shoot_window():
 
 
 def shoot_cultivation():
-    """养成系统插件面板：配色应该跟着当前主题走（不是写死的绿色）。"""
+    """养成系统插件面板，配色应该跟着当前主题走。"""
     plugin_dir = os.path.abspath("plugins/cultivation_system")
     if plugin_dir not in sys.path:
         sys.path.insert(0, plugin_dir)

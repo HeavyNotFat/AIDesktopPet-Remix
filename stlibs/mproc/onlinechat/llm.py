@@ -19,7 +19,7 @@ _DONE = object()
 
 
 class SessionClosedError(RuntimeError):
-    """会话在请求开始前被回收（TTL / LRU / /api/reset 撞车）。"""
+    """会话在请求开始前被回收（TTL / LRU / reset）。"""
     def __init__(self, session_id: str):
         self.session_id = session_id
         super().__init__(f"会话 {session_id!r} 已回收，请重新发送")
@@ -71,7 +71,7 @@ class StreamPump:
                 if self.stop_event.is_set():
                     break
                 self._queue.put(chunk)
-        except BaseException as exc:  # noqa: BLE001 - 异常要带回消费端，不能吞
+        except BaseException as exc:  # noqa: BLE001 - 异常要带回消费端
             self.error = exc
         finally:
             self._queue.put(_DONE)
@@ -85,7 +85,7 @@ class StreamPump:
                     break
                 yield item
         finally:
-            # 客户端断开时 Starlette 会关掉这个生成器，得让工作线程收手并交出会话锁
+            # 客户端断开时 Starlette 会关掉这个生成器，得让工作线程收手
             self.stop_event.set()
             self._thread.join(timeout=5)
 
@@ -112,7 +112,7 @@ class WebChatSession:
                 raise SessionClosedError(self.session_id)
 
     def ask(self, question: str, attachments=None, skill=None) -> str:
-        # 同一个会话的请求串行执行：LLM 实例内部有可变记忆，并发调用会串上下文。
+        # 同一会话的请求串行执行：LLM 实例内部有可变记忆
         with self.lock:
             if self.llm is None:
                 raise SessionClosedError(self.session_id)
@@ -122,7 +122,7 @@ class WebChatSession:
         return answer or EMPTY_REPLY
 
     def stream(self, question: str, stop_event: threading.Event | None = None, attachments=None, skill=None):
-        """逐片段产出回答；生成期间一直持有会话锁。"""
+        """逐片段产出回答，生成期间持有会话锁。"""
         stop_event = stop_event or threading.Event()
 
         with self.lock:
@@ -131,7 +131,7 @@ class WebChatSession:
             try:
                 for event in _call_chat(self.llm, question, attachments, skill):
                     if stop_event.is_set():
-                        # 中途放弃时生成器会被关闭，LLM 自己不会把半截回答写进短期记忆
+                        # 中途放弃时生成器会被关闭
                         break
                     if isinstance(event, str) and event:
                         yield event

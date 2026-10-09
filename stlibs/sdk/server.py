@@ -11,7 +11,7 @@ from .methods import METHOD_HELP, HostMethods
 
 logger = logging.getLogger("sdk")
 
-# 旧名字（保持兼容） -> 规范名字
+# 旧名字 -> 规范名字
 ALIASES = {
     "play_motion": "play_live2d_motion",
     "play_expression": "play_live2d_expression",
@@ -96,7 +96,7 @@ class SDKServer(base.UDPBase):
         if name not in METHOD_HELP:
             return None
 
-        # 绑到实例上再取：普通方法与 staticmethod 都能直接按位置调用
+        # 绑到实例上再取：普通方法与 staticmethod 都能按位置调用
         handler = getattr(self.methods, name, None)
         return handler if callable(handler) else None
 

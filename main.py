@@ -98,12 +98,9 @@ class SplashWindow(QSplashScreen):
 
     def progress_updater(self):
         self.update_progress(10, "正在加载资源...")
-        # from stlibs.ai import local
-        # warmup = local.LLM()
         time.sleep(5)
         self.update_progress(50, "正在初始化...")
         self.update_progress(100, "启动完成")
-        # del warmup
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -165,7 +162,6 @@ class Application:
 
 
 def main():
-    """主函数"""
     app = Application()
     app.run()
 

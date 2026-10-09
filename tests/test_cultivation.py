@@ -260,7 +260,7 @@ def test_save_and_reload_round_trip(tmp_path, clock):
 
 
 def test_storage_object_style(clock):
-    """插件的 storage 是对象（storage_get/storage_set）也要能用。"""
+    """storage 是对象（storage_get/storage_set）时也要能用。"""
     class ApiStorage:
         def __init__(self):
             self.data = {}

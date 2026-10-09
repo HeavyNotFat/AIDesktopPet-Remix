@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from ..core import register
-from . import abstract_api, config_schema, hygiene, imports, resources, theme_mapping, ui_conflict, web_contract
+from . import (
+    abstract_api,
+    config_schema,
+    docs_layout,
+    hygiene,
+    imports,
+    resources,
+    theme_mapping,
+    ui_conflict,
+    web_contract,
+)
 
 
 # --- 抽象类 / 抽象方法 -----------------------------------------------------
@@ -108,3 +118,12 @@ register("hygiene/todo", "TODO/FIXME 统计", "hygiene")(hygiene.check_todo)
 register("import/cycle", "禁止模块级循环导入", "import")(imports.check_import_cycle)
 register("import/requirements", "第三方依赖必须写进 requirements.txt", "import")(imports.check_requirements)
 register("import/unused-req", "未被使用的依赖声明", "import")(imports.check_unused_requirements)
+
+
+# --- 文档与文件开头 --------------------------------------------------------
+register("docs/header-comment", "文件开头不许写注释", "docs", docs="AGENTS.md")(
+    docs_layout.check_header_comment
+)
+register("docs/markdown-location", "文档统一放 docs/", "docs", docs="AGENTS.md")(
+    docs_layout.check_markdown_location
+)

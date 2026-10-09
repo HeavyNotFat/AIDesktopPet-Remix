@@ -1,9 +1,8 @@
-
 from __future__ import annotations
 
 from .. import Config, SharingData
 
-# 主题包名 → 中文名；主题里写了 THEME_LABEL 就优先用它的
+# 主题包名 → 中文名；主题写了 THEME_LABEL 就优先用它
 FALLBACK_LABELS = {
     "hacker": "黑客",
     "breeze": "轻风",

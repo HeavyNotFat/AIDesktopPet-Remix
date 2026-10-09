@@ -49,7 +49,7 @@
   }
 
   function thumbnail(dataUrl) {
-    // 历史记录里只留小图：localStorage 装不下原图
+    // 历史记录里只留小图。
     return new Promise(resolve => {
       const img = new Image();
       img.onload = () => {
@@ -92,7 +92,7 @@
     return entry;
   }
 
-  // 历史记录里没必要存整张图，只留缩略图和小段文本预览
+  // 历史记录只留缩略图和小段文本预览。
   function toStored(entry) {
     const stored = { kind: entry.kind, name: entry.name, mime: entry.mime, size: entry.size };
     if (entry.kind === 'image') {
@@ -131,7 +131,7 @@
   }
 
   function collectFiles(data) {
-    // 浏览器之间不一致：Chrome 给 files，Firefox 有时只在 items 里给
+    // 兼容浏览器差异，files 与 items 两种来源都收
     const files = [];
     for (const file of Array.from((data && data.files) || [])) files.push(file);
     for (const item of Array.from((data && data.items) || [])) {

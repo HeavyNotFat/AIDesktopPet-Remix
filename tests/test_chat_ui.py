@@ -23,8 +23,7 @@ def isolated_config(tmp_path, monkeypatch):
         {"name": "翻译", "description": "翻译成中文", "prompt": "只输出译文"},
         {"name": "总结", "description": "提炼要点", "prompt": "三条要点"},
     ], raising=False)
-    # 模型列表也要隔离：记忆页把它和本地模型拼在一起显示，
-    # 而 Config.models 是进程级全局——不隔离的话用例结果取决于跑之前谁动过它
+    # Config.models 是进程级全局，不隔离的话用例结果取决于跑之前谁动过它
     monkeypatch.setattr(stlibs.Config, "models", {}, raising=False)
     yield stlibs.Config
 
@@ -36,8 +35,7 @@ def notify_spy(monkeypatch):
     def fake(text, level="info", timeout=3200, parent=None):
         calls.append((level, text))
 
-    # 主题里直接用 HackerNotify；设置页走的是 from ... import notify
-    # （主题按职责拆过模块：直接调用提示条的是 chat / model_chat）
+    # 主题里直接用 HackerNotify；设置页走的是 from ... import notify，要打在各自命名空间上
     monkeypatch.setattr("stlibs.themes.hacker.chat.HackerNotify", fake)
     monkeypatch.setattr("stlibs.themes.hacker.model_chat.HackerNotify", fake)
     monkeypatch.setattr(
@@ -308,7 +306,7 @@ def test_skill_menu_when_no_skills(qapp, monkeypatch, isolated_config):
 
 # 设置页
 def _memory_page(qapp, isolated_config, monkeypatch, models=("model-a", "model-b")):
-    """记忆页：模型列表用假数据，免得依赖本机 Ollama（用 monkeypatch 免得泄漏到别的用例）。"""
+    """模型列表用假数据，免得依赖本机 Ollama。"""
     import stlibs.themes.hacker.llm as llm_module
 
     monkeypatch.setattr(llm_module, "get_model_lists", lambda: list(models))
@@ -321,7 +319,7 @@ def _memory_page(qapp, isolated_config, monkeypatch, models=("model-a", "model-b
 
 
 def test_memory_page_has_single_viewer_and_interactive_selector(qapp, isolated_config, monkeypatch):
-    """回归：重建展示项会盖在整页上 —— 表现为两个输入框、控件点不动。"""
+    """回归：重建展示项会盖在整页上，表现为两个输入框、下拉点不动。"""
     page = _memory_page(qapp, isolated_config, monkeypatch)
 
     texts = [item for item in page.findChildren(QtWidgets.QTextEdit) if item.isVisible()]
@@ -554,7 +552,7 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
 class Recorder:
-    """记下 userInputSignal 发出来的 (正文, 附件)。"""
+    """记下 userInputSignal 发出的正文与附件。"""
     def __init__(self):
         self.calls = []
 
@@ -709,10 +707,7 @@ def test_sending_document_shows_chip_in_bubble(qapp, isolated_config):
 
 @pytest.mark.parametrize("theme_name", ["hacker", "breeze"])
 def test_removing_one_attachment_takes_its_chip_away(qapp, isolated_config, theme_name):
-    """回归：动态属性取回来的是副本，只比 `is` 的话 chip 会赖着不走（僵尸 chip）。
-
-    两个主题都要过——这是主题各自实现的删除逻辑，不是共用的。
-    """
+    """回归：动态属性取回来的是副本，只比 `is` 的话 chip 会赖着不走。"""
     import stlibs
     from stlibs.ai import attachment as attachment_api
 
@@ -748,7 +743,7 @@ def test_empty_message_without_attachments_does_nothing(qapp, isolated_config):
 
 
 def test_real_clipboard_ctrl_v_attaches_image(qapp, isolated_config, notify_spy):
-    """真实剪切板给的是 QImage（不是 QPixmap），以前只判 QPixmap，所以真按 Ctrl+V 没反应。"""
+    """剪切板给的是 QImage，以前只判 QPixmap，真按 Ctrl+V 没反应。"""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QGuiApplication, QImage
     from PySide6.QtTest import QTest
@@ -800,7 +795,7 @@ def test_paste_key_detection_ignores_paste_as_plain_text(qapp, isolated_config):
 
 
 def test_send_message_hands_attachments_to_worker(model_chat, monkeypatch):
-    """走真实发送流程（_send_message 而不是直接调 add_user_msg）：附件必须到 worker。"""
+    """走真实 _send_message：附件必须送到 worker。"""
 
     from PySide6.QtCore import QObject, Signal
     from stlibs.ai import attachment as attachment_api

@@ -6,7 +6,7 @@ import threading
 import time
 import uuid
 
-from .attachment import (  # noqa: F401 - encode_image 是老接口，从这里继续对外暴露
+from .attachment import (  # noqa: F401
     MAX_ATTACHMENTS,
     compact_for_display,
     data_url,
@@ -55,7 +55,7 @@ def summarize_turns(turns, max_chars=800):
 
 
 class LTMemory:
-    """长期记忆：把对话按轮次攒起来压缩成摘要落盘，下次按相关性召回。"""
+    """长期记忆：攒够若干轮对话就压缩成摘要落盘，之后按相关性召回。"""
     STORE_PATH = "./resources/memory/lt_memory.json"
     _path_locks = {}
     _locks_guard = threading.Lock()
@@ -83,7 +83,7 @@ class LTMemory:
 
     @classmethod
     def _shared_lock(cls, path):
-        """同一个记忆文件可能被多个 LLM 实例（多个网页会话）同时写，锁必须按路径共享。"""
+        """同一个记忆文件会被多个实例同时写，锁按路径共享。"""
         with cls._locks_guard:
             lock = cls._path_locks.get(path)
             if lock is None:
@@ -111,8 +111,7 @@ class LTMemory:
         return kept
 
     def _entries(self):
-        # 每次读盘：记忆文件被多个实例（多个网页会话）共享，
-        # 用 mtime 做缓存判据会在两次写入落在同一时间戳刻度时读到旧快照
+        # 记忆文件被多个实例共享，每次读盘才能拿到最新内容
         with self._lock:
             return self._read()
 
@@ -234,7 +233,7 @@ class LTMemory:
 
 
 def inject_memory_context(messages, context):
-    """把长期记忆插在 system 消息之后，别让它变成"最新一轮用户输入"。"""
+    """把长期记忆插在 system 消息之后，别让它变成最新一轮用户输入。"""
     if not context:
         return messages
 
@@ -255,7 +254,7 @@ def _skill_list(skills=None) -> list:
 
 
 def find_skill(name, skills=None):
-    """按名字找技能（忽略大小写，允许带前导 ``/``）。"""
+    """按名字找技能，忽略大小写、允许带前导斜杠。"""
     wanted = str(name or "").strip().lstrip("/").strip().casefold()
     if not wanted:
         return None
@@ -267,7 +266,7 @@ def find_skill(name, skills=None):
 
 
 def parse_skill(text, skills=None):
-    """把 ``/名字 正文`` 拆成 ``(技能, 正文)``；没匹配上就原样返回。"""
+    """把 ``/名字 正文`` 拆成 ``(技能, 正文)``，没匹配上就原样返回。"""
     text = text or ""
     if not text.startswith("/"):
         return None, text
@@ -280,7 +279,7 @@ def parse_skill(text, skills=None):
 
 
 def inject_skill(messages, prompt):
-    """技能提示词插在 system 段之后，用户消息保持原样（记忆面板里不会出现一大段提示词）。"""
+    """技能提示词插在 system 段之后。"""
     if not isinstance(prompt, str) or not prompt.strip():
         return messages
 
@@ -298,7 +297,7 @@ def skill_prompt(skill) -> str:
 
 
 def _coop_config() -> dict:
-    # Config 只能在运行期取：stlibs/__init__.py 里还没有 ai，模块级导入会成环
+    # 运行期才取 Config，模块级导入会成环
     from .. import Config
 
     return getattr(Config, "coop", None) or {}
@@ -333,7 +332,7 @@ def chat_prompt(llm, question):
 
 
 class MultiAgentCoop:
-    """多模型协作：主模型出稿，其它模型按角色评审，主模型再据此定稿。"""
+    """多模型协作：主模型出稿，其它模型评审，主模型据此定稿。"""
     MODES = {"review": "评审改稿", "parallel": "并行汇总"}
 
     REVIEW_PROMPT = (
@@ -394,7 +393,7 @@ class MultiAgentCoop:
         return agents
 
     def instance(self, model_key, system_prompt=""):
-        """协作成员的实例按 (模型, 角色提示词) 缓存，不必每轮重建。"""
+        """协作成员的实例按 (模型, 角色提示词) 缓存。"""
         key = (model_key, system_prompt)
         with self._lock:
             llm = self._instances.get(key)
@@ -499,14 +498,14 @@ class MultiAgentCoop:
             return "".join(
                 chunk for chunk in self._invoke(llm, base_messages) if isinstance(chunk, str)
             ).strip()
-        except Exception:  # noqa: BLE001 - 初稿失败就走普通回答
+        except Exception:  # noqa: BLE001
             return ""
 
     def _reply(self, llm, prompt, base_messages):
         yield from self._invoke(llm, [*base_messages, {"role": "user", "content": prompt}])
 
     def _ask(self, agent, prompt):
-        """让一个协作成员回答；失败只报告，不中断整轮协作。"""
+        """让一个协作成员回答，失败只报告不中断。"""
         try:
             llm = self.instance(agent["model"], agent["prompt"] or self.REVIEW_PROMPT)
         except Exception as exc:  # noqa: BLE001
@@ -528,7 +527,7 @@ class Memory:
         self.messages = []
 
     def add_user_msg(self, msg: str, attachments=None, target: str = "ollama"):
-        """attachments: 附件列表（见 ``stlibs.ai.attachment``）；target 决定消息形状。"""
+        """attachments 是附件列表（见 ``stlibs.ai.attachment``）；target 决定消息形状。"""
         items = normalize(attachments) if attachments else []
         text = with_document_context(msg, items)
         builder = openai_message if target == "openai" else ollama_message

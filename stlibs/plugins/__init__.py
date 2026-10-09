@@ -8,6 +8,7 @@ from .api import (  # noqa: F401
     MENU,
     ON_LOAD,
     ON_UNLOAD,
+    SETTINGS_ACTION,
     SYSTEM_PROMPT,
     PluginAPI,
     PluginError,
@@ -28,10 +29,15 @@ from .manager import (  # noqa: F401
     PluginsPanel,
 )
 from .manifest import ICON_SUFFIXES, ManifestError, PluginManifest  # noqa: F401
+from .pages import (  # noqa: F401
+    FORM_TYPES,
+    PLUGIN_CATEGORY,
+    FormRow,
+    PluginPages,
+    SettingsPageSpec,
+)
 
-# 注意：这里**不要**再导出名叫 manager 的单例 —— 那会把同名的子包
-# ``stlibs.plugins.manager`` 覆盖掉。单例请用 stlibs.plugin_manager()，
-# 或者 stlibs.plugins.manager.manager。
+# 别再导出名叫 manager 的单例，会覆盖同名子包；用 stlibs.plugin_manager()。
 
 __all__ = [
     "ALL_HOOKS",
@@ -40,6 +46,7 @@ __all__ = [
     "COMMAND",
     "DEFAULT_DIR",
     "EVENT",
+    "FORM_TYPES",
     "HOOK_HELP",
     "ICON_SUFFIXES",
     "MENU",
@@ -48,13 +55,18 @@ __all__ = [
     "MenuItem",
     "ON_LOAD",
     "ON_UNLOAD",
+    "PLUGIN_CATEGORY",
     "PluginAPI",
     "PluginError",
     "PluginInfo",
     "PluginManager",
     "PluginManifest",
+    "PluginPages",
     "PluginsPanel",
+    "SETTINGS_ACTION",
     "SYSTEM_PROMPT",
+    "SettingsPageSpec",
+    "FormRow",
     "badge_icon",
     "badge_pixmap",
     "clear_icon_cache",

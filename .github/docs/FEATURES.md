@@ -136,12 +136,15 @@ python tools/manual/probe_attachment.py glm4:latest --web
 ## 插件（Python + JavaScript）
 
 插件目录 `plugins/<id>/`，一个 `plugin.json` + 一个入口文件；设置页 →「插件」里启用/停用、
-重载、打开目录。完整开发文档见 [`plugins/README.md`](../../plugins/README.md)，
+重载、打开目录，插件自己注册的设置页也挂在**同一个「插件」分类**下（页面标题是「插件名 · 标题」，
+左边带插件图标）。完整开发文档见 [`plugins/README.md`](../../plugins/README.md)，
 宿主侧代码按「作者看的 / 宿主怎么管」分层：
 
 ```
 stlibs/plugins/
 ├── api.py        插件能用到的那套 API
+├── errors.py     PluginError
+├── pages.py      设置页注册表（页面规格 + 表单校验，不依赖 Qt）
 ├── manifest.py   plugin.json 的解析与校验
 └── manager/      管插件的一切
     ├── core.py           发现 / 加载 / 派发 hook / 卸载
@@ -150,6 +153,11 @@ stlibs/plugins/
     ├── runtime.js        node 侧那一半
     └── panel.py          设置页背后的逻辑（不依赖 Qt，单独可测）
 ```
+
+设置页有两种写法：**声明式表单**（`form=[{"type": "switch", "key": "loud", ...}]`，两种语言都能用，
+宿主按当前主题渲染成开关/输入框/下拉/按钮）和 **Python 自己的 QWidget**（`builder=build_page`）。
+带 `key` 的行改完直接写进 `configure.json` 的 `plugins.settings.<id>.<key>`，
+每次改动回调解一次 `on_settings_action`；插件卸载或重载时页面会被摘掉，不会留下孤儿。
 
 | | Python | JavaScript |
 | --- | --- | --- |
@@ -166,9 +174,11 @@ Hook（两种语言名字与参数一致，第一个参数是 `api`）：
 | `on_system_prompt` | 增强：追加系统提示词（**本地与网页聊天都会带上**） |
 | `on_menu` + `api.add_menu_item` | UI Hook：桌宠右键菜单项，点了走 `on_command` |
 | `on_command` | 增强：聊天里 `/命令` |
+| `on_settings_action` | UI Hook：设置页里的控件动了（`ctx` 带 `page`/`action`/`key`/`value`） |
 | `on_event` | 宿主动作（`chat_finished` 等） |
 
 api 里还有：`notify` 提示、`storage_*` 私有存储（`plugins/.data/<id>.json`）、
+`add_settings_page` 系列（设置窗「插件」分类下的页面）、
 `play_motion` / `play_expression` 控制 Live2D、`send_to_chat` 直接往聊天窗塞消息。
 
 * 插件出错只影响它自己：hook 抛异常记进状态、界面提示一次，绝不影响聊天；
@@ -199,9 +209,12 @@ python tools/manual/probe_plugin.py glm4:latest
 
 * 入口：右键桌宠 →「养成系统：打开面板」，或聊天里 `/养成`；
 * 命令：`/状态`、`/买 可乐`、`/喂食 汉堡`；
-* 接了 6 个 hook：`on_load`（读存档 + 起定时器）、`on_unload`、`on_command`、
+* 接了 7 个 hook：`on_load`（读存档 + 起定时器 + 注册设置页）、`on_unload`、`on_command`、
   `on_chat_reply`（按回答长度给奖励）、`on_event`（`pet_click` 给金币）、
-  `on_system_prompt`（饿了就提醒模型"我想吃东西"）；
+  `on_system_prompt`（饿了就提醒模型"我想吃东西"）、
+  `on_settings_action`（设置页里的按钮复用菜单动作）；
+* 设置页：设置 →「插件」→「养成系统 · 养成设置」里可改金币上限、饥饿提醒开关，
+  另有「打开养成面板」「看看当前状态」两个按钮；
 * 数值逻辑在 [`cultivation_model.py`](../../plugins/cultivation_system/cultivation_model.py)，
   纯 Python 可单测；界面在 `cultivation_window.py`；`main.py` 只做 hook 装配。
 

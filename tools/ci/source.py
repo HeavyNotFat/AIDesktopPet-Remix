@@ -139,7 +139,7 @@ class SourceIndex:
         self._functions: dict[tuple[str, str], ast.AST] = {}
         self._assignments: dict[str, dict[str, ast.AST]] = {}
         self._node_files: dict[int, SourceFile] = {}
-        # 名字 → 索引，避免每个 finding 都线性扫一遍（原来是平方级）
+        # 名字 → 索引，避免每个 finding 都线性扫一遍
         self._by_rel: dict[str, SourceFile] = {}
         self._classes_by_qualname: dict[str, ClassRecord] = {}
         self._classes_by_module_name: dict[tuple[str, str], ClassRecord] = {}
@@ -182,7 +182,7 @@ class SourceIndex:
         self._index_symbols()
 
     def _iter_paths(self) -> Iterator[Path]:
-        """自己走目录：``rglob`` 会连 .venv 一起遍历，太慢。"""
+        """自己走目录，不用 ``rglob``。"""
         import os
 
         for dirpath, dirnames, filenames in os.walk(self.root):
@@ -209,7 +209,7 @@ class SourceIndex:
             self._assignments[src.module] = {}
 
             for node in ast.walk(src.tree):
-                # 节点都是活对象（tree 一直持有），用 id 建反查表是安全的
+                # 节点由 tree 持有，可以用 id 建反查表
                 self._node_files[id(node)] = src
 
             for node in src.tree.body:
@@ -273,7 +273,7 @@ class SourceIndex:
         return self._tables.get(src.module, ImportTable(()))
 
     def top_level_imports(self, src: SourceFile) -> list[ImportRef]:
-        """只看模块顶层的 import（函数内的延迟导入不算，它是破环手段）。"""
+        """只看模块顶层的 import。"""
         refs: list[ImportRef] = []
         for node in src.tree.body:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -295,7 +295,7 @@ class SourceIndex:
         return dict(self._classes_by_qualname), dict(self._classes_by_module_name)
 
     def resolve_class(self, src: SourceFile, name: str) -> ClassRecord | None:
-        """把模块里的一个类名（可能是 import 进来的）解析成索引条目。"""
+        """把模块里的一个类名解析成索引条目。"""
         local = self.class_in_module(src.module, name)
         if local is not None:
             return local
@@ -313,7 +313,7 @@ class SourceIndex:
         return self.class_in_module(target, attr) if attr else None
 
     def module_of(self, src: SourceFile, name: str) -> SourceFile | None:
-        """解析模块名（如 ``.llm`` → ``stlibs.mproc.onlinechat.llm``）。"""
+        """把模块名解析成全限定模块名。"""
         table = self.table(src)
         target = table.resolved(name)
         if target and target in self.modules:
@@ -361,7 +361,7 @@ class SourceIndex:
 
 
 def module_name_for(rel: str) -> tuple[str, str, bool]:
-    """``stlibs/themes/__init__.py`` → ``('stlibs.themes', 'stlibs.themes', True)``。"""
+    """仓库相对路径 → (模块名, 包名, 是否包)。"""
     pure = rel[:-3] if rel.endswith(PY_EXT) else rel
     parts = pure.split("/")
     if parts[-1] == "__init__":
@@ -398,12 +398,12 @@ def _expr_name(node: ast.AST | None) -> str:
 
 
 def call_name(node: ast.Call) -> str:
-    """``foo.bar(x)`` → ``foo.bar``。"""
+    """调用表达式 → 被调用的名字。"""
     return _expr_name(node.func)
 
 
 def call_qualname(node: ast.Call) -> tuple[str, str]:
-    """``obj.method(x)`` → ``('obj', 'method')``；``f(x)`` → ``('', 'f')``。"""
+    """调用表达式 → (接收者, 属性名)。"""
     func = node.func
     if isinstance(func, ast.Attribute):
         return _expr_name(func.value), func.attr
@@ -420,7 +420,7 @@ class BranchStatement:
 
 
 def iter_branch_statements(func: ast.AST) -> Iterator[BranchStatement]:
-    """按分支路径展开函数体（只下钻一层控制流，足够覆盖 UI 代码）。"""
+    """按分支路径展开函数体。"""
     def walk(body: Sequence[ast.stmt], path: tuple[str, ...]) -> Iterator[BranchStatement]:
         for stmt in body:
             yield BranchStatement(path, stmt)

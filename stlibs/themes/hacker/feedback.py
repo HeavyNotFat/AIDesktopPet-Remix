@@ -14,7 +14,7 @@ from ... import SharingData
 
 
 class HackerNotify(QFrame):
-    """操作反馈条：优先贴在当前窗口顶部（醒目、居中、带图标），没有窗口时才浮到屏幕右下角。"""
+    """操作反馈条：贴在当前窗口顶部，没有窗口时浮到屏幕右下角。"""
 
     LEVELS = {
         "info": ("#0e1c0e", "#00FF00", "i"),
@@ -33,7 +33,6 @@ class HackerNotify(QFrame):
         if QApplication.instance() is None:
             raise RuntimeError("没有 QApplication，无法显示提示")
 
-        # parent 传什么都行：这里统一解析成"要贴进去的窗口"，解析不到才当浮层
         parent = self._resolve_host(parent)
         super().__init__(parent)
 
@@ -120,7 +119,7 @@ class HackerNotify(QFrame):
 
     @staticmethod
     def _resolve_host(parent):
-        """能贴窗口就贴窗口，贴不上才用浮层。"""
+        """解析提示条要贴进去的窗口，解析不到返回 None。"""
         if parent is not None:
             return parent.window() if hasattr(parent, "window") else parent
 

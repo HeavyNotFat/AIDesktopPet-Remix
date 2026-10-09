@@ -15,10 +15,7 @@ os.chdir(ROOT)
 from tools.ci import Report, run  # noqa: E402
 from tools.ci.core import Severity  # noqa: E402
 
-# 迷你仓库的落脚点。
-# 用点开头的目录：``Settings.is_excluded`` 会跳过任何点目录，
-# 所以即使临时目录被创建在仓库内部（某些环境下 gettempdir() 就是仓库根），
-# 真实仓库的扫描也不会被这些样例文件污染。
+# 迷你仓库放点开头的目录下：CI 扫描会跳过点目录，样例文件不会污染真实仓库
 WORK_ROOT = ROOT / ".ci-tmp"
 # pytest 的 --basetemp 指向 .ci-tmp/pytest，而它只创建最后一级目录，
 # 父目录得先有，否则单独跑某个用例会 FileNotFoundError

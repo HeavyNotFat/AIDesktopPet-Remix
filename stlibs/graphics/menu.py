@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from .. import SharingData
@@ -20,16 +19,12 @@ def plugin_menu_groups(manager=None) -> list:
 
 
 def plugin_menu_items(manager=None) -> list:
-    """平铺用的 ``(分组, 菜单项)`` 列表（顺序 = 插件加载顺序 × 组内注册顺序）。"""
+    """平铺用的 ``(分组, 菜单项)`` 列表。"""
     return [(group, item) for group in plugin_menu_groups(manager) for item in group.items]
 
 
 def add_plugin_menu(context_menu, manager=None, action_factory=None) -> list:
-    """把插件菜单平铺到 ``context_menu`` 上，返回挂上去的分组（没有就返回空列表）。
-
-    ``action_factory(text, icon)`` 由主题提供（各主题 Action 的构造签名不一样，
-    桌宠这边的 shader 传的是 ``stlibs.SharingData.theme.Action``）。
-    """
+    """把插件菜单平铺到 ``context_menu`` 上，返回挂上去的分组。"""
     entries = plugin_menu_items(manager)
     if not entries:
         return []
@@ -42,11 +37,7 @@ def add_plugin_menu(context_menu, manager=None, action_factory=None) -> list:
 
 
 def item_label(group, item) -> str:
-    """平铺后的显示名：``插件名 · 菜单名``（平铺了就没有分组标题兜底了）。
-
-    有些插件本来就习惯把插件名写进菜单名（``养成系统：打开面板``、
-    ``扭蛋机：打开面板`` 配插件名 ``桌宠扭蛋机``），那种就别再挂前缀重复一遍了。
-    """
+    """平铺后的显示名：``插件名 · 菜单名``（菜单名已含插件名就不加前缀）。"""
     title = str(getattr(group, "title", "") or "").strip()
     label = str(getattr(item, "label", "") or "").strip()
     if not title:
@@ -59,16 +50,12 @@ def item_label(group, item) -> str:
 
 
 def _already_names_plugin(title: str, label: str) -> bool:
-    """菜单名里是不是已经能看出是哪个插件了。
-
-    插件标题是"桌宠扭蛋机"、菜单名是"扭蛋机：打开面板"这种最容易撞：
-    标题去掉"桌宠/宠物"这类前缀之后跟菜单名开头对得上，就别再挂前缀重复了。
-    """
+    """菜单名里是不是已经能看出是哪个插件了。"""
     if not title or not label:
         return True
     if label.startswith(title) or title in label:
         return True
-    if label in title:                                   # 标题就是菜单名的超集
+    if label in title:                                   # 标题是菜单名的超集
         return True
     for prefix in _TITLE_PREFIX_NOISE:
         if title.startswith(prefix) and label.startswith(title[len(prefix):]):
@@ -76,7 +63,7 @@ def _already_names_plugin(title: str, label: str) -> bool:
     return False
 
 
-# 插件标题里常见、但对不上菜单名的前缀（"桌宠养成系统" vs "养成系统：xxx"）
+# 插件标题里常见、但对不上菜单名的前缀
 _TITLE_PREFIX_NOISE = ("桌宠", "宠物", "我的")
 
 

@@ -89,7 +89,7 @@ class PluginsWidgetScroll(QWidget):
             ):
                 self.table.setItem(index, column, QTableWidgetItem(text))
 
-        # 图标列按 ICON_CELL_SIZE 显示（默认 16px 太小，看不清自定义图）
+        # 图标列按 ICON_CELL_SIZE 显示，默认 16px 看不清自定义图
         self.table.setIconSize(QSize(ICON_CELL_SIZE, ICON_CELL_SIZE))
         self.detail.setText(self.panel.hint())
 
@@ -110,7 +110,7 @@ class PluginsWidgetScroll(QWidget):
 
     @staticmethod
     def _tell(result):
-        """panel 返回 (level, message)，notify 收的是 (text, level)。"""
+        """把 panel 返回的 (level, message) 转给 notify。"""
         from ... import notify
 
         level, message = result
@@ -137,7 +137,7 @@ class PluginsPage(QWidget):
         root.addWidget(scroll, 1)
 
     def refresh(self):
-        """重新扫描插件目录（设置窗打开时、手动刷新时都会走）。"""
+        """重新扫描插件目录。"""
         return self.card.refresh()
 
 

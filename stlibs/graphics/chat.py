@@ -27,7 +27,7 @@ class Chat(SharingData.theme.Window):
             widget=widget,
             category=get_translation("graphics.chat.local" if is_local else "graphics.chat.api"),
         ).run()
-        # 键用界面上显示的名字：新增配置时拿到的就是别名
+        # 键用界面上显示的名字
         self.model_widgets[ai_name] = widget
         return widget
 
@@ -44,7 +44,7 @@ class Chat(SharingData.theme.Window):
         return None
 
     def reload_models(self, select: str | None = None):
-        """重新扫描本地与 API 模型；新加的配置立刻出现在左侧列表里。"""
+        """重新扫描本地与 API 模型。"""
         for widget in list(self.model_widgets.values()):
             self.removeNavigation(widget)
             widget.deleteLater()

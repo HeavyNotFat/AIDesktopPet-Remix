@@ -84,7 +84,7 @@
       else if (status === 'ready') {
         if (dom.modelMenu.hidden) {
           open();
-          // 每次展开都重新拉一次：桌面端刚加的 API 模型能立刻出现
+          // 每次展开都重新拉一次模型列表
           onRefresh();
         } else close();
       }

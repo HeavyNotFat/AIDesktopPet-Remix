@@ -30,7 +30,7 @@ def test_select_by_id_category_and_glob():
 
 
 def test_select_does_not_do_substring_matching():
-    """``theme`` 只能选中 theme 分类，不能顺带命中 id 里含 theme 的其它检查。"""
+    """``theme`` 只选中 theme 分类，不做子串匹配。"""
     selected = {chk.id for chk in select(["theme"])}
     assert selected == {chk.id for chk in registered_checks() if chk.category == "theme"}
     assert all(chk.id.startswith("theme/") for chk in select(["theme"]))
@@ -59,7 +59,7 @@ def test_finding_sort_and_dict():
 
 
 def test_location_third_positional_is_symbol_not_column():
-    """``Location(path, line, "符号")`` 必须落在 symbol 上，否则列号会变成字符串。"""
+    """``Location(path, line, "符号")`` 的第三个位置参数是 symbol。"""
     location = Location("a.py", 7, "SomeClass")
     assert location.symbol == "SomeClass"
     assert location.column == 0
@@ -81,7 +81,7 @@ def _node_at_line_7():
 
 
 def test_reporters_survive_three_arg_locations(mini_repo):
-    """回归：所有输出格式都要能吃 ``Location(path, line, symbol)``。"""
+    """所有输出格式都要能吃三参数的 ``Location``。"""
     root = mini_repo({"stlibs/__init__.py": "SharingData = None\n"})
     from tools.ci import run
 
@@ -237,7 +237,7 @@ def test_module_docstring_is_flagged(mini_repo):
 
 
 def test_class_and_function_docstrings_are_not_flagged(mini_repo):
-    """只拦"文件开头那一大段"，类/函数自己的 docstring 照常写。"""
+    """类/函数自己的 docstring 不算违规。"""
     root = mini_repo({
         "pkg/ok.py": (
             "# 模块级说明用注释\n"
@@ -255,7 +255,7 @@ def test_class_and_function_docstrings_are_not_flagged(mini_repo):
 
 
 def test_real_repo_has_no_module_docstrings(repo_root):
-    """本仓库自己必须干净（清理过一遍，这条防回退）。"""
+    """本仓库自己不能有模块 docstring。"""
     from tools.ci import run
 
     report = run(root=repo_root, only=["hygiene/module-docstring"])

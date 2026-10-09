@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
 
+from ..base import icon_pixmap
+
 
 class _HackerTitleBar(QWidget):
     def __init__(self, parent=None, title=""):
@@ -121,23 +123,18 @@ class _CodeRain(QWidget):
             })
 
     def update_rain(self):
-        # 更新每一列
         for col in self.columns:
             col['y'] += col['speed'] * self.font_size * 0.7
 
-            # 头部字符随机变化
             if random.random() < 0.15:
                 col['head_char'] = random.choice(self.chars)
 
-            # 当头部进入可视区域时，添加字符到拖尾
             if col['y'] > 0:
-                # 拖尾长度控制
                 if len(col['fade_chars']) > col['length']:
                     col['fade_chars'].pop(0)
 
                 col['fade_chars'].append(col['head_char'])
 
-            # 超出底部就重置到顶部
             if col['y'] > self.height() + 100:
                 col['y'] = random.randint(-150, -20)
                 col['length'] = random.randint(8, 35)
@@ -246,7 +243,7 @@ class _HackerCategory(QWidget):
 class _HackerNavButton(QWidget):
     clicked = Signal()
 
-    def __init__(self, text: str, shortcut: str | None = None):
+    def __init__(self, text: str, shortcut: str | None = None, icon=None):
         super().__init__()
         self.setFixedHeight(36)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -256,6 +253,18 @@ class _HackerNavButton(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed
         )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(6)
+
+        pixmap = icon_pixmap(icon, 16)
+        if pixmap is not None:
+            mark = QLabel()
+            mark.setFixedSize(16, 16)
+            mark.setPixmap(pixmap)
+            mark.setStyleSheet("background: transparent; border: none;")
+            layout.addWidget(mark)
 
         self.label = QLabel(text)
         self.label.setStyleSheet("color: #00FF00;border: none;background: transparent;")
@@ -269,9 +278,6 @@ class _HackerNavButton(QWidget):
         if not shortcut:
             self.shortcut.hide()
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0)
-        layout.setSpacing(6)
         layout.addWidget(self.label)
         layout.addStretch()
         layout.addWidget(self.shortcut)

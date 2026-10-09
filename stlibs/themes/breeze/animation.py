@@ -26,12 +26,7 @@ from .window import PageHint, PageTitle
 
 
 class Live2D(QWidget):
-    """Live2D 页签的内容本体。
-
-    卡片竖着排下来比页签高（本机实测要 529px，页签只给 451px），**必须放进滚动区**：
-    直接塞进页签的话 Qt 会把卡片压扁、控件互相重叠（"录入坐标"被输入框盖掉、
-    播放表情整块看不见）。滚动区在 `AnimationPage` 里套，这里只管内容。
-    """
+    """Live2D 页签的内容本体，卡片比页签高，要放进滚动区。"""
 
     live2d_mot_signal = Signal(list)
     live2d_exp_signal = Signal(list)
@@ -55,8 +50,7 @@ class Live2D(QWidget):
         self.ai_control.stateChanged.connect(self.check_ai_control)
         root.addWidget(BreezeCard("AI 控制", self.ai_control, "允许模型自己决定播放什么"))
 
-        # 坐标录入：一行动作下拉 + 一行 4 个坐标，用布局排（不是 QGridLayout 叠格子，
-        # 那样在卡片高度不够时两行会互相压住，按钮文字被输入框盖掉一半）
+        # 坐标录入：一行动作下拉 + 一行 4 个坐标，用布局排
         self.action_combo = BreezeComboBox()
         self.action_combo.addItems(list(MAPPING_ANIMATION.keys()))
         self.action_combo.addItems(list(MAPPING_SPECTIAL_ANIMATION.keys()))
@@ -109,7 +103,7 @@ class Live2D(QWidget):
         QTimer.singleShot(500, self.get_motion_and_expression)
         self.startTimer(200)
 
-    # -- 信号 ---------------------------------------------------------------
+    # 信号
     def play_mot_example(self, mot: str):
         if not mot:
             return
@@ -142,9 +136,9 @@ class Live2D(QWidget):
         self.motion_combo.setCurrentText("")
         self._switching = False
 
-    # -- 数据 ---------------------------------------------------------------
+    # 数据
     def get_motion_and_expression(self):
-        """从 Live2D 模型参数里读出动作与表情清单（模型没加载就安静跳过）。"""
+        """从 Live2D 模型参数里读出动作与表情清单。"""
         from ... import architecture
 
         path = getattr(SharingData, "model_json_path", "")
@@ -191,7 +185,7 @@ class Live2D(QWidget):
             getattr(Animation, MAPPING_SPECTIAL_ANIMATION[value])
 
     def timerEvent(self, event, /):
-        """轮询坐标录入结果：用户在桌宠上点完，这里把值落到 Animation 上。"""
+        """轮询坐标录入结果，把用户点出的值落到 Animation 上。"""
         from .chrome import MAPPING_ANIMATION, MAPPING_SPECTIAL_ANIMATION
 
         if SharingData.coordinates[0] not in (-1, 0):
@@ -235,11 +229,7 @@ class Static(QWidget):
 
 
 def scroll_wrap(widget: QWidget, parent: QWidget) -> BreezeScrollArea:
-    """把内容套进滚动区：比页签高的内容才不会被压扁、重叠。
-
-    用 `setWidgetResizable(True)`（不是 setFixedHeight）：这样内容有多高就滚多高，
-    页签变小也不会反过来挤内容。
-    """
+    """把内容套进滚动区，比页签高的内容才不会被压扁。"""
     scroll = BreezeScrollArea(parent)
     scroll.setWidgetResizable(True)
     scroll.setWidget(widget)

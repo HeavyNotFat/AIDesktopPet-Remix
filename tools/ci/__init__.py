@@ -32,7 +32,7 @@ __version__ = "1.0.0"
 
 
 def run(*args, **kwargs):
-    """惰性转发到 :mod:`tools.ci.__main__`，避免 ``python -m tools.ci`` 双重导入。"""
+    """惰性转发到 :mod:`tools.ci.__main__`。"""
     from .__main__ import run as _run
 
     return _run(*args, **kwargs)

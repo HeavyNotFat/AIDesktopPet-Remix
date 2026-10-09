@@ -49,7 +49,7 @@ def post(path, payload, timeout=180):
 
 
 def send_through_chat_widget(model: str, document: dict, timeout: float = 240.0) -> str:
-    """离屏跑一遍真实聊天页：挂附件 -> _send_message -> 等线程结束 -> 读气泡。"""
+    """离屏跑一遍聊天页发附件，返回最后一个气泡的文本。"""
     import time
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

@@ -5,6 +5,9 @@ import os
 import threading
 from pathlib import Path
 
+from .errors import PluginError
+from .pages import rows_from_manifest
+
 # hook 名：插件按需实现，宿主按名派发
 ON_LOAD = "on_load"
 ON_UNLOAD = "on_unload"
@@ -14,8 +17,9 @@ SYSTEM_PROMPT = "on_system_prompt"
 MENU = "on_menu"
 COMMAND = "on_command"
 EVENT = "on_event"
+SETTINGS_ACTION = "on_settings_action"
 
-ALL_HOOKS = (ON_LOAD, ON_UNLOAD, CHAT_SEND, CHAT_REPLY, SYSTEM_PROMPT, MENU, COMMAND, EVENT)
+ALL_HOOKS = (ON_LOAD, ON_UNLOAD, CHAT_SEND, CHAT_REPLY, SYSTEM_PROMPT, MENU, COMMAND, EVENT, SETTINGS_ACTION)
 
 HOOK_HELP = {
     ON_LOAD: "插件加载后调用一次（注册菜单/命令/系统提示）",
@@ -26,11 +30,9 @@ HOOK_HELP = {
     MENU: "返回菜单项列表 [{label, action}]，会挂到桌宠右键菜单",
     COMMAND: "聊天里输入 /命令 时触发（api.register_command 注册）",
     EVENT: "宿主事件：theme_changed / chat_opened / plugin_loaded 等",
+    SETTINGS_ACTION: "设置页里的控件动了：ctx 带 page/key/action/value",
 }
 
-
-class PluginError(RuntimeError):
-    """插件自身出错（加载失败、hook 抛异常、超时）。"""
 
 def _jsonable(value):
     try:
@@ -41,7 +43,7 @@ def _jsonable(value):
 
 
 class PluginAPI:
-    """一个插件一个实例：所有副作用都记在它身上，方便卸载时清理。"""
+    """一个插件一个实例：副作用记在它身上，卸载时统一清理。"""
     def __init__(self, manifest, manager):
         self._manifest = manifest
         self._manager = manager
@@ -80,7 +82,6 @@ class PluginAPI:
         return notify(f"[{self.name}] {text}", level, timeout)
 
     def get_setting(self, key, default=None):
-        """清单里声明的设置项（值存在配置里，面板上可以改）。"""
         settings = self._manager.settings_for(self.id)
         if key in settings:
             return settings[key]
@@ -130,13 +131,40 @@ class PluginAPI:
             return dict(self._load_data())
 
     def add_menu_item(self, label, action=None):
-        """UI Hook：往桌宠右键菜单加一项；点了会回调插件的 on_command(action)。"""
+        """UI Hook：加一项右键菜单，点了回调插件的 on_command(action)。"""
         action = action or f"plugin:{self.id}:{len(self.menu_items)}"
         item = {"plugin": self.id, "label": str(label), "action": str(action)}
         with self._lock:
             self.menu_items = [entry for entry in self.menu_items if entry["action"] != item["action"]]
             self.menu_items.append(item)
         return item["action"]
+
+    def add_settings_page(self, title, form=None, builder=None, key=None, order=100, hint=""):
+        """UI Hook：在设置窗「插件」分类下加一页，返回页面 key。"""
+        if builder is None and not form:
+            form = rows_from_manifest(self._manifest.settings)
+            if not form:
+                raise PluginError(
+                    "add_settings_page 需要 form 或 builder，"
+                    "或者在 plugin.json 的 settings 里声明设置项"
+                )
+
+        spec = self._manager.pages.add(
+            self.id, title, form=form, builder=builder, key=key, order=order, hint=hint
+        )
+        return spec.key
+
+    def remove_settings_page(self, key=None):
+        """摘掉自己注册的设置页：key 为空摘全部，返回摘掉的页数。"""
+        return self._manager.pages.remove(self.id, key)
+
+    def settings_pages(self) -> list:
+        """自己注册的设置页信息（key / 标题 / 表单）。"""
+        return [spec.public() for spec in self._manager.pages.pages(self.id)]
+
+    def refresh_settings_page(self, key=None):
+        """让页面重建一遍，界面跟上最新的设置值。"""
+        return self._manager.pages.refresh(self.id, key)
 
     def register_command(self, name, help_text=""):
         """增强：聊天里 /name 触发插件的 on_command。"""
@@ -148,7 +176,7 @@ class PluginAPI:
         return name
 
     def append_system_prompt(self, text):
-        """增强：把这段文本追加到系统提示词（本地与网页聊天都会带上）。"""
+        """增强：把这段文本追加到系统提示词。"""
         text = str(text or "").strip()
         if not text:
             return ""
@@ -170,7 +198,7 @@ class PluginAPI:
         return self._manager.run_on_ui(func, *args, **kwargs)
 
     def play_motion(self, name, index=0):
-        """UI Hook：播 Live2D 动作（和 UDP SDK 里那个是同一条路）。"""
+        """UI Hook：播 Live2D 动作（和 UDP SDK 同一条路）。"""
         return self._manager.play_motion(str(name), int(index))
 
     def play_expression(self, name):
@@ -195,6 +223,10 @@ class PluginAPI:
             self.menu_items = []
             self.commands = {}
             self.prompts = []
+        try:
+            self._manager.pages.remove_plugin(self.id)
+        except Exception as exc:  # noqa: BLE001 - 摘页面失败不该影响卸载
+            print(f"[plugin:{self.id}] 设置页摘除失败：{exc}")
 
 
 __all__ = [
@@ -209,5 +241,6 @@ __all__ = [
     "ON_UNLOAD",
     "PluginAPI",
     "PluginError",
+    "SETTINGS_ACTION",
     "SYSTEM_PROMPT",
 ]

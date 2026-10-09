@@ -17,8 +17,7 @@ class PythonHooks:
         self.api = plugin_api
         self.path = str(path) if path else None
 
-        # 插件目录要一直留在 sys.path 里：入口文件之外的模块经常是**懒加载**的
-        # （比如 "打开窗口时才 import 窗口模块"），只在 exec 期间挂一下就太短了。
+        # 插件目录要一直留在 sys.path 里：入口之外的模块常是懒加载的
         if self.path:
             _keep_path(self.path)
 
@@ -83,7 +82,7 @@ def load_hooks(manifest: PluginManifest, plugin_api) -> PythonHooks:
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
 
-    # 插件里能 import 宿主自己的模块、也能 import 自己同目录的兄弟模块
+    # 插件能 import 宿主模块，也能 import 同目录的兄弟模块
     _keep_path(str(manifest.path))
     try:
         spec.loader.exec_module(module)

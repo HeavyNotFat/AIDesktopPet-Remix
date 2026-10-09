@@ -95,7 +95,7 @@ class BasicWidgetScroll(QWidget):
         self.setLayout(layout)
 
     def _build_remove_row(self):
-        # 上下排的卡片里独占一行：下拉框自己撑开，按钮固定宽
+        # 上下排的卡片里独占一行
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -215,7 +215,7 @@ class Memory(QWidget):
         self.reload_models()
 
     def showEvent(self, event, /):
-        """每次切到这一页都重新扫一遍模型：刚在「新增 LLM」里加的模型立刻能选。"""
+        """每次切到这一页都重新扫一遍模型。"""
         super().showEvent(event)
         self.reload_models()
 
@@ -229,7 +229,7 @@ class Memory(QWidget):
         return seen
 
     def reload_models(self):
-        """重新扫描模型：新加的模型立刻出现在下拉里（选中项尽量保留）。"""
+        """重新扫描模型并填充下拉框，尽量保留原来选中的项。"""
         selected = self.model_selector.currentText()
         self.models = self.model_names()
 
@@ -246,11 +246,7 @@ class Memory(QWidget):
         self.show_model(self.model_selector.currentText())
 
     def show_model(self, model: str):
-        """切到某个模型：只刷新展示区，不再给每个模型建控件。
-
-        以前这里是 "每个模型建一个 MemoryShowItem 塞进页签"，改成下拉之后那些控件
-        已经没用了；继续创建它们会盖在整页上（看得见两个输入框、控件点不动）。
-        """
+        """切到某个模型：只刷新展示区。"""
         if not model:
             return
 
@@ -303,7 +299,7 @@ class RAGWidgetScroll(QWidget):
         )
         layout.addWidget(clear_cache_next_time_card)
         layout.addStretch()
-        # 启用？
+        # 启用 RAG
         enable_rag_switch = HackerSwitch(parent=self)
         enable_rag_switch.setChecked(Config.rag['enable'])
         enable_rag_switch_card = HackerCard(
@@ -314,7 +310,7 @@ class RAGWidgetScroll(QWidget):
         enable_rag_switch.stateChanged.connect(self.check_enable)
         layout.addWidget(enable_rag_switch_card)
         layout.addStretch()
-        # 启用BM25
+        # 启用 BM25 检索
         enable_bm25_switch = HackerSwitch(parent=self)
         enable_bm25_switch.setChecked(Config.rag['bm25_enable'])
         enable_bm25_switch_card = HackerCard(
@@ -325,7 +321,7 @@ class RAGWidgetScroll(QWidget):
         enable_bm25_switch.stateChanged.connect(self.check_bm25_enable)
         layout.addWidget(enable_bm25_switch_card)
         layout.addStretch()
-        # 压缩启用
+        # 启用压缩 RAG
         compressed_rag_switch = HackerSwitch(parent=self)
         compressed_rag_switch.setChecked(Config.rag['compressed_enable'])
         compressed_rag_switch_card = HackerCard(
@@ -359,7 +355,6 @@ class RAGWidgetScroll(QWidget):
         rag_engine_card = HackerCard(
             "RAG引擎",
             rag_engine,
-            # "Chroma轻量，Lance多元，Milvus海量。"
             "Chroma 轻量，Lance多元"
         )
         rag_engine.currentTextChanged.connect(self.check_engine)
@@ -512,26 +507,26 @@ class MCP(QWidget):
         super().__init__(parent)
         from . import HackerSwitch, HackerTable, HackerLabel, HackerButton
 
-        # 开启MCP
+        # 开启 MCP
         HackerLabel("开启MCP", self).setGeometry(20, 10, 150, 30)
         mcp_switch = HackerSwitch(parent=self)
         mcp_switch.setChecked(Config.mcp['enable'])
         mcp_switch.setGeometry(170, 5, 100, 30)
         mcp_switch.stateChanged.connect(self.check_mcp)
 
-        # MCP表格
+        # MCP 服务器表格
         self.mcp_table = HackerTable(parent=self)
         self.mcp_table.setGeometry(20, 50, 600, 300)
         self.mcp_table.setHorizontalHeaderLabels(['服务器ID', '参数', '启动命令'])
         for server in Config.mcp['mcp']:
             self.add_data(server['server'], ' '.join(server['args']), server['command'])
-        # 调整宽度
+        # 调整列宽
         self.mcp_table.setColumnWidth(0, 110)
         self.mcp_table.setColumnWidth(1, 400)
         self.mcp_table.setColumnWidth(2, 90)
         self.mcp_table.itemChanged.connect(self.change_data)
 
-        # 增加MCP面板
+        # 增删 MCP 的按钮
         add_mcp_button = HackerButton("添加MCP", parent=self)
         add_mcp_button.set_border()
         add_mcp_button.setGeometry(20, 360, 100, 30)
@@ -568,7 +563,7 @@ class MCP(QWidget):
         self.mcp_table.setItem(row, 2, QTableWidgetItem(command))
 
     def add_mcp(self):
-        # 空行也得建出单元格，否则那一行是点不进去编辑的
+        # 空行也得建出单元格，否则点不进去编辑
         row = self.mcp_table.rowCount()
         self.mcp_table.blockSignals(True)
         self.mcp_table.insertRow(row)
@@ -580,7 +575,6 @@ class MCP(QWidget):
         notify(f"已添加一行（第 {row + 1} 行），填写后自动保存", "info", 3000)
 
     def remove_mcp(self):
-        # 删除表格
         row = self.mcp_table.currentRow()
         if row < 0:
             return  # 没有选中行时 pop(-1) 会误删最后一条
@@ -622,8 +616,7 @@ class Cooperation(QWidget):
         self.model_search.setGeometry(20, 140, 280, 30)
         self.model_search.textChanged.connect(self.filter_models)
 
-        # 可用模型计数：搜索时显示"匹配 N / 共 M"，一眼看得出筛选掉多少
-        # （以前 filter_models 里算了 total 却没地方显示，refresh 还直接 setText 到一个不存在的属性）
+        # 搜索时显示"匹配 N / 共 M"，一眼看得出筛选掉多少
         self.available_label = HackerLabel("", self)
         self.available_label.setGeometry(20, 172, 280, 20)
 
@@ -671,7 +664,7 @@ class Cooperation(QWidget):
         self.refresh()
 
     def refresh(self):
-        """切到这个页签时重新读配置：刚添加的模型立刻能选。"""
+        """切到这个页签时重新读配置。"""
         self.agent_table.blockSignals(True)
         self.agent_table.setRowCount(0)
         for agent in Config.coop.get("agents") or []:
@@ -699,7 +692,7 @@ class Cooperation(QWidget):
         return unique
 
     def filter_models(self, keyword: str):
-        """按关键字筛可用模型：模型几十个的时候靠它找，而不是挤成一行字。"""
+        """按关键字筛可用模型，模型多的时候靠它找。"""
         keyword = (keyword or "").strip().lower()
         rows = [row for row in self.models
                 if not keyword or keyword in row[0].lower() or keyword in row[1].lower()]
@@ -716,7 +709,6 @@ class Cooperation(QWidget):
         table.blockSignals(False)
         table.rows = rows
 
-        # 计数和表格行数是同一份数据算出来的，永远不会对不上
         total = len(self.models)
         if not total:
             self.available_label.setText("（还没有可用模型，先去「新增 LLM」加一个）")
@@ -802,7 +794,7 @@ class Cooperation(QWidget):
 
     def add_agent(self):
         row = self.agent_table.rowCount()
-        # 建行时 setItem 会触发 itemChanged，先静音免得重复追加一条
+        # 建行时 setItem 会触发 itemChanged，先静音免得重复追加
         self.agent_table.blockSignals(True)
         self.add_row("", "", "")
         self.agent_table.blockSignals(False)
@@ -846,7 +838,7 @@ class Cooperation(QWidget):
 
 
 class Skills(QWidget):
-    """技能：一段可以随时套在提问外面的提示词，聊天窗里按 /名字 或点「技能」使用。"""
+    """技能：可以随时套在提问外面的提示词。"""
     def __init__(self, parent):
         super().__init__(parent)
         from . import HackerTable, HackerLabel, HackerButton

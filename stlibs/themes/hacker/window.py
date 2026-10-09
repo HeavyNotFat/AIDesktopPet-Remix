@@ -191,6 +191,7 @@ class HackerWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
             shortcut_keys: tuple[int, ...] | None = None,
             position: str = "top",
             category: str | None = None,
+            icon=None,
     ):
         if position not in ("top", "bottom"):
             raise ValueError("position must be 'top' or 'bottom'")
@@ -201,7 +202,7 @@ class HackerWindow(QWidget, MainWindowABS, metaclass=CombinedMeta):
             else None
         )
 
-        btn = _HackerNavButton(text, shortcut_text)
+        btn = _HackerNavButton(text, shortcut_text, icon)
         btn.clicked.connect(
             lambda w=widget: self._set_active(w)
         )

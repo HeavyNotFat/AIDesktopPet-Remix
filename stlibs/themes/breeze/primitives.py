@@ -149,12 +149,7 @@ class BreezeButton(QPushButton):
 
 
 class BreezeLineEdit(QLineEdit):
-    """单行输入：浅底、无重描边，聚焦时主色描边。
-
-    第一个参数既能当占位符（字符串）也能当父窗口（QWidget）：
-    `BreezeLineEdit("提示", parent)` 和 `BreezeLineEdit(parent)` 都得能用——
-    以前后者会把 QWidget 当成"不是字符串"直接丢掉，控件变成没有父级的小窗口。
-    """
+    """单行输入：浅底、无重描边，聚焦时主色描边。"""
 
     def __init__(self, placeholder_text: str | None = None, parent=None):
         if isinstance(placeholder_text, QWidget):
@@ -165,8 +160,7 @@ class BreezeLineEdit(QLineEdit):
             self.setPlaceholderText(placeholder_text)
         self.setMinimumHeight(32)
 
-        # 占位符颜色得用 QPalette：Qt6 的样式表没有 `::placeholder` 这条规则，
-        # 写进 QSS 不生效，浅色底上占位文字会淡到看不见
+        # 占位符颜色得用 QPalette，Qt6 的样式表没有 ::placeholder 这条规则
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(TEXT_FAINT))
         self.setPalette(palette)
@@ -193,7 +187,7 @@ class BreezeLineEdit(QLineEdit):
 
 
 class BreezeTextEdit(QTextEdit):
-    """多行输入（第一个参数同样兼容占位符与父窗口，见 `BreezeLineEdit`）。"""
+    """多行输入（第一个参数同样兼容占位符与父窗口）。"""
 
     def __init__(self, placeholder_text: str | None = None, parent=None):
         if isinstance(placeholder_text, QWidget):
@@ -398,7 +392,7 @@ class BreezeSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
 
 
 class BreezeCard(QFrame):
-    """卡片：标题 + 说明 + 控件，白底圆角描边（设置页的基本单元）。"""
+    """卡片：标题 + 说明 + 控件，白底圆角描边。"""
 
     def __init__(self, title: str, widget: QWidget, description: str = "", parent=None, stacked: bool = False):
         super().__init__(parent)
@@ -414,7 +408,7 @@ class BreezeCard(QFrame):
         )
 
         if stacked:
-            # 上下排：控件独占一行（下拉框、表格这类要宽度的）
+            # 上下排：控件独占一行
             layout = QVBoxLayout(self)
             layout.setContentsMargins(14, 10, 14, 12)
             layout.setSpacing(6)
@@ -422,7 +416,7 @@ class BreezeCard(QFrame):
             if description:
                 layout.addWidget(self.description_label)
             layout.addWidget(widget)
-            # 卡片自己按内容长高：只给 layout 加不行，里面的控件会被压扁/重叠
+            # 卡片自己按内容长高，只给 layout 加不行，里面的控件会被压扁
             self.setMinimumHeight(layout.sizeHint().height())
         else:
             layout = QHBoxLayout(self)
@@ -437,8 +431,7 @@ class BreezeCard(QFrame):
                 text_layout.addWidget(self.description_label)
 
             layout.addLayout(text_layout, 1)
-            # 别把控件压扁：按它自己的建议高度来。用 max() 而不是直接 setMinimumHeight，
-            # 免得把 BreezeSwitch 这种固定 28px 的控件顶到 30px（Qt 会静默夹掉，容易看出偏差）
+            # 按控件自己的建议高度来，用 max() 免得把固定高度的开关顶高
             hint = widget.sizeHint().height()
             if hint > 0:
                 widget.setMinimumHeight(hint)
@@ -588,7 +581,7 @@ class BreezeTabWidget(QTabWidget):
 
 
 class BreezeScrollArea(QScrollArea):
-    """滚动区：透明底、无边框（滚动条样式在 base_sheet 里）。"""
+    """滚动区：透明底、无边框。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)

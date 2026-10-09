@@ -19,7 +19,7 @@ logger = logging.getLogger('onlinechat')
 class AttachmentIn(BaseModel):
     name: str = Field(default="", max_length=200)
     mime: str = Field(default="", max_length=120)
-    # 前端统一按 base64 上传（图片直接用，文本类后端自己解码抽正文）
+    # 前端统一按 base64 上传
     data: str = Field(default="", max_length=config.MAX_ATTACHMENT_CHARS)
 
 
@@ -62,7 +62,7 @@ def _validate(req: ChatRequest) -> str:
 
 
 def _attachments(req: ChatRequest) -> list:
-    """把上传上来的 base64 统一成附件字典（分类、限额、抽正文都在 attachment 模块里）。"""
+    """把上传的 base64 统一成附件字典。"""
     if not req.attachments:
         return []
 
@@ -87,7 +87,7 @@ def get_model_list():
 
 
 def _plugin_prompt() -> str:
-    """插件要求的系统提示词（网页聊天也带上，否则同一个插件两端行为不一致）。"""
+    """插件要求的系统提示词，让网页聊天与本地聊天行为一致。"""
     try:
         from ... import plugin_prompts
 
@@ -107,9 +107,9 @@ def chat(req: ChatRequest):
     except UnknownModelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except SessionClosedError as e:
-        # 会话刚好被 TTL/LRU/删除对话回收掉：让前端重发一次即可，不算服务端故障
+        # 会话刚被回收：让前端重发一次即可
         raise HTTPException(status_code=409, detail=str(e)) from e
-    except Exception as e:  # noqa: BLE001 - 统一转成 502 给前端展示
+    except Exception as e:  # noqa: BLE001 - 统一转成 502 给前端
         logger.exception('网页聊天生成失败')
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
 
@@ -155,7 +155,7 @@ def chat_stream(req: ChatRequest):
 
 @api.post('/chat/recall')
 def chat_recall(req: RecallRequest):
-    """补记一轮没走模型的问答（前端命中本地缓存时用）。"""
+    """补记一轮没走模型的问答。"""
     question = req.question.strip()
     if not question or not req.answer.strip():
         raise HTTPException(status_code=400, detail='问题与回答都不能为空')

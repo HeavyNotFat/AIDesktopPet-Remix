@@ -118,6 +118,7 @@ LineEdit = BreezeLineEdit
 Button = BreezeButton
 Label = BreezeLabel
 Slider = BreezeSlider
+Switch = BreezeSwitch
 ComboBox = BreezeComboBox
 CardWidget = BreezeCard
 ScrollArea = BreezeScrollArea
@@ -173,6 +174,7 @@ __all__ = [
     "ScrollArea",
     "SharingData",
     "Slider",
+    "Switch",
     "SwitchWidgetABS",
     "TextEdit",
     "Window",

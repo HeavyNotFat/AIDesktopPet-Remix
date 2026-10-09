@@ -42,7 +42,7 @@ def test_fully_implemented_class_is_clean(mini_repo):
 
 
 def test_class_attribute_counts_as_implementation(mini_repo):
-    """主题里 Signal / QIcon 都是类属性形态，不能算"没实现"。"""
+    """类属性也算实现，不算「没实现」。"""
     root = mini_repo(
         {
             "stlibs/themes/base.py": (

@@ -20,7 +20,7 @@ QtGui = pytest.importorskip("PySide6.QtGui", reason="图标测试需要 PySide6"
 
 @pytest.fixture(scope="module", autouse=True)
 def qapp():
-    """整个模块都要有 QApplication：没有它时构造 QPixmap 会直接终止进程。"""
+    """模块里必须有 QApplication，否则构造 QPixmap 会终止进程。"""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
 
@@ -35,7 +35,7 @@ def make_manifest(directory, **raw):
 
 
 def write_png(directory, name, color=(255, 0, 0)):
-    """真写一张 PNG（用 Qt 存，省得给测试引 Pillow 依赖）。"""
+    """真写一张 PNG（用 Qt 存，省得引 Pillow 依赖）。"""
     from PySide6.QtGui import QColor, QPixmap
 
     pixmap = QPixmap(32, 32)
@@ -175,14 +175,14 @@ def test_custom_icon_cache_notices_a_replaced_file(qapp, tmp_path):
 
 
 def test_plugin_icon_accepts_a_bare_manifest_like_object(qapp):
-    """SDK/主题拿到的是 dataclass，不一定是完整清单；缺属性也不能炸。"""
+    """SDK/主题拿到的是 dataclass，缺属性也不能炸。"""
     manifest = PluginManifest(id="bare", name="极简", path=None)
 
     assert not plugin_icon(manifest, 24).isNull()
 
 
 def test_icon_without_gui_returns_empty_instead_of_crashing(tmp_path, monkeypatch):
-    """没有 QGuiApplication 时 Qt 构造 QPixmap 会直接终止进程——必须提前返回。"""
+    """没有 QGuiApplication 时构造 QPixmap 会终止进程，必须提前返回。"""
     from stlibs.plugins import icons
 
     monkeypatch.setattr(icons, "has_gui", lambda: False)

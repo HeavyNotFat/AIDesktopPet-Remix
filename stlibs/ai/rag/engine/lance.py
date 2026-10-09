@@ -20,7 +20,7 @@ class LanceVectorStore(BaseVectorStore):
         if self.collection_name in self.db.table_names():
             self.table = self.db.open_table(self.collection_name)
         else:
-            # 表在第一次写入 chunk 时才会被创建（需要至少一行数据来推断 schema）
+            # 第一次写入 chunk 时才会建表
             self.table = None
 
         log(f"LanceDB 初始化完成：{self.store_path}")
@@ -78,8 +78,7 @@ class LanceVectorStore(BaseVectorStore):
             hits = self.table.search(query_vector).limit(top_k).to_list()
 
             for hit in hits:
-                # LanceDB 默认返回 L2 距离，这里沿用与 Chroma 一致的 1 - distance 换算方式，
-                # 便于和 BM25 分数用同一套融合逻辑（如需严格可比，建议按需替换成余弦距离）。
+                # LanceDB 返回的是 L2 距离，用 1 - distance 换算成和 Chroma 一致的分数
                 distance = hit.get("_distance", 0.0)
                 results.append({
                     "score": 1 - distance,

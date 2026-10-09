@@ -9,7 +9,7 @@ class BaseVectorStore(ABC):
 
     @abstractmethod
     def init(self):
-        """初始化底层客户端/表"""
+        """初始化底层客户端或数据表。"""
         raise NotImplementedError
 
     def ensure_ready(self):

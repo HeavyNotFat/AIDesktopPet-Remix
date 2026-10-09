@@ -5,7 +5,7 @@
 所以 CI 里不需要装 PySide6、ollama、chromadb，几秒钟就能出结果。
 
 ```
-python -m tools.ci                 # 跑全部 55 项检查
+python -m tools.ci                 # 跑全部 57 项检查
 python -m tools.ci --list          # 列出检查项
 python -m tools.ci ui/*            # 只跑某一类
 python -m tools.ci --strict        # warning 也算失败
@@ -131,12 +131,19 @@ Qt 类 + CombinedMeta       → __abstractmethods__ 根本不存在，缺抽象�
 | `web/namespace` | 调用了 `QW.xxx.yyy` 但没人导出 `yyy` |
 | `web/script-loaded` | js 文件没被 `index.html` 引入，写了不生效 |
 
+### 文档与文件开头 `docs/*`
+
+| id | 拦什么 |
+| --- | --- |
+| `docs/header-comment` | 文件开头是注释（说明块 / 分割线 / 装饰性标题）：`.py` `.js` `.css` `.yml` 都拦；shebang 与 `# noqa` 这类工具指令不算 |
+| `docs/markdown-location` | `.md` 没放在 `docs/` 下（各目录只留 `README.md`，根目录只留 `README.md` 与 `AGENTS.md`） |
+
 ### 基础卫生 `hygiene/*` `import/*`
 
 | id | 拦什么 |
 | --- | --- |
 | `hygiene/parse-error` | 文件读不了/语法错误 |
-| `hygiene/module-docstring` | 文件头部的模块 docstring（`"""..."""`），见 [AGENTS.md](AGENTS.md) 第一条硬规则；只拦"文件开头那一大段"，类/函数 docstring 与 `#` 注释照常写 |
+| `hygiene/module-docstring` | 文件头部的模块 docstring（`"""..."""`），见 [AGENTS.md](../../AGENTS.md) 第一条硬规则；只拦"文件开头那一大段"，类/函数 docstring 与 `#` 注释照常写 |
 | `hygiene/bare-except` | 裸 `except:` 会把 `KeyboardInterrupt`/`SystemExit` 一起吞掉 |
 | `hygiene/attr-typo` | 调用了与 Qt API 只差一个字母、且全项目不存在的属性（`bounds.ottom()` 就是这么抓到的） |
 | `hygiene/todo` | TODO/FIXME 统计（info） |
@@ -194,10 +201,10 @@ allow = ["ui/stylesheet-class:QCustomThing"]   # 细粒度白名单
 ### 5.1 门禁 + 测试套件（几秒~几十秒，CI 每次都跑）
 
 ```bash
-python -m tools.ci            # 55 项静态检查，9 秒左右
+python -m tools.ci            # 57 项静态检查，9 秒左右
 python -m tools.ci ui/*       # 只跑某一类
 python -m tools.ci --strict   # warning 也算失败
-python -m pytest tests -q     # 153 个用例：门禁自身 + 实例隔离 + 平台金丝雀
+python -m pytest tests -q     # 663 个用例：单元 + 离屏 Qt + node 跑前端 js + 门禁自测
 pytest tests/ci -q            # 只测门禁框架
 pytest tests/test_onlinechat.py -q   # 只测网页聊天实例池
 ```
@@ -355,17 +362,23 @@ python tools/manual/shoot_ui.py            # 输出到 .tmp/ui-shots/
 ### 5.6 插件系统
 
 ```bash
-python -m pytest tests/test_plugins.py tests/test_plugins_panel.py tests/test_plugins_ui.py -q
+python -m pytest tests/test_plugins.py tests/test_plugins_panel.py tests/test_plugins_ui.py \
+    tests/test_plugin_settings_pages.py tests/test_plugin_settings_ui.py -q
 ```
 
 * `test_plugins.py`：清单校验（坏 JSON、缺入口、语言不支持、`entry` 越界、id 重复、
   点开头目录跳过）、Python 插件的加载/卸载/重载/异常隔离、hook 参数自适应、
   `Plugin` 类写法、存储与设置持久化、启停写回配置、总开关、事件派发；
-  JavaScript 部分**跑真实 node 子进程**：加载、api 往返（storage/notify/menu/command）、
+  JavaScript 部分**跑真实 node 子进程**：加载、api 往返（storage/notify/menu/command/settings page）、
   菜单点击、语法错误、hook 抛异常、超时、卸载杀进程、没有 node 时的降级；
 * `test_plugins_panel.py`：管理页的**逻辑层**（不依赖 Qt）——表格行、状态文案
   （停用/加载失败/运行出错/已加载）、选中映射、启停、重载成功与仍失败、总开关、打开目录；
-* `test_plugins_ui.py`（离屏 Qt）：页面把数据画出来、按钮接对了没有、提示有没有发出去。
+* `test_plugins_ui.py`（离屏 Qt）：页面把数据画出来、按钮接对了没有、提示有没有发出去；
+* `test_plugin_settings_pages.py`：设置页注册表（不依赖 Qt）——表单行校验与上限、覆盖注册换
+  generation、按插件 order 排序、卸载摘页、值落盘与 `on_settings_action` 派发、JS 桥的同名调用；
+* `test_plugin_settings_ui.py`（离屏 Qt）：页面挂进设置窗的「插件」分类、导航项带插件图标、
+  开关/输入框/数字校验/按钮回调、`builder` 页面与构建失败兜底、刷新重建、两个主题的控件；
+  最后用**真插件**（`plugins/cultivation_system`）跑一遍端到端。
 
 真机联调（暗号判据：插件要求回答里必须带 `【插件生效】`）：
 

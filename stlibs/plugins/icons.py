@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -9,11 +8,10 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter, QPen, QPixmap
 
 DEFAULT_ICON_SIZE = 64
-BADGE_FONT_POINT = 0.52  # 徽章字号 = 边长 × 这个比例
+BADGE_FONT_POINT = 0.52  # 徽章字号比例
 BADGE_RADIUS_RATIO = 0.26  # 圆角半径比例
 BADGE_BORDER_RATIO = 0.06  # 描边宽度比例
 
-# 深色主题下都能看清的一组颜色（背景压暗、字用白色）
 BADGE_COLORS = (
     (0x2E, 0x7D, 0x32),  # 绿
     (0x00, 0x69, 0x5C),  # 青
@@ -28,21 +26,15 @@ BADGE_COLORS = (
 _CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff]")
 _LATIN_RE = re.compile(r"[0-9A-Za-z]")
 
-# 中文/日文字符必须落到有这些字形的字体上，否则徽章会画成空白方块。
-# 实测（192 个系统字体的真机）：这一串能解析到 Microsoft YaHei，汉字宽 33px / 字母宽 25px。
+# 中文字符要有这些字形的字体，否则徽章会画成空白方块
 FONT_FAMILIES = "Microsoft YaHei, SimHei, Noto Sans CJK SC, PingFang SC, sans-serif"
 
 _cache: dict = {}
-_MISS = object()  # 解码失败也要缓存（文件坏了不该每次重画都再读一遍盘）
+_MISS = object()  # 解码失败也缓存
 
 
 def has_gui() -> bool:
-    """能不能安全地构造 QPixmap。
-
-    这一条是**必须**的：没有 QGuiApplication 时 Qt 会在构造 QPixmap 时直接
-    终止进程（qFatal，不抛异常），插件菜单、设置页、甚至一个纯逻辑测试只要
-    碰一下图标就会把整个宿主带走。没有界面时统一返回 None，让调用方画文字。
-    """
+    """能不能安全地构造 QPixmap：没有 QGuiApplication 时构造它会直接终止进程。"""
     return QGuiApplication.instance() is not None
 
 
@@ -132,7 +124,7 @@ def _file_key(path, size: int) -> tuple:
 
 
 def plugin_icon(manifest, size: int = DEFAULT_ICON_SIZE) -> QIcon:
-    """插件图标：有自定义图就解码它，否则回退到字母徽章；没有界面就返回空图标。"""
+    """插件图标：有自定义图就解码它，否则回退到字母徽章。"""
     if not has_gui():
         return QIcon()
 
@@ -159,7 +151,7 @@ def plugin_icon(manifest, size: int = DEFAULT_ICON_SIZE) -> QIcon:
 
 
 def plugin_pixmap(manifest, size: int = DEFAULT_ICON_SIZE):
-    """plugin_icon 的 QPixmap 版本（自绘菜单要直接 drawPixmap）；没有界面就返回 None。"""
+    """plugin_icon 的 QPixmap 版本（自绘菜单要 drawPixmap）。"""
     if not has_gui():
         return None
 

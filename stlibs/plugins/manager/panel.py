@@ -44,10 +44,7 @@ class PluginsPanel:
         return self.manager.enabled()
 
     def rows(self) -> list:
-        """表格行：名称 / 语言 / 版本 / 状态 / 调用次数（先 refresh 再读）。
-
-        ``icon`` 是这一行的图标（QIcon）；没有 Qt 时是 None，展示层跳过图标列就行。
-        """
+        """表格行：名称 / 语言 / 版本 / 状态 / 调用次数 / 图标（先 refresh 再读）。"""
         rows = []
         for info in self.manager.status()["plugins"]:
             rows.append({
@@ -72,7 +69,7 @@ class PluginsPanel:
             print(f"[plugin:{plugin_id}] 图标读取失败：{exc}")
             return None
 
-        # 空图标（没有 QGuiApplication 时就是这种）按"没有"处理，展示层好判断
+        # 空图标按"没有"处理，展示层好判断
         return None if icon is None or icon.isNull() else icon
 
     def hint(self) -> str:
@@ -85,7 +82,7 @@ class PluginsPanel:
         return READY_HINT
 
     def selected(self, row: int):
-        """行号 -> 插件 id（表格里显示的标题带 id 后缀，这里直接按顺序取更稳）。"""
+        """行号 -> 插件 id。"""
         infos = list(self.manager.infos.values())
         if row < 0 or row >= len(infos):
             return None
@@ -167,7 +164,7 @@ def _open_local(path: str) -> bool:
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
         return True
-    except Exception as exc:  # noqa: BLE001 - 没装 Qt / 无界面都只是打不开而已
+    except Exception as exc:  # noqa: BLE001 - 没装 Qt / 无界面都只是打不开
         print(f"[plugin] 插件目录：{path}（打开失败：{exc}）")
         return False
 
@@ -177,7 +174,7 @@ def state_text(item: dict) -> str:
     if not item.get("enabled", True):
         return "已停用"
     if item.get("error"):
-        # 加载成功但 hook 抛异常也要露出来，否则看着像一切正常
+        # 加载成功但 hook 抛异常也要露出来
         prefix = "运行出错：" if item.get("loaded") else "加载失败："
         return prefix + str(item["error"])[:60]
     if item.get("loaded"):
@@ -186,7 +183,7 @@ def state_text(item: dict) -> str:
 
 
 def ensure_directory(directory: str) -> str:
-    """把插件目录准备好（第一次跑的时候它可能还不存在）。"""
+    """把插件目录准备好，不存在就创建。"""
     target = Path(directory).resolve()
     os.makedirs(target, exist_ok=True)
     return str(target)

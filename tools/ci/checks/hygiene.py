@@ -6,10 +6,7 @@ from typing import Iterator
 
 from ..core import Finding, Location, Severity
 
-# 常见 Qt / 本项目的 API 名。
-# # 只收「界面编程专用」的名字：像 ``strip`` / ``emit`` / ``exit`` 这类通用名
-# 参与"差一个字母"比较会疯狂误报（``lstrip`` vs ``strip``、``exit`` vs ``emit``）。
-# 真正的收益是 ``bounds.ottom()`` 这种 Qt API 拼写错误。
+# 常见 Qt / 本项目的 API 名，只收界面专用名，通用名参与比较会误报。
 KNOWN_API_NAMES: frozenset[str] = frozenset(
     """
     bottom top left right width height size rect geometry move resize show hide close update
@@ -41,11 +38,7 @@ MODULE_DOCSTRING_EXEMPT = ("tools/manual/strip_doc_headers.py",)
 
 
 def check_module_docstring(ctx) -> Iterator[Finding]:
-    """文件头部不许写模块 docstring（见 AGENTS.md 的第一条硬规则）。
-
-    类/函数自己的 docstring 与 ``#`` 注释照常写，这里只拦"文件开头那一大段"：
-    判定就是模块 body 的第一条语句是不是字符串常量。
-    """
+    """拦「文件头部写了模块 docstring」：模块 body 第一条语句是字符串常量就算。"""
     for src in ctx.sources.files:
         if src.rel in MODULE_DOCSTRING_EXEMPT:
             continue
@@ -61,7 +54,7 @@ def check_module_docstring(ctx) -> Iterator[Finding]:
             severity=Severity.ERROR,
             message="文件头部不允许模块 docstring（`\"\"\"...\"\"\"`）",
             location=Location(src.rel, first.lineno),
-            hint="删掉它；模块级的说明写进 `#` 注释或 STRUCTURE.md，类/函数说明写进各自的 docstring",
+            hint="删掉它；模块级的说明写进 `#` 注释或 docs/STRUCTURE.md，类/函数说明写进各自的 docstring",
         )
 
 
@@ -88,9 +81,7 @@ def check_attribute_typo(ctx) -> Iterator[Finding]:
         name = node.func.attr
         if name in defined or name in allowed or name in KNOWN_API_NAMES or len(name) < 5:
             continue
-        # 只看首字母小写的名字：Qt/Python 的方法都是小写开头，
-        # 首字母大写的基本是外部绑定库自己的命名（live2d-py 的 Update/Resize），
-        # 拿去和 Qt API 比会一路误报。
+        # 只看首字母小写的名字，大写开头多是外部绑定库的命名。
         if not name[0].islower():
             continue
         for candidate in KNOWN_API_NAMES:

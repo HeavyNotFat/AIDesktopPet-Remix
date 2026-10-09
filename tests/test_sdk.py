@@ -183,6 +183,8 @@ def test_get_config_rejects_unknown_key(client):
 
 def test_set_config_writes_and_persists(tmp_path, monkeypatch, client):
     monkeypatch.setattr(stlibs, "CONFIG_PATH", str(tmp_path / "configure.json"))
+    # 别的用例会照着 Config 建界面，改完必须还原（否则 setValue("80") 直接 TypeError）
+    monkeypatch.setattr(stlibs.Config, "opacity", stlibs.Config.opacity)
 
     result = client.set_config("opacity", "80")
 

@@ -187,7 +187,7 @@ def check_static_models(ctx) -> Iterator[Finding]:
 
 
 def check_json_resources(ctx) -> Iterator[Finding]:
-    """resources 目录下的 JSON 必须都能解析（打包后崩在这里最难查）。"""
+    """resources 目录下的 JSON 必须都能解析。"""
     root_dir = ctx.root / "resources"
     if not root_dir.is_dir():
         return
@@ -214,7 +214,7 @@ def check_json_resources(ctx) -> Iterator[Finding]:
 
 
 def check_icon_usage(ctx) -> Iterator[Finding]:
-    """icons/ 下没有被任何代码引用的素材（聚合报告，避免刷屏）。"""
+    """icons/ 下没有被任何代码引用的素材。"""
     icon_dir = ctx.root / "resources/icons"
     if not icon_dir.is_dir():
         return

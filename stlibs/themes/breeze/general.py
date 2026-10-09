@@ -24,7 +24,7 @@ from .window import PageHint, PageTitle
 
 
 class GeneralPage(QWidget):
-    """常规设置：改完立刻生效（信号发给设置窗，再转成桌宠的实时调整）。"""
+    """常规设置：改完立刻生效。"""
 
     opacity_changed = Signal(int)
     size_changed = Signal(int)
@@ -42,7 +42,7 @@ class GeneralPage(QWidget):
         root.setSpacing(10)
         root.addWidget(PageTitle(self.windowTitle()))
 
-        # 表单区放滚动里：窗口小的时候不至于挤没
+        # 表单区放滚动里，窗口小的时候不至于挤没
         holder = QWidget()
         holder.setStyleSheet(f"background: {SURFACE};")
         form = QVBoxLayout(holder)
@@ -95,7 +95,7 @@ class GeneralPage(QWidget):
 
     @staticmethod
     def _characters() -> list[str]:
-        """可用形象：Live2D 模型目录 + 静态帧目录，读不到就返回空列表。"""
+        """可用形象：Live2D 模型目录 + 静态帧目录。"""
         names: list[str] = []
         for folder in ("./resources/character/model", "./resources/character/static"):
             try:
@@ -117,7 +117,7 @@ class GeneralPage(QWidget):
         ConfigLoader.save_config()
 
     def check_character(self, character):
-        """Live2D 目录里有模型文件就当 Live2D，否则当静态序列帧。"""
+        """目录里有模型文件就当 Live2D，否则当静态序列帧。"""
         if os.path.exists(f"./resources/character/model/{character}/3") or \
                 os.path.exists(f"./resources/character/model/{character}/2"):
             Config.model_live2d = character

@@ -59,16 +59,7 @@ def _value_kind(value: ast.AST | None, class_names: set[str]) -> tuple[str, ast.
 
 
 def _export_class_name(sources, src: SourceFile, entry: tuple[str, ast.AST] | None) -> str | None:
-    """映射绑定到哪个类，认这几种写法：
-
-    * ``Window = HackerWindow``（本文件定义的，或从别的模块 import 进来的）
-    * ``from .window import HackerWindow``（直接重新导出）
-    * ``IconList = IconList()``（实例映射，取被实例化的那个类）
-
-    主题按职责拆成多个文件之后，映射大多不再是"本文件定义的类"了。以前只认
-    "本文件里的 ClassDef"，拆分后会静默解析不到，``theme/member-missing``
-    等于白跑——所以这里统一走 ``SourceIndex.resolve_class``（它会跟 import 表）。
-    """
+    """映射指向哪个类：本文件的类、import 重导出、实例映射，统一走 ``resolve_class`` 解析。"""
     if not entry:
         return None
 
@@ -214,7 +205,7 @@ def check_member_missing(ctx) -> Iterator[Finding]:
 
 
 def check_member_kind(ctx) -> Iterator[Finding]:
-    """抽象声明是 property，实现却是方法（或反过来），取值会拿到函数对象。"""
+    """抽象声明是 property、实现却是方法（或反过来）。"""
     contract: ThemeContract = ctx.contract
     from .abstract_api import Hierarchy
 
@@ -270,7 +261,7 @@ def check_usage_unsupported(ctx) -> Iterator[Finding]:
 
 
 def check_protocol_drift(ctx) -> Iterator[Finding]:
-    """代码用到的映射没写进 ``_ThemeTypingProtocol``：契约与实现开始漂移。"""
+    """代码用到的映射没写进 ``_ThemeTypingProtocol``。"""
     contract: ThemeContract = ctx.contract
     usage, _ = _usage_sites(ctx)
     allowed = set(contract.all_names()) | set(EXTRA_ATTRS)
@@ -364,7 +355,7 @@ def check_alias_duplicate(ctx) -> Iterator[Finding]:
 
 
 def check_protocol_declared(ctx) -> Iterator[Finding]:
-    """契约本身要存在，否则整套检查会「静默通过」。"""
+    """契约映射本身必须存在。"""
     contract: ThemeContract = ctx.contract
     if contract.declared_at is None:
         src = ctx.sources.modules.get("stlibs")

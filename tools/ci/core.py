@@ -12,7 +12,7 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型
 
 
 class Severity(enum.StrEnum):
-    """问题等级。``ERROR`` 会让 CI 失败，其余默认只提示。"""
+    """问题等级，``ERROR`` 会让 CI 失败。"""
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -109,7 +109,7 @@ class Context:
 
     @property
     def contract(self):
-        """主题契约（惰性构建，避免没用到的检查也去解析）。"""
+        """主题契约，惰性构建。"""
         if self._contract is None:
             from .contract import build_contract
 
@@ -152,7 +152,7 @@ _REGISTRY: dict[str, Check] = {}
 
 
 def register(id: str, title: str, category: str, docs: str = ""):
-    """把一个检查函数登记进注册表。``id`` 必须全局唯一。"""
+    """把一个检查函数登记进注册表。"""
     def decorator(func: Callable[[Context], Iterable[Finding]]):
         if id in _REGISTRY:
             raise ValueError(f"检查 id 重复：{id}")

@@ -32,7 +32,6 @@ from ..base import CombinedMeta, SwitchWidgetABS
 class HackerLabel(QLabel):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
-        # 文字左对齐
         self.setAlignment(Qt.AlignmentFlag.AlignLeft)
         font_id = QFontDatabase.addApplicationFont("./resources/fonts/jetbrains.ttf")
         if font_id != -1:
@@ -347,7 +346,7 @@ class HackerSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
         self._checked = False
         self._offset = 3.0
 
-        # 滑动动画
+        # 滑块滑动动画
         self.animation = QPropertyAnimation(self, b"offset")
         self.animation.setDuration(180)
         self.animation.setEasingCurve(
@@ -385,7 +384,7 @@ class HackerSwitch(QWidget, SwitchWidgetABS, metaclass=CombinedMeta):
         self.animation.setEndValue(end)
         self.animation.start()
 
-        # 代码里改状态也要通知出去（以前只有鼠标点击才发信号）
+        # 代码里改状态也要通知出去
         if changed:
             self.stateChanged.emit(checked)
 
@@ -486,7 +485,7 @@ class HackerCard(QFrame):
         """)
 
         if stacked:
-            # 上下排：控件独占一整行，适合下拉框、表格这类需要宽度的东西
+            # 上下排：控件独占一整行，适合下拉框、表格
             self.setFixedHeight(104)
             layout = QVBoxLayout(self)
             layout.setContentsMargins(14, 10, 14, 12)
@@ -514,7 +513,7 @@ class HackerCard(QFrame):
             text_layout.addWidget(description_label)
 
             layout.addLayout(text_layout, 1)
-            # 别把控件压扁：按它自己的建议高度来（开关 30、按钮 38 都能放下）
+            # 别把控件压扁：按它自己的建议高度来
             widget.setFixedHeight(max(30, widget.sizeHint().height()))
             layout.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter)
 
@@ -686,21 +685,21 @@ class HackerTable(QTableWidget):
 
         header = self.horizontalHeader()
         header.setHighlightSections(False)
-        # 默认根据内容调整
+        # 默认根据内容调整列宽
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
 
     def setHorizontalHeaderLabels(self, headers):
-        """设置表头"""
+        """重新设置表头"""
         self.setColumnCount(len(headers))
         super().setHorizontalHeaderLabels(headers)
 
     def set_header_stretch(self):
-        """让所有列平均拉伸"""
+        """让所有列平均拉伸宽度"""
         header = self.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
     def set_header_resize(self):
-        """允许用户拖动调整列宽"""
+        """允许用户拖动调整列宽（以此为准）"""
         header = self.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
 
@@ -796,8 +795,6 @@ class HackerTabWidget(QTabWidget):
             }
         """)
 
-
-# UI
 
 class HackerScrollArea(QScrollArea):
     def __init__(self, parent=None):

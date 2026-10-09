@@ -10,7 +10,7 @@ from PySide6.QtCore import QThread, Signal
 
 
 def decode_audio(data: str, dtype="float32"):
-    """base64 音频（云端给的是 mp3）-> (波形, 采样率)。"""
+    """base64 音频解码成 (波形, 采样率)。"""
     raw = base64.b64decode(data)
     return soundfile.read(io.BytesIO(raw), dtype=dtype)
 
@@ -40,6 +40,6 @@ class LLMAICallback(QThread):
                 cache_text += event
                 self.text_chunk.emit(event)
             elif isinstance(event, dict):
-                # 音频也走 tool_event：交给界面决定什么时候播（不再自动播）
+                # 音频也走 tool_event，由界面决定播放时机
                 self.tool_event.emit(event)
         self.finished.emit(cache_text)

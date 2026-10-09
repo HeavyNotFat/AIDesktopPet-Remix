@@ -17,7 +17,7 @@ def _get_state(api) -> PetState:
 
 
 class _Storage:
-    """把插件的 storage 包装成 ``get/set`` 两个方法给 PetState 用。"""
+    """把插件的 storage 包装成 get/set 给 PetState 用。"""
     def __init__(self, api):
         self.api = api
 
@@ -50,6 +50,21 @@ def on_load(api):
     api.register_command("喂食", "喂一份背包里的食物：/喂食 汉堡")
     api.register_command("买", "买一份食物：/买 可乐")
 
+    # 设置窗「养成设置」页的可改项
+    api.add_settings_page(
+        "养成设置",
+        form=[
+            {"type": "number", "key": "click_coin", "label": "点一下最多给几枚金币",
+             "default": 5, "min": 1, "max": 50},
+            {"type": "switch", "key": "mood_prompt", "label": "饿了时提醒 AI", "default": True},
+            {"type": "hint", "text": "改完立刻生效，不用重载插件。"},
+            {"type": "button", "action": "cultivation_system:open", "label": "打开养成面板"},
+            {"type": "button", "action": "cultivation_system:status", "label": "看看当前状态"},
+        ],
+        key="settings",
+        hint="和 plugin.json 里声明的设置项是同一份值",
+    )
+
     api.run_on_ui(_start_timer, api)
 
 
@@ -71,7 +86,7 @@ def on_unload(api):
 
 
 def _start_timer(api):
-    """在 UI 线程里起一个定时器（插件线程不能直接创建 QTimer）。"""
+    """在 UI 线程里起一个定时器。"""
     global _timer
 
     from PySide6.QtCore import QTimer
@@ -111,7 +126,7 @@ def _open_window(api):
 
     from PySide6.QtWidgets import QApplication
 
-    # 没有界面环境时创建 QWidget 会直接把进程带崩，这里先说清楚
+    # 无界面环境不能建 QWidget
     if QApplication.instance() is None:
         return f"没有界面环境，先看状态吧：{_get_state(api).status_text()}"
 
@@ -213,6 +228,14 @@ def on_event(api, ctx):
     _notify_gains(api, events)
     if _window is not None and _window.isVisible():
         _window.refresh()
+
+
+def on_settings_action(api, ctx):
+    """设置页上的按钮：动作名和菜单项共用一套处理。"""
+    action = str(ctx.get("action") or "")
+    if action not in ("cultivation_system:open", "cultivation_system:status"):
+        return None
+    return on_command(api, {"name": action, "args": "", "text": ""})
 
 
 def on_system_prompt(api):

@@ -32,11 +32,7 @@ def make_coop(agents, replies=None, **config):
 
 
 def test_local_llm_complete_streams_without_touching_memory(monkeypatch):
-    """本地模型走协作时用的是 complete()：它必须能产出文本，且不写短期记忆。
-
-    回归：这一行以前调了不存在的 self._call_chat(...)，本地模型的协作会
-    AttributeError 然后被降级成"主模型没有给出初稿"，表面看只是没输出。
-    """
+    """回归：本地模型协作要用 complete() 出文本且不写短期记忆。"""
     pytest.importorskip("PySide6.QtCore")
 
     import stlibs
@@ -250,5 +246,5 @@ def test_lead_draft_is_not_written_into_memory(agents):
 
     collect(coop, lead)
 
-    # 初稿用 complete()（不碰记忆），定稿也走 complete()，由 LLM.chat() 统一记账
+    # 初稿走不碰记忆的 complete()，定稿也走 complete()，由 LLM.chat() 统一记账
     assert all(call[-1]["role"] == "user" for call in lead.calls)

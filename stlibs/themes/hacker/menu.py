@@ -15,7 +15,7 @@ from PySide6.QtGui import (
 
 from ..base import CombinedMeta, MenuWidgetABS
 
-# 条目左边图标统一按这个尺寸取（插件图标、主题图标都走这里）
+# 条目左边图标的统一尺寸
 MENU_ICON = 22
 
 
@@ -45,11 +45,10 @@ class Action(QAction):
 
 
 class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
-    """右键菜单：整个条目都是自绘的（一条一张 QPixmap），一层平铺、没有子菜单。"""
+    """右键菜单：条目自绘成一张 QPixmap，一层平铺、没有子菜单。"""
 
     triggered = Signal(object)
-    # 菜单收起来了。Popup 开着时鼠标事件归它管，宿主收不到 release，
-    # 所以"按住拖动"的宿主（桌宠）靠这个信号复位拖拽状态，否则会追着光标漂
+    # 菜单收起来了：宿主靠它复位拖拽状态
     menu_closed = Signal()
 
     ROW_HEIGHT = 36   # 单条菜单项的高度
@@ -97,7 +96,6 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         }
         """)
 
-    # -- 装配 ---------------------------------------------------------------
     def addAction(self, action):
         self._actions.append(action)
         self._items.append(('action', action))
@@ -105,8 +103,7 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         text = action.text()
         pixmap = menu_icon_pixmap(action.icon())
 
-        # 每一条都按「最宽的那条」来画：早先按自己文字宽度画，短条目右边留空、
-        # 悬停高亮也只亮一半，看着很难受。
+        # 每条都按最宽的那条画，短条目的高亮才铺得满
         label = QLabel()
         label.setFixedHeight(self.ROW_HEIGHT)
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -163,7 +160,6 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
             separator.setFixedWidth(self._max_width)
         self.adjustSize()
 
-    # -- 绘制 ---------------------------------------------------------------
     def _render_row(self, entry, width: int, hovered: bool) -> QPixmap:
         """把一条菜单项画成一张位图（没有反锯齿，字才是清楚的）。"""
         height = entry['label'].height() or self.ROW_HEIGHT
@@ -209,7 +205,6 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.box.setFixedWidth(self._max_width + 20)
         self.adjustSize()
 
-    # -- 生命周期 -----------------------------------------------------------
     def _announce_closed(self):
         """通知宿主"菜单收起来了"（hide 与 close 可能都来一遍，去重）。"""
         if self._closed_announced:
@@ -218,7 +213,7 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         self.menu_closed.emit()
 
     def hideEvent(self, event, /):
-        # Popup 关掉的时候鼠标事件才回到宿主手上，这里通知它复位拖拽状态
+        # Popup 关掉后鼠标事件才回到宿主手上
         self._announce_closed()
         super().hideEvent(event)
 
@@ -227,7 +222,7 @@ class HackerMenu(QWidget, MenuWidgetABS, metaclass=CombinedMeta):
         super().closeEvent(event)
 
     def menu_actions(self):
-        """已经加进来的 QAction（条目是自己画的，Qt 的 actions() 拿不到）。"""
+        """已经加进来的 QAction（Qt 的 actions() 拿不到自绘条目）。"""
         return list(self._actions)
 
     def _emit(self, action):

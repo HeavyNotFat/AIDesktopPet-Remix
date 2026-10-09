@@ -1,11 +1,28 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget
 
 from ..ai import local, cloud
 
 _QWidgetMeta = type(QWidget)
+
+
+def icon_pixmap(icon, size: int = 16):
+    """QIcon / QPixmap 统一成 QPixmap；给不了就返回 None（导航项退化成纯文字）。"""
+    if icon is None:
+        return None
+
+    if isinstance(icon, QPixmap):
+        pixmap = icon.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+    elif hasattr(icon, "pixmap"):
+        pixmap = icon.pixmap(size, size)
+    else:
+        return None
+    return None if pixmap is None or pixmap.isNull() else pixmap
 
 
 class CombinedMeta(_QWidgetMeta, ABCMeta):
@@ -14,12 +31,7 @@ class CombinedMeta(_QWidgetMeta, ABCMeta):
 
 @dataclass(frozen=True, slots=True)
 class ThemePalette:
-    """主题的语义配色，给"不属于某个主题"的界面用（插件面板、探针、SDK 弹窗）。
-
-    主题包可以导出一个 ``PALETTE = ThemePalette(...)``；没导出的主题由
-    `stlibs.graphics.palette` 退回默认（深色那套），所以这是个**可选**接口。
-    插件只认这些语义名，不认具体色号——这样换主题时插件面板跟着变。
-    """
+    """主题的语义配色，给不属于某个主题的界面用（插件面板、探针、SDK 弹窗）。"""
 
     # 底色：本体 / 卡片 / 次级填充 / 凹陷（滚动槽）
     bg: str = "#16181c"
@@ -53,7 +65,7 @@ class ThemePalette:
     error: str = "#ff6b6b"
     info: str = "#00FF00"
 
-    # 进度条等按语义取色：{"level": (亮色, 浅底), ...}
+    # 进度条等按语义取色：level -> (亮色, 浅底)
     tints: dict = field(default_factory=dict)
 
     def tint(self, key: str) -> tuple[str, str]:
@@ -72,7 +84,6 @@ class ThemePalette:
         """
 
 
-# 定义抽象类
 class ModelChatABS(metaclass=ABCMeta):
     """模型聊天的构建页面"""
     @staticmethod
@@ -89,6 +100,7 @@ class MainWindowABS(metaclass=ABCMeta):
         shortcut_keys: tuple[int, ...] | None = None,
         position: str = "top",
         category: str | None = None,
+        icon=None,
     ): pass
     @abstractmethod
     def removeNavigation(self, widget): pass
@@ -129,7 +141,6 @@ class SwitchWidgetABS(metaclass=ABCMeta):
     def isChecked(self): pass
 
 
-# 内部页面抽象类
 class AnimationABS(metaclass=ABCMeta):
     """动画"""
     @property

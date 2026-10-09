@@ -21,8 +21,7 @@ MAPPING_ABC: dict[str, str] = {
     "IconList": "IconListABS",
 }
 
-# 抽象基类管不到的映射，用「谁在用」显式列出来。
-# 每一项都注明调用方，改动时必须同步。
+# 抽象基类管不到的映射，显式列出调用方，改动时必须同步。
 EXTRA_MEMBERS: dict[str, tuple[str, ...]] = {
     # stlibs/themes/hacker/__init__.py::ModelChat 通过 self.chat.xxx 调用
     "ChatWidget": (
@@ -110,7 +109,7 @@ def _read_protocol(node: ast.ClassDef, contract: ThemeContract, modules: list[st
 
 
 def collect_abc_members(sources: SourceIndex) -> dict[str, tuple[str, ...]]:
-    """``stlibs/themes/base.py`` 里每个 ABC 的抽象成员（含继承）。"""
+    """``stlibs/themes/base.py`` 里每个 ABC 的抽象成员。"""
     module = sources.modules.get(BASE_MODULE)
     if module is None:
         return {}

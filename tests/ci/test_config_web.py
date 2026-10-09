@@ -352,7 +352,7 @@ def test_imported_package_is_not_reported_as_unused(mini_repo):
 
 
 def test_prompts_check_ignores_unrelated_local_dicts(mini_repo):
-    """别的文件里恰好叫 prompts 的局部字典不该拿 prompts.json 去比。"""
+    """同名的局部字典不该拿 prompts.json 去比。"""
     root = mini_repo(
         {
             "resources/prompts.json": json.dumps({"rag": "x"}),

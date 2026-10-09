@@ -176,7 +176,7 @@ def test_alias_duplicate_warning(mini_repo):
 
 
 def test_abc_mapping_warns_when_missing(mini_repo):
-    """契约关联的抽象基类被删掉时要提示（否则成员要求会静默失效）。"""
+    """契约关联的抽象基类被删掉时要提示。"""
     trimmed_base = BASE_SRC.split("class IconListABS")[0]
     files = _theme(exports=FULL_EXPORTS)
     files["stlibs/__init__.py"] = PROTOCOL_SRC
@@ -187,7 +187,7 @@ def test_abc_mapping_warns_when_missing(mini_repo):
 
 
 def test_instance_mapping_members_are_checked(mini_repo):
-    """IconList 是实例（IconList = IconList()），成员同样要按 ABC 校验。"""
+    """IconList 是实例映射，成员同样要按 ABC 校验。"""
     head = THEME_HEAD.replace("    CHAT = None\n", "")
     root = mini_repo(_theme(head=head), contract=True)
     findings = findings_of(root, "theme/member-missing")
@@ -195,10 +195,7 @@ def test_instance_mapping_members_are_checked(mini_repo):
 
 
 def test_members_checked_when_mapping_points_at_imported_class(mini_repo):
-    """主题拆成多个文件后，映射常写成 ``Window = HackerWindow``（类在别的模块里）。
-
-    这条以前会静默解析不到、直接跳过成员校验，等于契约白写。
-    """
+    """映射写成 ``Window = HackerWindow``（类在别的模块）时也要查成员。"""
     window_class = (
         "class HackerWindow:\n"
         "    def addNavigation(self, text, widget, shortcut_keys=None, position=\"top\", category=None): pass\n"
@@ -207,7 +204,7 @@ def test_members_checked_when_mapping_points_at_imported_class(mini_repo):
         "    def setTitle(self, title): pass\n"
     )
     files = _theme()
-    # 类挪到 window.py，__init__ 里只剩一个 import（少写 setTitle 用来看有没有被查出来）
+    # 类挪到 window.py，__init__ 里只剩一个 import
     files["stlibs/themes/hacker/__init__.py"] = files["stlibs/themes/hacker/__init__.py"].replace(
         window_class,
         "from .window import HackerWindow\n",
@@ -226,7 +223,7 @@ def test_members_checked_when_mapping_points_at_imported_class(mini_repo):
 
 
 def test_members_checked_when_mapping_is_a_reexport(mini_repo):
-    """``from .window import HackerWindow`` 这种直接重新导出也要能解析到真实类。"""
+    """``from .window import HackerWindow`` 重新导出也要解析到真实类。"""
     window_class = (
         "class HackerWindow:\n"
         "    def addNavigation(self, text, widget, shortcut_keys=None, position=\"top\", category=None): pass\n"

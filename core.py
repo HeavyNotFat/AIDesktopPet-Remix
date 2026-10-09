@@ -9,15 +9,13 @@ def console(msg):
     print(msg)
 
 
-# 初始化SDK
 server = sdk_server.SDKServer()
 server.start()
 
 import stlibs
-# 主题必须在 stlibs.graphics / shader 之前绑定：
-# 那些模块在导入期就拿 SharingData.theme.Window 当基类
+# 主题必须在 stlibs.graphics / shader 之前绑定，它们在导入期就要用
 stlibs.SharingData.theme = stlibs.load_theme(stlibs.Config.theme)
-# 让界面/插件也能推 SDK 事件（桌宠被点了一下、聊天结束之类）
+# 界面/插件推 SDK 事件用
 stlibs.SharingData.sdk_server = server
 from stlibs.mproc import onlinechat
 if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
@@ -82,11 +80,7 @@ class DesktopPetRemix(shader.PublicShader):
         self.move(round(self.physics.x), round(self.physics.y))
 
     def _reset_drag(self):
-        """清掉拖拽状态。
-
-        右键弹出菜单后鼠标事件会被 Popup 接走，桌宠再也收不到那一下 release——
-        留着 ``_dragging=True`` 的话，之后鼠标随手一动桌宠就跟着漂。
-        """
+        """清掉拖拽状态。"""
         self._dragging = False
         self.drag_position = None
         self.drag_start_position = None
@@ -96,7 +90,7 @@ class DesktopPetRemix(shader.PublicShader):
         self.physics.dragging = False
         self.physics.set_position(self.x(), self.y())
 
-    # shader 那边（PublicShader.reset_drag_state）在菜单收起时回调这个复位桌宠状态
+    # shader 在菜单收起时回调这个复位桌宠状态
     reset_host_drag_state = _reset_drag
 
     def mousePressEvent(self, event):
@@ -111,8 +105,7 @@ class DesktopPetRemix(shader.PublicShader):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        # 只在左键真的按住时才跟着走：鼠标移过桌宠（没按键）也会进来，
-        # 光看 _dragging 的话一次状态泄漏就会让桌宠追着光标漂
+        # 只有左键真的按住才跟着走
         if self._dragging and event.buttons() & Qt.MouseButton.LeftButton:
             current_pos = event.globalPosition().toPoint()
             dx = (current_pos.x() - self._drag_last_pos.x())
@@ -149,8 +142,6 @@ class DesktopPetRemix(shader.PublicShader):
 
 
 sys.excepthook = handle_exception
-# 这里为什么不用多进程？
-# 因为这傻逼多进程的通信给我弄的头要烧了
 proc_onlinechat = threading.Thread(target=onlinechat.main)
 proc_onlinechat.start()
 stlibs.SharingData.theme.IconList.init()
@@ -159,7 +150,7 @@ desktop = DesktopPetRemix()
 stlibs.SharingData.mainloop_ui = desktop
 desktop.show()
 
-# 插件在界面起来之后再加载：插件的 on_load 里可以直接碰窗口/托盘/菜单
+# 界面起来后再加载插件
 try:
     loaded = stlibs.plugin_manager().load_all()
     if loaded:

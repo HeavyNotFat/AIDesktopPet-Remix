@@ -119,7 +119,7 @@ def main():
         print("   回答：", with_mark[:100].replace("\n", " "))
         assert MARK in with_mark, f"系统提示词没进模型（回答里没有 {MARK}）"
 
-        # 换回仓库目录，并把插件重新装回来（发现流程会把不认识的插件卸掉）
+        # 换回仓库目录，并把插件重新装回来
         stlibs.Config.plugins["directory"] = manager.directory
         stlibs.plugin_manager().reload()
 

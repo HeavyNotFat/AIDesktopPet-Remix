@@ -159,7 +159,7 @@ def test_layout_vs_geometry(mini_repo):
 
 
 def test_layout_vs_geometry_with_chained_creation(mini_repo):
-    """``HackerLabel("X", self).setGeometry(...)`` 这种链式写法也要被跟踪。"""
+    """``HackerLabel("X", self).setGeometry(...)`` 这种链式写法也要跟踪。"""
     root = mini_repo(
         {
             "pkg/mod.py": WIDGET_IMPORTS + (

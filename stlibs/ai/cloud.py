@@ -63,11 +63,10 @@ class LLM(QObject):
         self.memory_signal.emit([self.model, self.memory.messages])
 
     def complete(self, messages: list):
-        """按给定消息跑一轮，不读写短期记忆（协作成员与初稿走这里）。"""
+        """按给定消息跑一轮，不读写短期记忆。"""
         yield from self._completion(messages)
 
     def _completion(self, messages: list):
-        # noinspection PyTypeChecker
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -77,14 +76,11 @@ class LLM(QObject):
             audio={"voice": "default", "format": "mp3"},
         )
         for chunk in completion:
-            # noinspection PyUnresolvedReferences
             if not chunk.choices: continue
 
             try:
-                # noinspection PyUnresolvedReferences
                 delta = chunk.choices[0].delta
             except AttributeError:
-                # noinspection PyUnresolvedReferences
                 delta = chunk.choices[0].message
 
             function_call = getattr(delta, "function_call", None)
@@ -94,7 +90,7 @@ class LLM(QObject):
                        "args": function_call.arguments}
                 continue
 
-            # 音频（流式文本结束后，服务端会推一个带完整 audio 的 chunk）
+            # 服务端在流式文本结束后会推一个带完整音频的 chunk
             audio = getattr(delta, "audio", None)
             if audio:
                 audio_data = audio.get("data") if isinstance(audio, dict) else getattr(audio, "data", None)

@@ -47,7 +47,7 @@ hacker.HackerNotify._stack.clear()
 
 
 def shot(name, widget):
-    # 先把挂起的布局/样式跑完，否则刚 addWidget 的控件还没尺寸，截出来是空的
+    # 先跑完挂起的布局/样式，否则刚 addWidget 的控件还没尺寸
     for _ in range(3):
         app.processEvents()
     widget.grab().save(os.path.join(OUT_DIR, name))
@@ -55,7 +55,7 @@ def shot(name, widget):
 
 
 def shoot_cultivation():
-    """养成系统插件的面板：给它一点存档，好让进度条/背包有内容。"""
+    """养成系统插件面板，塞一点存档让进度条/背包有内容。"""
     plugin_dir = os.path.abspath("plugins/cultivation_system")
     if plugin_dir not in sys.path:
         sys.path.insert(0, plugin_dir)
@@ -84,7 +84,7 @@ def shoot_cultivation():
 
 
 def shoot_menu():
-    """右键菜单：条目必须一行铺满（宽度参差不齐 + 高亮只亮一半是回归信号）。"""
+    """右键菜单，检查条目是否一行铺满。"""
     menu = hacker.HackerMenu(None)
     for text, tip in (("打开养成面板", "看看桌宠的状态"),
                       ("示例：打个招呼", "很长的菜单项文字用来撑宽度"),
@@ -105,10 +105,7 @@ def shoot_menu():
 
 
 def shoot_plugin_menu():
-    """插件右键菜单：所有插件条目一层平铺（每条带自己插件的图标 + 「插件名 · 菜单名」）。
-
-    平铺之后整张菜单就是一个窗口，直接 grab 即可，不用再拼预览图。
-    """
+    """插件右键菜单，所有插件条目一层平铺，各带自己的图标。"""
     from stlibs.graphics import menu as menu_module
     from stlibs.plugins.manager import core as plugin_core
 
@@ -129,7 +126,7 @@ def shoot_plugin_menu():
 
     labels = [entry['text'] for entry in menu._action_items]
     print(f"   平铺条目：{labels}")
-    # 菜单里除了"设置/聊天/关闭"三条固定项，其余都是插件的（平铺所以没有分组标题）
+    # 除「设置/聊天/关闭」外，其余条目都是插件平铺上来的
     fixed = {"设置", "聊天", "关闭"}
     plugin_rows = [entry for entry in menu._action_items if entry['text'] not in fixed]
     assert len(plugin_rows) == sum(len(group) for group in groups), "每条插件菜单项都该平铺在这一层"

@@ -24,7 +24,7 @@ DEFAULT_EXCLUDE: tuple[str, ...] = (
     ".ruff_cache/*",
     ".pytest_cache/*",
     "node_modules/*",
-    "test/*",          # 该目录在 .gitignore 里，属于本地试验代码
+    "test/*",          # 本地试验代码目录，在 .gitignore 里
     "tools/ci/tests/fixtures/*",
 )
 
@@ -52,8 +52,7 @@ class Settings:
             with pyproject.open("rb") as handle:
                 data = tomllib.load(handle).get("tool", {}).get("adpci", {}) or {}
 
-        # pyproject 里的 exclude 是**追加**在默认排除项之后，而不是替换：
-        # 否则很容易不小心把 __pycache__ 之类的默认项丢掉。
+        # pyproject 里的 exclude 追加在默认排除项之后，而不是替换。
         exclude = (*DEFAULT_EXCLUDE, *tuple(data.get("exclude", ())))
         env_fail = os.getenv("ADPCI_FAIL_ON")
         fail_on = Severity.parse(env_fail) if env_fail else Severity.parse(str(data.get("fail-on", "error")))
@@ -70,7 +69,7 @@ class Settings:
     # -- 过滤 -------------------------------------------------------------
     def is_excluded(self, rel_path: str) -> bool:
         rel = rel_path.replace("\\", "/")
-        # 点开头的目录一律不看：.venv/.git/.idea/.PluginDevOld 这类本地残留
+        # 点开头的目录一律不看，属于本地残留
         for part in rel.split("/"):
             if part.startswith(".") and part not in {".", ".."}:
                 return True
@@ -83,7 +82,7 @@ class Settings:
         return False
 
     def is_disabled(self, check_id: str) -> bool:
-        """完全不跑的检查（``disable``）。``ignore`` 走 suppression。"""
+        """完全不跑的检查（``disable``）。"""
         return check_id in self.disable
 
     def allow_tokens(self, check_id: str) -> set[str]:

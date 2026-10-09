@@ -99,7 +99,6 @@ from .primitives import (
 )
 from .window import HackerWindow, IconList
 
-# 契约映射别名（名字见 stlibs/__init__.py::_ThemeTypingProtocol）
 Window = HackerWindow
 Menu = HackerMenu
 Notify = HackerNotify
@@ -108,11 +107,11 @@ LineEdit = HackerLineEdit
 Button = HackerButton
 Label = HackerLabel
 Slider = HackerSlider
+Switch = HackerSwitch
 ComboBox = HackerComboBox
 CardWidget = HackerCard
 ScrollArea = HackerScrollArea
 ChatBubble = HackerChatBubble
 ChatWidget = HackerChatWidget
 
-# 契约要的是"能直接用的实例"，不是类
 IconList = IconList()

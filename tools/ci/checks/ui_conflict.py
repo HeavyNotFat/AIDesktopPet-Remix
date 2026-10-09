@@ -47,8 +47,7 @@ _SELECTOR_TYPE_RE = re.compile(r"(?:^|[\s,>+~(])([A-Z][A-Za-z0-9_]*)\s*(?=[#:.{\
 _COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _HEX_COLOR_RE = re.compile(r"^[0-9A-Fa-f]{3,8}$")
 
-# Qt 自带信号名。同名信号在项目里也有定义时（例如 HackerSwitch.stateChanged），
-# 只有在接收者类型能确定的情况下才按项目信号算，否则放过，避免误报。
+# Qt 自带信号名，接收者类型能确定时才按项目信号算。
 QT_SIGNAL_NAMES: frozenset[str] = frozenset(
     """
     clicked pressed released toggled triggered hovered destroyed
@@ -433,7 +432,7 @@ def check_dead_control(ctx) -> Iterator[Finding]:
 
 
 def _connected_anywhere(ctx, attribute: str) -> bool:
-    """项目里是否有 ``<某控件>.<信号>.connect(...)`` 指向这个属性名。"""
+    """项目里是否有 ``<控件>.<信号>.connect(...)`` 指向该属性名。"""
     for _, node in ctx.sources.iter_nodes(ast.Call):
         if not (isinstance(node.func, ast.Attribute) and node.func.attr == "connect"):
             continue
@@ -566,7 +565,7 @@ def _receiver_type(receiver: str, local_types: dict[str, str], owner: str | None
 
 
 def _local_types(func: ast.AST) -> dict[str, str]:
-    """``x = HackerSwitch(...)`` / ``self.x = HackerComboBox(...)`` → 变量类型。"""
+    """``x = HackerSwitch(...)`` 形式的局部变量类型表。"""
     types: dict[str, str] = {}
     for node in ast.walk(func):
         if not isinstance(node, ast.Assign):
@@ -600,7 +599,7 @@ def _required_positional(node: ast.AST) -> list[ast.arg]:
 
 # 父子关系
 def check_missing_super_init(ctx) -> Iterator[Finding]:
-    """QWidget 子类把 parent 收下却没交给 super()，控件会脱离父子树。"""
+    """QWidget 子类收了 parent 却没交给 super()。"""
     for record in ctx.sources.classes:
         init = record.methods.get("__init__")
         if init is None or not init.args.args:
@@ -634,7 +633,7 @@ def check_missing_super_init(ctx) -> Iterator[Finding]:
 
 
 def _is_super_init_call(node: ast.AST) -> bool:
-    """``super().__init__(...)`` / ``super(X, self).__init__(...)``。"""
+    """是不是 ``super().__init__(...)`` 调用。"""
     if not isinstance(node, ast.Call):
         return False
     func = node.func

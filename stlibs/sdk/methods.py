@@ -4,7 +4,7 @@ import time
 
 from .base import SDKMethodError
 
-# 方法名 -> 说明（``list_methods`` 直接用它生成文档）
+# 方法名 -> 说明（``list_methods`` 用它生成文档）
 METHOD_HELP: dict[str, str] = {
     "ping": "探活：返回 pong 与服务器时间",
     "version": "协议/程序版本",
@@ -194,7 +194,7 @@ class HostMethods:
 
     @staticmethod
     def ask(question, model=None, timeout=None):
-        """跑一次真实模型，属于慢方法（客户端记得把超时调大）。"""
+        """跑一次真实模型，慢方法（客户端记得把超时调大）。"""
         from .. import get_model_lists
         from ..ai import build_llm, chat_prompt
 
@@ -328,7 +328,7 @@ def _window(label: str):
 
 
 def _apply_appearance(changed: dict):
-    """改完配置顺手作用到桌宠上（拿不到窗口就算了，下次启动会读配置）。"""
+    """改完配置顺手作用到桌宠上，拿不到窗口就算了。"""
     from .. import SharingData
 
     ui = SharingData.mainloop_ui
@@ -341,7 +341,7 @@ def _apply_appearance(changed: dict):
             ui.setCanvasOpacity(changed["opacity"] / 100 if changed["opacity"] > 1 else changed["opacity"])
         if "rotate" in changed and hasattr(ui, "setRotationAngle"):
             ui.setRotationAngle(changed["rotate"])
-    except Exception as exc:  # noqa: BLE001 - 应用失败不影响配置已保存
+    except Exception as exc:  # noqa: BLE001 - 应用失败不影响已保存的配置
         print(f"[sdk] 应用外观失败：{exc}")
 
 

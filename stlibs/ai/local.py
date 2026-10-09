@@ -12,7 +12,7 @@ mcp: mcp_server.MCP | None = None
 if Config.mcp["enable"]:
     try:
         mcp = mcp_server.MCP()
-    except Exception as exc:  # noqa: BLE001 - MCP 起不来不该拖垮聊天
+    except Exception as exc:  # noqa: BLE001
         print(f"[MCP] 管理器初始化失败，本次将不加载任何 MCP 工具：{type(exc).__name__}: {exc}")
         mcp = None
 
@@ -22,7 +22,7 @@ for server in Config.mcp["mcp"]:
     runnable_args = [arg.replace("$PATH$", os.getcwd()) for arg in server["args"]]
     try:
         mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args, )
-    except Exception as exc:  # noqa: BLE001 - 单个 MCP server 失败不影响对话
+    except Exception as exc:  # noqa: BLE001
         print(f"[MCP] 启动 {server.get('server')!r} 失败，跳过该工具：{type(exc).__name__}: {exc}")
 with open("./resources/prompts.json", "r", encoding="utf-8") as f:
     prompts = json.load(f)
@@ -49,7 +49,7 @@ class LLM(QObject):
         if Config.mcp["enable"] and mcp is not None:
             try:
                 mcp.inject_to_funcall(self.function_call)
-            except Exception as exc:  # noqa: BLE001 - 注不进工具也要能正常聊天
+            except Exception as exc:  # noqa: BLE001
                 print(f"[MCP] 注入工具失败，将只做纯对话：{type(exc).__name__}: {exc}")
         if Config.rag["enable"]:
             self.rag = rag.RAG(
@@ -61,8 +61,6 @@ class LLM(QObject):
             self.rag.load_or_build()
         if system_prompt.strip():
             self.memory.add_system_msg(system_prompt)
-        # else:
-        #     self.memory.add_system_msg(prompts['general'])
 
     def chat(self, user_input: str, should_emit: bool = True, skill=None, attachments=None):
         if not Config.memory["shortterm"]:
@@ -105,9 +103,7 @@ class LLM(QObject):
         if should_emit: self.memory_signal.emit([self.model, self.memory.messages])
 
     def complete(self, messages: list):
-        """按给定消息跑一轮，不读写短期记忆（协作成员与初稿走这里）。"""
-        # 走和 chat() 同一条生成链路，只是不碰记忆：以前这里调了不存在的
-        # self._call_chat(...)，本地模型做协作时会直接 AttributeError 然后静默失败。
+        """按给定消息跑一轮，不读写短期记忆。"""
         for event in self.function_call.run(list(messages)):
             if isinstance(event, str):
                 yield event

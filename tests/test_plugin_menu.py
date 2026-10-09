@@ -35,8 +35,7 @@ def theme(qapp):
     previous = stlibs.SharingData.theme
     stlibs.SharingData.theme = hacker
     yield hacker
-    # 复原：stlibs.graphics.chat / settings 是拿 SharingData.theme 当基类定义的，
-    # 留成 None 会让后面 import 它们的地方直接 AttributeError
+    # 复原：留成 None 会让后面拿 SharingData.theme 当基类 import 的地方 AttributeError
     stlibs.SharingData.theme = previous
 
 
@@ -86,7 +85,7 @@ def build_menu(theme):
 
 
 def texts(menu):
-    """菜单里一层的条目文字（自己画的条目要翻 _action_items）。"""
+    """菜单里一层的条目文字，自己画的条目要翻 _action_items。"""
     return [entry["text"] for entry in menu._action_items]
 
 
@@ -127,7 +126,7 @@ def test_two_plugins_are_flattened_into_one_list(theme, plugins_dir):
 
 
 def test_flat_entries_keep_their_plugin_icon(theme, plugins_dir):
-    """平铺之后没有分组标题兜底了：每条得带插件自己的图标，才看得出是谁加的。"""
+    """回归：平铺后没有分组标题兜底，每条都得带插件自己的图标。"""
     root, manager = plugins_dir
     write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭一次", "roll")], order=20)
@@ -158,7 +157,7 @@ def test_single_plugin_single_item_is_still_flat(theme, plugins_dir):
 
 
 def test_item_label_formats_plugin_then_menu(theme, plugins_dir):
-    """标签格式：``插件名 · 菜单名``；插件名已在菜单名里就不重复，没有标题则退化。"""
+    """标签格式 ``插件名 · 菜单名``，插件名已在菜单名里就不重复。"""
     root, manager = plugins_dir
     write_plugin(root, "solo", "唯一插件", [("唯一一条", "one"), ("唯一插件：自报家门", "two")])
     write_plugin(root, "gacha", "桌宠扭蛋机", [("扭蛋机：来一发", "roll")], order=20)
@@ -244,7 +243,7 @@ def test_entries_share_the_widest_row(theme, plugins_dir):
 
 
 def test_menu_closed_signal_fires_once_per_close(theme, plugins_dir):
-    """菜单收起要通知宿主（桌宠靠它复位拖拽状态，否则会跟着鼠标漂）。"""
+    """菜单收起要通知宿主，桌宠靠它复位拖拽状态。"""
     root, manager = plugins_dir
     write_plugin(root, "cultivation", "养成系统", [("打开面板", "panel")], order=10)
     manager.load_all()
@@ -311,7 +310,7 @@ def test_trigger_unknown_action_is_silent(theme, plugins_dir, monkeypatch):
 
 
 def test_shaders_expose_the_plugin_menu_hook(theme):
-    """两个 shader 都要有主题动作工厂（否则主题换实现就断在运行时）。"""
+    """两个 shader 都要有主题动作工厂，否则运行时断掉。"""
     import shader.live2d as live2d
     import shader.static as static_shader
 

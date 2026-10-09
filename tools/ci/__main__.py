@@ -19,7 +19,7 @@ def discover_root(start: Path | None = None) -> Path:
 
 
 def run(root: Path | None = None, only: list[str] | None = None, **overrides) -> Report:
-    """跑检查并返回报告（供 CLI 与 pytest 共用）。"""
+    """跑一遍检查并返回报告。"""
     root = (root or discover_root()).resolve()
     settings = Settings.load(root)
     for key, value in overrides.items():

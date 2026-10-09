@@ -1,10 +1,6 @@
 name: CI
 
-# 触发策略：
-#   * push / PR 到 main 跑完整门禁
-#   * 手动触发（workflow_dispatch）方便排障
-#   * tag 推送**不在这里**处理：`branches` 与 `tags` 同时出现时语义容易踩坑，
-#     tag 路径统一交给 release.yml 的 gate job（同样跑 tools.ci + pytest）
+# 触发策略：push / PR 到 main 跑完整门禁，打 tag 交给 release.yml
 on:
   push:
     branches: [main]
@@ -25,10 +21,7 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: '1'
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # 1) UI / 架构质量门禁：纯 AST 静态分析，装个 Python 就能跑，秒级出结果
-  #    覆盖 UI 冲突、抽象类/方法契约、主题类映射、配置/资源结构、前后端契约
-  # ---------------------------------------------------------------------------
+  # 1) UI / 架构质量门禁：纯 AST 静态分析，秒级出结果
   quality:
     name: UI & 架构门禁
     runs-on: ubuntu-latest
@@ -73,9 +66,7 @@ jobs:
             ci.sarif
           if-no-files-found: warn
 
-  # ---------------------------------------------------------------------------
   # 2) 静态检查 + 风格
-  # ---------------------------------------------------------------------------
   lint:
     name: 静态检查 (ruff)
     runs-on: ubuntu-latest
@@ -89,16 +80,14 @@ jobs:
           cache: pip
 
       - name: 安装 ruff
-        # 与 .pre-commit-config.yaml 的 ruff-pre-commit rev 保持一致，
-        # 否则本地格式化结果和 CI 判定会打架
+        # 与 .pre-commit-config.yaml 的 ruff-pre-commit rev 保持一致
         run: python -m pip install "ruff==0.6.9"
 
-      # 阻断项只留"语法/无法解析"级别：这类问题一定是 bug，且当前代码库是干净的。
+      # 只阻断语法/无法解析级别的问题
       - name: ruff 语法级检查（阻断）
         run: ruff check --select E9 --output-format=github .
 
-      # 完整规则先当"建议"跑：存量代码还有一批风格债，
-      # 直接阻断会让 CI 从第一天就红着，看不到真正的问题。
+      # 完整规则只报告，不阻断
       - name: ruff 完整规则（仅报告，不阻断）
         continue-on-error: true
         run: |
@@ -112,9 +101,7 @@ jobs:
         continue-on-error: true
         run: ruff format --check .
 
-  # ---------------------------------------------------------------------------
-  # 3) 编译检查：所有 Python 文件必须能编译（打包前最容易踩的坑）
-  # ---------------------------------------------------------------------------
+  # 3) 编译检查：所有 Python 文件必须能编译
   compile:
     name: 编译检查
     runs-on: ${{ matrix.os }}
@@ -144,13 +131,13 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
 
-  # ---------------------------------------------------------------------------
   # 4) 单元测试：门禁自身 + 网页聊天实例隔离 + 平台行为金丝雀
-  # ---------------------------------------------------------------------------
   tests:
     name: 测试 (py${{ matrix.python-version }})
     runs-on: windows-latest
     timeout-minutes: 25
+    env:
+      QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
@@ -163,13 +150,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      # 只装"能被静态测试用到"的轻量依赖：不装 PySide6/ollama/chromadb，
-      # 让测试跑得快、也不会因为显卡/模型环境差异挂掉。
+      # 安装测试所需依赖：
       - name: 安装测试依赖
         run: |
           python -m pip install --upgrade pip
-          # 版本与 requirements.txt 对齐，避免测试环境和运行时漂移
-          python -m pip install pytest "fastapi==0.142.2" "pydantic==2.13.4" "uvicorn==0.54.0" "httpx==0.28.1"
+          # 版本与 requirements.txt 对齐
+          python -m pip install pytest "fastapi==0.142.2" "pydantic==2.13.4" "uvicorn==0.54.0" "httpx==0.28.1" PySide6 "PySide6-Fluent-Widgets" pytest-qt
 
       - name: 跑 pytest
         run: python -m pytest tests -q --junitxml=junit.xml
@@ -182,9 +168,7 @@ jobs:
           path: junit.xml
           if-no-files-found: warn
 
-  # ---------------------------------------------------------------------------
-  # 5) 网页端语法检查（纯 node，不需要 npm install）
-  # ---------------------------------------------------------------------------
+  # 5) 网页端语法检查（纯 node）
   web:
     name: 网页端语法检查
     runs-on: ubuntu-latest
@@ -206,9 +190,7 @@ jobs:
           done < <(find resources/web -name '*.js' -type f)
           exit $fail
 
-  # ---------------------------------------------------------------------------
-  # 6) 打包冒烟：确认 PyInstaller 能收齐资源（只在 main / tag 上跑）
-  # ---------------------------------------------------------------------------
+  # 6) 打包冒烟：确认 PyInstaller 能收齐资源
   package:
     name: 打包冒烟
     if: github.event_name != 'pull_request'

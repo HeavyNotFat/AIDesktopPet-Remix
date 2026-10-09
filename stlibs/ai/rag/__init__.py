@@ -29,7 +29,6 @@ class RAG:
 
         # 引擎优先级：显式传参 > Config.rag["engine"] > 默认 chroma
         self.vector_engine = (vector_engine or Config.rag['engine']).lower()
-        # 不同引擎的数据互不兼容，分别存放在各自的目录下
         self.store_path = os.path.join(self.RAG_ROOT, f"{self.vector_engine}_db")
 
         self.top_k = top_k

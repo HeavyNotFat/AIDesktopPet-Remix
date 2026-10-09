@@ -30,8 +30,9 @@ from .theme import (
     TEXT_DIM,
     font_css,
 )
+from ..base import icon_pixmap
 
-# 动作/表情的中文名 → Animation 对象上的字段名（动画设置页与 Live2D 换动作要用）
+# 动作/表情的中文名 → Animation 对象上的字段名
 MAPPING_ANIMATION = {
     "捏耳朵": "ClickEar",
     "拍拍头": "ClickHead",
@@ -54,7 +55,7 @@ with open("./resources/prompts.json", "r", encoding="utf-8") as f:
 
 
 class _SoftBackdrop(QWidget):
-    """窗口背景：淡蓝渐变 + 几个柔光圆斑（清新主题的底色）。"""
+    """窗口背景：淡蓝渐变 + 几个柔光圆斑。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,7 +88,7 @@ class _SoftBackdrop(QWidget):
         painter.end()
 
 
-# 主窗口里沿用旧名字（`_CodeRain` 是 hacker 主题的叫法，这里换成了柔光背景）
+# 主窗口里沿用旧名字
 _CodeRain = _SoftBackdrop
 
 
@@ -252,11 +253,11 @@ class _Category(QWidget):
 
 
 class _NavButton(QWidget):
-    """侧栏导航项：左边一条主色指示条 + 文字（选中时浅薄荷底）。"""
+    """侧栏导航项：左边一条主色指示条 + 文字。"""
 
     clicked = Signal()
 
-    def __init__(self, text: str, shortcut: str | None = None):
+    def __init__(self, text: str, shortcut: str | None = None, icon=None):
         super().__init__()
         self.setObjectName("BreezeNavButton")
         self.setFixedHeight(36)
@@ -271,6 +272,14 @@ class _NavButton(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 10, 0)
         layout.setSpacing(6)
+
+        pixmap = icon_pixmap(icon, 16)
+        if pixmap is not None:
+            mark = QLabel()
+            mark.setFixedSize(16, 16)
+            mark.setPixmap(pixmap)
+            mark.setStyleSheet("background: transparent; border: none;")
+            layout.addWidget(mark)
 
         self.label = QLabel(text)
         self.label.setStyleSheet(f"color: {TEXT}; background: transparent; border: none; {font_css(13)}")
@@ -334,7 +343,7 @@ class _NavButton(QWidget):
 
 
 def soft_shadow(widget: QWidget, blur: int = 18, dy: int = 3, alpha: int = 26):
-    """给控件挂一层很淡的投影（卡片浮起来一点点就好）。"""
+    """给控件挂一层很淡的投影。"""
     effect = QGraphicsDropShadowEffect(widget)
     effect.setBlurRadius(blur)
     effect.setOffset(0, dy)
@@ -344,7 +353,7 @@ def soft_shadow(widget: QWidget, blur: int = 18, dy: int = 3, alpha: int = 26):
 
 
 def rounded_pixmap(size: int, color: str, glyph: str = "", glyph_color: str = "#FFFFFF"):
-    """画一个圆角方块图标（菜单图标集用，避免依赖外部素材）。"""
+    """画一个圆角方块图标（菜单图标集用）。"""
     from PySide6.QtGui import QPixmap
 
     pixmap = QPixmap(size, size)

@@ -107,8 +107,7 @@ class Hierarchy:
             short = meta.rpartition(".")[2]
             if meta in ABC_METACLASSES or short.endswith("ABCMeta"):
                 return True
-            # 项目内自定义的合并元类（CombinedMeta / _CombinedMeta）：
-            # 看它自己有没有继承 ABCMeta
+            # 项目内自定义的合并元类，看它自己有没有继承 ABCMeta
             meta_record = self.sources.resolve_class(record.file, short)
             if meta_record is not None:
                 return any(

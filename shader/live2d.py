@@ -29,17 +29,13 @@ WS_EX_TRANSPARENT: int = 0x00000020
 class PublicShader(ADPOpenGLCanvas):
     def __init__(self):
         super().__init__()
-        # 设置标题
         self.setWindowTitle("DesktopPetRemix - Character Mainloop")
-        # 设置图标
         self.setWindowIcon(QIcon("logo.ico"))
-        # 设置属性
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
-        # 初始化
         self.is_transparent_raise = False
         self.current_size = 1000
         self.pet_model: architecture.live2d.LAppModel | None = None
@@ -47,7 +43,6 @@ class PublicShader(ADPOpenGLCanvas):
         self.drag_position, self.drag_start_position, self.is_dragging = None, None, None
         self.amount = 0
 
-        # 调整大小
         self.setFixedSize(self.current_size, self.current_size)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -74,7 +69,6 @@ class PublicShader(ADPOpenGLCanvas):
             self.setRotationAngle(stlibs.Config.rotate)
         if model_live2d is not None:
             self.loadModelEvent(model_live2d)
-            # architecture.live2d.
 
     def set_mouse_transparent(self, is_transparent: bool):
         """设置鼠标穿透 (透明部分可以直接穿过)"""
@@ -84,13 +78,10 @@ class PublicShader(ADPOpenGLCanvas):
         try:
             current_ex_style = ctypes.windll.user32.GetWindowLongW(window_handle, GWL_EX_STYLE)
             if is_transparent:
-                # 添加WS_EX_TRANSPARENT样式以启用鼠标穿透
                 new_ex_style = current_ex_style | WS_EX_TRANSPARENT
             else:
-                # 移除WS_EX_TRANSPARENT样式以禁用鼠标穿透
                 new_ex_style = current_ex_style & ~WS_EX_TRANSPARENT
 
-            # 应用新的样式
             ctypes.windll.user32.SetWindowLongW(window_handle, GWL_EX_STYLE, new_ex_style)
         except Exception:
             self.is_transparent_raise = True
@@ -111,13 +102,11 @@ class PublicShader(ADPOpenGLCanvas):
         return alpha > 0
 
     def loadModelEvent(self, model, is_info: bool = False):
-        """模型加载事件"""
         try:
             model_files = os.listdir(f"./resources/character/model/{model}")
             # 寻找最像模型json文件的那一个文件
             model_json_file = get_close_matches(f"{model}.model.json", model_files)[0]
             SharingData.model_json_path = f"./resources/character/model/{model}/{model_json_file}"
-            # 加载架构
             if model_json_file.split(".")[1] == "model3":
                 if is_info:
                     return 3, SharingData.model_json_path
@@ -138,7 +127,6 @@ class PublicShader(ADPOpenGLCanvas):
             return
 
     def timerEvent(self, a0):
-        """定时器事件"""
         local_x, local_y = QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y()
         self.pet_model.Drag(local_x, local_y)
 
@@ -164,7 +152,6 @@ class PublicShader(ADPOpenGLCanvas):
         self.update()
 
     def show_context_menu(self, position):
-        """显示右键菜单"""
         def window_visible(window, ui_class):
             if window is None:
                 window = ui_class()
@@ -177,8 +164,7 @@ class PublicShader(ADPOpenGLCanvas):
         def open_browser():
             webbrowser.open("http://127.0.0.1:52493")
 
-        # 开菜单前把拖拽状态清干净：弹出之后鼠标事件归 Popup 管，
-        # 桌宠收不到 release，残留的 is_dragging 会让它把后续点击当成"拖动"
+        # 开菜单前清掉拖拽残留，否则后续点击会被当成拖动
         self.reset_drag_state()
 
         context_menu = stlibs.SharingData.theme.Menu(self)
@@ -209,18 +195,13 @@ class PublicShader(ADPOpenGLCanvas):
         context_menu.exec(self.mapToGlobal(position))
 
     def add_plugin_actions(self, context_menu):
-        """把插件注册的菜单项挂到右键菜单上（UI Hook）：一个插件一层子菜单。"""
+        """把插件注册的菜单项挂到右键菜单上。"""
         from stlibs.graphics import menu as menu_module
 
         return menu_module.add_plugin_menu(context_menu, action_factory=self.plugin_menu_action)
 
     def connect_menu_closed(self, context_menu):
-        """菜单收起来时清一次拖拽状态。
-
-        主题的菜单会在关闭时发 ``menu_closed``；没有这个信号的实现直接跳过
-        （主题是可插拔的，不能因为少一个信号就把右键菜单整个搞坏）。
-        菜单是每次右键新建的，所以按菜单实例去重。
-        """
+        """菜单收起时清一次拖拽状态。"""
         signal = getattr(context_menu, "menu_closed", None)
         if signal is None or getattr(context_menu, "_pet_drag_reset_hooked", False):
             return
@@ -228,17 +209,13 @@ class PublicShader(ADPOpenGLCanvas):
         context_menu._pet_drag_reset_hooked = True
 
     def reset_drag_state(self):
-        """清掉拖拽残留状态。
-
-        Popup 开着时 release 会被它吃掉，``is_dragging`` 卡在 True 的话桌宠会把
-        之后的点击都当成"拖动"，连 pet_click 都不发了。
-        """
+        """清掉拖拽残留状态。"""
         self.is_dragging = False
         self.drag_position = None
         self.drag_start_position = None
 
     def plugin_menu_action(self, text, icon):
-        """主题动作工厂：主题的 Action 签名是 (text, parent, icon)。"""
+        """主题的 Action 工厂。"""
         return stlibs.SharingData.theme.Action(text, self, icon)
 
     def run_plugin_action(self, action: str):
@@ -248,16 +225,15 @@ class PublicShader(ADPOpenGLCanvas):
 
     @staticmethod
     def emit_sdk_event(name: str, data=None):
-        """把桌宠上的动作告诉订阅了 SDK 事件的外部程序（统一走 stlibs）。"""
+        """把桌宠动作广播给 SDK 事件订阅者。"""
         stlibs.emit_sdk_event(name, data)
 
     def mousePressEvent(self, event):
-        """鼠标拖动时间及按下事件"""
+        """鼠标按下事件"""
         x, y = event.globalPosition().x(), event.globalPosition().y()
 
         if event.button() == Qt.LeftButton:
-            # 只有左键才谈得上拖拽：以前不管按哪个键都先置 is_dragging=True，
-            # 右键唤菜单时就会留下"正在拖拽"的状态
+            # 只有左键才算拖拽，右键唤菜单时不会留下拖拽状态
             if self.is_in_live2d_area(QCursor.pos().x() - self.x(), QCursor.pos().y() - self.y()):
                 if SharingData.coordinates[0] == -1 and SharingData.coordinates[1] == -1:
                     SharingData.coordinates[0] = int(x)
@@ -275,14 +251,13 @@ class PublicShader(ADPOpenGLCanvas):
             self.drag_position = event.globalPosition() - self.frameGeometry().topLeft()
             self.drag_start_position = QPoint(event.globalPosition().x(), event.globalPosition().y())
         else:
-            # 右键/中键：既不拖拽也不记抓取点，顺手把上一个左键的残留清掉
+            # 右键/中键：不拖拽，也不记抓取点
             self.is_dragging = False
             self.drag_position = None
             self.drag_start_position = None
         event.accept()
 
     def mouseMoveEvent(self, event):
-        """鼠标移动事件"""
         if event.buttons() & Qt.LeftButton and self.drag_position is not None:
             if self.is_dragging:
                 new_pos = event.globalPosition() - self.drag_position
@@ -290,7 +265,7 @@ class PublicShader(ADPOpenGLCanvas):
             event.accept()
 
     def mouseReleaseEvent(self, event):
-        """松手：没拖动就是在点桌宠 —— 通知插件与 SDK 订阅者。"""
+        """松手：没拖动就是在点桌宠。"""
         was_click = (
             event.button() == Qt.MouseButton.LeftButton
             and not self.is_dragging
@@ -307,9 +282,8 @@ class PublicShader(ADPOpenGLCanvas):
         except Exception:  # noqa: BLE001 - 插件系统的问题不该影响点击
             pass
 
-    # Ctrl + 滚轮a啊调整大小
     def wheelEvent(self, event):
-        """滚轮事件"""
+        """Ctrl + 滚轮调整大小。"""
         if event.modifiers() == Qt.ControlModifier and self.is_in_live2d_area():
             angle_delta = event.angleDelta().y()
             if angle_delta > 0:
@@ -332,7 +306,6 @@ class PublicShader(ADPOpenGLCanvas):
     def stop(self): pass
     def resume(self): pass
 
-    # 渲染
     def on_init(self):
         architecture.live2d.glewInit()
         self.pet_model = architecture.live2d.LAppModel()
@@ -346,7 +319,6 @@ class PublicShader(ADPOpenGLCanvas):
         architecture.live2d.clearBuffer()
         try:
             self.pet_model.Update()
-            # 加载模型 Load Model
             self.pet_model.Draw()
         except SystemError:
             pass

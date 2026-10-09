@@ -5,12 +5,10 @@ from .utils import log
 
 def merge_results(bm25_results, vector_results, top_k):
     result_map = {}
-    # BM25权重
     for r in bm25_results:
         key = r["text"]
         result_map[key] = {**r, "final_score": r["score"] * 2}
 
-    # vector权重
     for r in vector_results:
         key = r["text"]
         if key in result_map:

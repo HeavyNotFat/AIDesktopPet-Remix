@@ -19,7 +19,7 @@ _ID_PATTERN = re.compile(r"^[\w.\-]+$", re.UNICODE)
 
 SETTING_TYPES = ("text", "password", "number", "switch")
 
-# 插件图标：相对插件目录、必须是图片文件（svg 由 Qt 的 svg 插件按需解码）
+# 插件图标允许的图片后缀
 ICON_SUFFIXES = (".png", ".svg", ".jpg", ".jpeg", ".webp", ".ico", ".bmp")
 
 
@@ -49,7 +49,7 @@ class PluginManifest:
 
     @property
     def icon_path(self) -> Path | None:
-        """自定义图标的绝对路径；没配或文件不在就返回 None（调用方回退到内置徽章）。"""
+        """自定义图标的绝对路径；没配或文件不在就返回 None。"""
         if not self.icon:
             return None
         target = self.path / self.icon
@@ -99,10 +99,7 @@ def _clean_settings(raw) -> tuple:
 
 
 def _clean_icon(raw, path: Path) -> str:
-    """图标路径：只认插件目录内的相对路径；不合法就当没写（回退内置徽章，不算错误）。
-
-    插件清单写错图标不该让整个插件加载不了——图标只是装饰。
-    """
+    """图标路径：只认插件目录内的相对路径，不合法就当没写。"""
     text = str(raw or "").strip().replace("\\", "/")
     if not text:
         return ""

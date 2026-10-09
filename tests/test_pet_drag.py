@@ -29,10 +29,7 @@ def qapp():
 
 @pytest.fixture(scope="module")
 def real_theme(qapp):
-    """导入 shader.static 会连带建设置窗/聊天窗，这些全局状态用完要还原。
-
-    ``tests/test_sdk.py`` 里有用例依赖"全局还没有设置窗口"，不还原就会互相打架。
-    """
+    """导入 shader.static 会连带建设置窗/聊天窗，这些全局状态用完要还原。"""
     previous_theme = stlibs.SharingData.theme
     stlibs.SharingData.theme = stlibs.load_theme(stlibs.Config.theme)
     previous = {name: getattr(stlibs.SharingData, name, None)
@@ -54,11 +51,7 @@ def shader_module(qapp, real_theme):
 
 
 def load_pet_class(shader_module):
-    """从 core.py 取出真实 DesktopPetRemix（去掉 __init__，不跑模块级副作用）。
-
-    必须真的继承 ``shader.PublicShader``：方法体里用的是零参 ``super()``，
-    它靠定义处的 ``__class__`` 闭包，拼错基类会直接 TypeError。
-    """
+    """从 core.py 取出真实 DesktopPetRemix（去掉 __init__，不跑模块级副作用）。"""
     with open(os.path.join(ROOT, "core.py"), encoding="utf-8") as handle:
         tree = ast.parse(handle.read())
 
@@ -97,11 +90,7 @@ def make_pet(qapp, shader_module):
     created = []
 
     def build():
-        # 不用 PublicShader.__init__：别的用例会 reload stlibs.graphics.chat，
-        # shader.static 因此被重新导入，模块里的类对象与 PySide6 绑定可能不是同一份，
-        # shiboken 会直接报 "QWidget.__init__ called with wrong argument types"。
-        # 这里只做 QWidget 那一层初始化（必须做，否则一 move 就报 "__init__ not called"），
-        # 再把 shader 方法真正用到的字段补齐。
+        # 只做 QWidget 那层初始化，再把 shader 方法用到的字段补齐
         widget = pet_type.__new__(pet_type)
         QtWidgets.QWidget.__init__(widget)
 
@@ -266,12 +255,7 @@ def test_reset_drag_clears_every_leaked_field(make_pet):
 
 
 def show_without_grab(menu, monkeypatch):
-    """让菜单"逻辑上可见"但不真的走平台弹出。
-
-    offscreen 平台上真弹一个 ``Qt.Popup`` 会留下键盘/鼠标 grab 和活动弹窗，
-    后面的菜单用例就再也 show 不出来了。这里只把窗口标记成可见，
-    ``hide()``/``close()`` 照样会走 hideEvent/closeEvent。
-    """
+    """只把菜单标记成可见，不在 offscreen 上真弹 Popup 留下 grab。"""
     monkeypatch.setattr(type(menu), "show", lambda self: QtWidgets.QWidget.setVisible(self, True))
 
 
@@ -358,11 +342,7 @@ def test_menu_opening_wipes_the_leftover_drag_state(make_pet, monkeypatch):
 
 
 def test_real_context_menu_wipes_host_drag_state_on_open_and_close(make_pet, monkeypatch):
-    """走真实路径：show_context_menu 建真菜单，开与关都要清干净桌宠状态。
-
-    ``show_context_menu`` 是拿 ``SharingData.theme.Menu`` 造菜单的，所以补丁要打在
-    当前主题上（不能写死 hacker——那样换个主题跑这条用例就假失败了）。
-    """
+    """走真实路径：show_context_menu 建真菜单，开与关都要清干净桌宠状态。"""
     theme = stlibs.SharingData.theme
     menu_class = theme.Menu
 

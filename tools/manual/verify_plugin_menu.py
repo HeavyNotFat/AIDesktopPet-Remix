@@ -44,7 +44,7 @@ class FakeGroup:
 
 
 class FakeManager:
-    """假装装了三个插件：菜单应该平铺成 5 条，不再分组。"""
+    """假装装了三个插件的管理器。"""
 
     def __init__(self):
         self.groups = [

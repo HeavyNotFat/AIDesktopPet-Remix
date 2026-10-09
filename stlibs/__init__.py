@@ -196,7 +196,7 @@ class _BaseModelConfig:
     opacity: int
     size: int
     rotate: int
-    # 主题包名（stlibs/themes/<theme>），改动需重启生效
+    # 主题包名
     theme: str = "hacker"
 
     def __setitem__(self, key, value):
@@ -242,6 +242,7 @@ class _ThemeTypingProtocol(Protocol):
     TextEdit: Callable
     LineEdit: Callable
     Slider: Callable
+    Switch: Callable
     ComboBox: Callable
     CardWidget: Callable
     ChatWidget: Callable
@@ -266,7 +267,7 @@ class SharingData:
 
     static_models: dict
 
-    coordinates: list[int, int, int, int, Literal["live2d", "static", ""]] = [0, 0, 0, 0, ""]  # X, Y, DX, DY]
+    coordinates: list[int, int, int, int, Literal["live2d", "static", ""]] = [0, 0, 0, 0, ""]  # X, Y, DX, DY
 
     model_json_path: str
 
@@ -366,7 +367,7 @@ def plugin_manager():
 
 
 def plugin_prompts() -> list:
-    """插件要求追加的系统提示词（本地与网页聊天都会带上）。"""
+    """插件要求追加的系统提示词。"""
     try:
         return plugin_manager().system_prompts()
     except Exception:  # noqa: BLE001 - 插件系统坏了不能影响聊天
@@ -385,7 +386,7 @@ def emit_sdk_event(name: str, data=None) -> int:
 
 
 def run_plugin_command(text: str):
-    """聊天命令（/名字 参数）：返回 (是否被插件处理, 结果)。"""
+    """聊天命令（/名字 参数），返回 (是否被插件处理, 结果)。"""
     try:
         return plugin_manager().run_command(text)
     except Exception:  # noqa: BLE001
