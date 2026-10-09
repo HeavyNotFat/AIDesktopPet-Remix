@@ -1,0 +1,14 @@
+# 本地覆盖配置（不要提交）：只写要改的键，会覆盖 src/config.php 的同名项
+# 用法：复制成 src/config.local.php 再改
+return [
+    'app' => [
+        'debug' => false,
+    ],
+    'db' => [
+        'host' => '127.0.0.1',
+        'port' => 3306,
+        'database' => 'ugc',
+        'username' => 'ugc',
+        'password' => '换成你的密码',
+    ],
+];

@@ -1,0 +1,13 @@
+# 本地配置与运行时产物
+src/config.local.php
+storage/uploads/*
+!storage/uploads/.htaccess
+!storage/uploads/index.html
+storage/tmp/*
+!storage/tmp/.htaccess
+!storage/tmp/index.html
+storage/logs/*
+storage/sessions/*
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,12 @@
+# DocumentRoot = 项目根（站点根就是这里）时用这份：转发到 public/，并挡住代码与数据目录
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteRule ^(src|sql|tests|storage|config)(/|$) - [F,L]
+    RewriteRule "(^|/)\.(?!well-known)" - [F,L]
+
+    RewriteRule ^public(/|$) - [L]
+    RewriteRule ^(.*)$ public/$1 [L,QSA]
+</IfModule>
+
+Options -Indexes -ExecCGI
