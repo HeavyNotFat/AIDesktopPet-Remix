@@ -205,3 +205,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+!plugins/ugc_hub/LC_SERVER/tests/lib
+!plugins/ugc_hub/LC_SERVER/storage/tmp
