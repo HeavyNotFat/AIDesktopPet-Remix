@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QGridLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..plugins.pages import FormRow, SettingsPageSpec
+from ..plugins.pages import MAX_COLUMNS, FormRow, SettingsPageSpec
 from .palette import palette
 
 
@@ -114,6 +115,59 @@ class PluginSettingsPage(QWidget):
 
     def _row_hint(self, row: FormRow):
         return _hint_label(row.text)
+
+    def _row_section(self, row: FormRow):
+        """一块栅格卡片：按 columns 分列排子行，子行用 span 跨列。"""
+        columns = max(1, min(MAX_COLUMNS, int(row.columns or 1)))
+        body = QWidget()
+        grid = QGridLayout(body)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
+
+        cursor_row = 0
+        cursor_col = 0
+        for child in row.rows:
+            widget = self._build_row(child)
+            if widget is None:
+                continue
+            span = self._span_of(child, columns)
+            if cursor_col + span > columns:
+                cursor_row += 1
+                cursor_col = 0
+            grid.addWidget(widget, cursor_row, cursor_col, 1, span)
+            cursor_col += span
+            if cursor_col >= columns:
+                cursor_row += 1
+                cursor_col = 0
+
+        for column in range(columns):
+            grid.setColumnStretch(column, 1)
+        return _plain_card(row.title, body, row.hint)
+
+    def _row_map(self, row: FormRow):
+        """一组「名称 → 值」的只读展示：左列名称、右列值，横向铺开。"""
+        body = QWidget()
+        grid = QGridLayout(body)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
+        for index, item in enumerate(row.items):
+            name = _hint_label(str(item.get("key", "")), dim=True)
+            value = _hint_label(_text_value(item.get("value")), dim=False)
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            grid.addWidget(name, index, 0, Qt.AlignmentFlag.AlignTop)
+            grid.addWidget(value, index, 1, Qt.AlignmentFlag.AlignTop)
+        grid.setColumnStretch(1, 1)
+        return _plain_card(row.title, body, row.hint)
+
+    def _span_of(self, row: FormRow, columns: int) -> int:
+        """子行占几列：文字行默认整行，控件行默认一列。"""
+        span = int(row.span or 1)
+        if row.type in ("label", "hint", "map") and span <= 1:
+            span = columns
+        return max(1, min(columns, span))
 
     def _row_text(self, row: FormRow):
         return self._line_row(row)
@@ -302,6 +356,22 @@ def _title_label(text: str) -> QLabel:
         f" font-size: 16px; font-weight: 600; }}"
     )
     return label
+
+
+def _text_value(value) -> str:
+    """状态映射里的值：字典/列表也尽量显示成人能看的样子。"""
+    if value is None:
+        return "—"
+    if isinstance(value, bool):
+        return "开" if value else "关"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return "、".join(_text_value(item) for item in value) or "—"
+    if isinstance(value, dict):
+        return "；".join(f"{key}：{_text_value(item)}" for key, item in value.items()) or "—"
+    text = str(value).strip()
+    return text or "—"
 
 
 def _hint_label(text: str, dim: bool = True) -> QLabel:

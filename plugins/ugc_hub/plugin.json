@@ -1,0 +1,156 @@
+{
+  "id": "ugc_hub",
+  "name": "UGC 素材站",
+  "version": "2.1.0",
+  "description": "浏览 / 上传 / 下载社区分享的 Live2D 与静态形象素材，全部在设置页里操作",
+  "author": "ADPRemix",
+  "language": "javascript",
+  "entry": "main.js",
+  "order": 120,
+  "hooks": [
+    "on_load",
+    "on_unload",
+    "on_settings_action",
+    "on_event"
+  ],
+  "settings": [
+    {
+      "key": "server_url",
+      "label": "素材站地址",
+      "type": "text",
+      "default": "https://adp.cqjszx.cn"
+    },
+    {
+      "key": "download_dir",
+      "label": "模型安装目录",
+      "type": "text",
+      "default": "resources/character"
+    },
+    {
+      "key": "threads",
+      "label": "下载线程数",
+      "type": "number",
+      "default": 4
+    },
+    {
+      "key": "timeout_seconds",
+      "label": "网络超时（秒）",
+      "type": "number",
+      "default": 30
+    },
+    {
+      "key": "verify_sha256",
+      "label": "下载后校验 SHA-256",
+      "type": "switch",
+      "default": true
+    },
+    {
+      "key": "unzip_after_download",
+      "label": "下载后自动解包",
+      "type": "switch",
+      "default": true
+    },
+    {
+      "key": "keep_zip",
+      "label": "保留原始压缩包",
+      "type": "switch",
+      "default": false
+    },
+    {
+      "key": "overwrite",
+      "label": "覆盖同名目录",
+      "type": "switch",
+      "default": true
+    },
+    {
+      "key": "notify_when_done",
+      "label": "任务完成时提示",
+      "type": "switch",
+      "default": true
+    },
+    {
+      "key": "username",
+      "label": "用户名",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "password",
+      "label": "密码",
+      "type": "password",
+      "default": ""
+    },
+    {
+      "key": "keyword",
+      "label": "搜索关键词",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "browse_kind",
+      "label": "只看类型",
+      "type": "select",
+      "default": ""
+    },
+    {
+      "key": "sort",
+      "label": "排序",
+      "type": "select",
+      "default": "new"
+    },
+    {
+      "key": "page_size",
+      "label": "每页条数",
+      "type": "number",
+      "default": 30
+    },
+    {
+      "key": "pick",
+      "label": "选择要下载的素材",
+      "type": "select",
+      "default": ""
+    },
+    {
+      "key": "install_name",
+      "label": "安装后的名字",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "upload_path",
+      "label": "文件完整路径",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "upload_name",
+      "label": "显示名",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "upload_kind",
+      "label": "类型",
+      "type": "select",
+      "default": "auto"
+    },
+    {
+      "key": "upload_license",
+      "label": "授权",
+      "type": "select",
+      "default": "UNKNOWN"
+    },
+    {
+      "key": "upload_tags",
+      "label": "标签",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "upload_description",
+      "label": "说明",
+      "type": "text",
+      "default": ""
+    }
+  ]
+}

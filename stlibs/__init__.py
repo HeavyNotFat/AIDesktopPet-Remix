@@ -370,7 +370,7 @@ def plugin_prompts() -> list:
     """插件要求追加的系统提示词。"""
     try:
         return plugin_manager().system_prompts()
-    except Exception:  # noqa: BLE001 - 插件系统坏了不能影响聊天
+    except Exception:  # 插件系统坏了不能影响聊天
         return []
 
 

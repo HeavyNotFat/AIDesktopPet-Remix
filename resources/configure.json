@@ -66,7 +66,25 @@
       "enable": true,
       "directory": "./plugins",
       "disabled": [],
-      "settings": {},
+      "settings": {
+         "cultivation_system": {
+            "click_coin": 5
+         },
+         "ugc_hub": {
+            "download_dir": "",
+            "server_url": "https://adp.cqjszx.cn",
+            "timeout_seconds": null,
+            "upload_path": "",
+            "upload_name": "",
+            "browse_kind": "live2d",
+            "upload_license": "CC-BY-SA",
+            "upload_kind": "live2d",
+            "sort": "hot",
+            "username": "",
+            "password": "",
+            "keyword": ""
+         }
+      },
       "timeout": 3.0
    },
    "name": "Hiyori桃濑日和",
@@ -75,5 +93,5 @@
    "opacity": 1,
    "size": 110,
    "rotate": 0,
-   "theme": "breeze"
+   "theme": "hacker"
 }

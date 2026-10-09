@@ -5,8 +5,8 @@ from typing import Iterator
 
 from ..core import Finding, Location, Severity
 
-# 文档统一放 docs/；只有这些名字允许留在原地
-DOCS_DIR = "docs"
+# 文档统一放 docs/ 或 .github/docs/；只有这些名字允许留在原地
+DOCS_DIRS = ("docs", ".github/docs")
 ROOT_ALLOWED = ("AGENTS.md",)
 MARKDOWN_SUFFIXES = (".md", ".markdown")
 
@@ -70,18 +70,18 @@ def check_header_comment(ctx) -> Iterator[Finding]:
 
 
 def check_markdown_location(ctx) -> Iterator[Finding]:
-    """项目文档统一放 docs/，各目录只留自己的 README.md。"""
+    """项目文档统一放 docs/（或 .github/docs/），各目录只留自己的 README.md。"""
     for path, rel in _iter_files(ctx, MARKDOWN_SUFFIXES):
         if path.name.lower() == "readme.md" or rel in ROOT_ALLOWED:
             continue
-        if rel.startswith(f"{DOCS_DIR}/"):
+        if rel.startswith(tuple(f"{directory}/" for directory in DOCS_DIRS)):
             continue
         yield Finding(
             check="docs/markdown-location",
             severity=Severity.ERROR,
             message=f"{rel} 不在 docs/ 下（项目文档统一放 docs/，各目录只留 README.md）",
             location=Location(rel, 1),
-            hint="移到 docs/，并在 docs/README.md 的目录表里登记一行",
+            hint="移到 docs/ 或 .github/docs/，并在该目录的 README.md 目录表里登记一行",
         )
 
 

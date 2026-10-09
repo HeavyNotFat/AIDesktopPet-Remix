@@ -483,7 +483,8 @@ class PluginManager:
         self.run_on_ui(push)
         return True
 
-    def play_motion(self, name: str, index: int = 0):
+    @staticmethod
+    def play_motion(name: str, index: int = 0):
         from ... import SharingData
 
         window = SharingData.setting_window
@@ -492,7 +493,8 @@ class PluginManager:
         window.live2d_mot_signal.emit([name, index])
         return True
 
-    def play_expression(self, name: str):
+    @staticmethod
+    def play_expression(name: str):
         from ... import SharingData
 
         window = SharingData.setting_window
@@ -513,7 +515,8 @@ class PluginManager:
 
         return list(getattr(SharingData, "expressions", None) or [])
 
-    def run_on_ui(self, func, *args, **kwargs):
+    @staticmethod
+    def run_on_ui(func, *args, **kwargs):
         if threading.current_thread() is threading.main_thread():
             return func(*args, **kwargs)
 

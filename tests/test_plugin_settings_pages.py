@@ -7,6 +7,8 @@ import pytest
 import stlibs
 from stlibs.plugins.errors import PluginError
 from stlibs.plugins.pages import (
+    MAX_COLUMNS,
+    MAX_NESTED_ROWS,
     MAX_ROWS,
     PLUGIN_CATEGORY,
     PluginPages,
@@ -93,6 +95,79 @@ def test_bad_rows_are_skipped_and_unknown_types_ignored():
 
     rows = normalize_form([{"type": "nope"}, {"type": "text", "key": "ok", "label": "好"}])
     assert [row.key for row in rows] == ["ok"]
+
+
+def test_section_is_a_grid_with_columns_and_span():
+    rows = normalize_form([
+        {"type": "section", "title": "连接", "columns": 2, "hint": "两列", "rows": [
+            {"type": "text", "key": "server", "label": "服务器", "span": 2},
+            {"type": "number", "key": "threads", "label": "线程"},
+            {"type": "button", "action": "ping", "text": "测试"},
+        ]},
+    ])
+
+    assert [row.type for row in rows] == ["section"]
+    section = rows[0]
+    assert section.title == "连接" and section.hint == "两列"
+    assert section.columns == 2
+    assert [child.key or child.action for child in section.rows] == ["server", "threads", "ping"]
+    assert section.rows[0].span == 2 and section.rows[1].span == 1
+
+
+def test_section_limits_and_nesting():
+    rows = normalize_form([
+        {"type": "section", "title": "夹回来", "columns": 99, "rows": [
+            {"type": "text", "key": "a", "span": 42},
+        ]},
+        {"type": "section", "title": "嵌套", "rows": [
+            {"type": "section", "title": "里层不许", "rows": [{"type": "text", "key": "b"}]},
+            {"type": "text", "key": "c"},
+        ]},
+        {"type": "section", "title": "空块", "rows": []},
+        {"type": "section", "title": "全是坏行", "rows": [{"type": "text"}]},
+    ])
+
+    assert [row.type for row in rows] == ["section", "section"]
+    assert rows[0].columns == MAX_COLUMNS
+    assert rows[0].rows[0].span == MAX_COLUMNS
+    assert [child.key for child in rows[1].rows] == ["c"], "嵌套的 section 要被丢掉"
+
+    capped = normalize_form([{"type": "section", "title": "太多", "rows": [
+        {"type": "text", "key": f"k{index}"} for index in range(MAX_NESTED_ROWS + 10)
+    ]}])
+    assert len(capped[0].rows) == MAX_NESTED_ROWS
+
+
+def test_map_row_accepts_three_shapes():
+    rows = normalize_form([
+        {"type": "map", "title": "状态一", "items": {"素材站": "https://a.example", "账号": None}},
+        {"type": "map", "title": "状态二", "items": [["线程", 4], ["开关", True]]},
+        {"type": "map", "title": "状态三", "items": [{"key": "进度", "value": "3 / 10"}]},
+        {"type": "map", "title": "空的", "items": {}},
+        {"type": "map", "title": "只有空键", "items": {"": 1}},
+    ])
+
+    assert [row.type for row in rows] == ["map", "map", "map"]
+    assert [item["key"] for item in rows[0].items] == ["素材站", "账号"]
+    assert rows[0].items[0]["value"] == "https://a.example"
+    assert rows[1].items[0]["value"] == 4 and rows[1].items[1]["value"] is True
+    assert rows[2].items[0]["key"] == "进度"
+
+
+def test_public_shape_carries_sections_and_maps():
+    rows = normalize_form([
+        {"type": "section", "title": "块", "columns": 2, "rows": [
+            {"type": "text", "key": "server", "span": 2},
+        ]},
+        {"type": "map", "title": "表", "items": {"账号": "alice"}},
+    ])
+
+    payload = [row.public() for row in rows]
+    assert payload[0]["columns"] == 2
+    assert payload[0]["rows"][0]["key"] == "server"
+    assert payload[0]["rows"][0]["span"] == 2
+    assert payload[1]["items"] == [{"key": "账号", "value": "alice"}]
+
 
 
 def test_form_must_be_a_list():

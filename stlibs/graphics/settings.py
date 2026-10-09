@@ -17,6 +17,8 @@ class Settings(SharingData.theme.Window):
         self.setTitle(f"AI桌宠 · 重置版 | 设置 | {theme_label()}")
         # 页面 id -> (generation, 控件)
         self.plugin_pages = {}
+        # 上次同步过的 (页面 id, generation) 组合，没变就不重建
+        self.plugin_pages_signature = ()
 
         general_page = SharingData.theme.general.GeneralPage(self)
         general_page.opacity_changed.connect(lambda value: self.general_changed.emit({"opacity": value}))
@@ -57,26 +59,36 @@ class Settings(SharingData.theme.Window):
         self.refresh_plugin_pages()
 
     def refresh_plugin_pages(self, rebuild: bool = False):
-        """同步插件注册的页面到「插件」分类：新增、重建、摘除。"""
+        """同步插件注册的页面到「插件」分类：顺序对齐注册表，重建后把选中项放回去。"""
         registry = plugin_pages_registry()
-        wanted = {spec.id: spec for spec in registry.pages()} if registry is not None else {}
+        specs = list(registry.pages()) if registry is not None else []
+        signature = tuple((spec.id, spec.generation) for spec in specs)
+        if signature == self.plugin_pages_signature:
+            return
+        self.plugin_pages_signature = signature
 
-        for page_id, (generation, widget) in list(self.plugin_pages.items()):
-            spec = wanted.get(page_id)
-            if spec is not None and spec.generation == generation:
-                continue
+        # 重建前用户正看着哪个插件页？重建完要还给他，不然会掉到别的页面去
+        current = self.pages.currentWidget()
+        current_id = next(
+            (page_id for page_id, (_generation, widget) in self.plugin_pages.items() if widget is current),
+            None,
+        )
+
+        for page_id, (_generation, widget) in list(self.plugin_pages.items()):
             self.removeNavigation(widget)
-            self.plugin_pages.pop(page_id, None)
+            widget.deleteLater()
+        self.plugin_pages.clear()
 
-        for page_id, spec in wanted.items():
-            if page_id in self.plugin_pages:
-                continue
+        for spec in specs:
             widget = build_plugin_page(spec, self)
             analyze_signature(
                 self.addNavigation, text=plugin_page_title(spec), widget=widget,
                 category=PLUGIN_CATEGORY, position="bottom", icon=plugin_page_icon(spec),
             ).run()
-            self.plugin_pages[page_id] = (spec.generation, widget)
+            self.plugin_pages[spec.id] = (spec.generation, widget)
+
+        if current_id is not None and current_id in self.plugin_pages:
+            self._set_active(self.plugin_pages[current_id][1])
 
     def plugin_page(self, page_id: str):
         """已挂上的插件页面控件。"""

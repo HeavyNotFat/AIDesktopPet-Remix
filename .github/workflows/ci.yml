@@ -155,7 +155,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # 版本与 requirements.txt 对齐
-          python -m pip install pytest "fastapi==0.142.2" "pydantic==2.13.4" "uvicorn==0.54.0" "httpx==0.28.1" PySide6 "PySide6-Fluent-Widgets" pytest-qt
+          python -m pip install pytest "fastapi==0.142.2" "pydantic==2.13.4" "uvicorn==0.54.0" "httpx==0.28.1" PySide6 pytest-qt "ollama==0.6.2"
 
       - name: 跑 pytest
         run: python -m pytest tests -q --junitxml=junit.xml

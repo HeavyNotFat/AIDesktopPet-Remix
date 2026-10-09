@@ -27,6 +27,13 @@ PAGE_PLUGIN = '''
 
 # 仓库里那个真插件（养成系统），用来跑端到端
 PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "cultivation_system"
+UGC_PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ugc_hub"
+
+
+def _has_node() -> bool:
+    from stlibs.plugins.manager.js_plugin import find_node
+
+    return find_node() is not None
 
 
 @pytest.fixture(scope="module")
@@ -326,6 +333,11 @@ def test_form_rows_use_the_theme_widgets(theme_name, qapp):
             {"type": "text", "key": "suffix", "label": "后缀"},
             {"type": "switch", "key": "noisy", "label": "爱说话"},
             {"type": "select", "key": "mode", "label": "模式", "options": ["a", "b"]},
+            {"type": "section", "title": "两列", "columns": 2, "rows": [
+                {"type": "text", "key": "wide", "label": "整行", "span": 2},
+                {"type": "number", "key": "left", "label": "左"},
+                {"type": "number", "key": "right", "label": "右"},
+            ]},
         ])
         page = PluginSettingsPage(spec)
         theme = stlibs.SharingData.theme
@@ -333,6 +345,7 @@ def test_form_rows_use_the_theme_widgets(theme_name, qapp):
         assert isinstance(page.controls["suffix"], theme.LineEdit)
         assert isinstance(page.controls["noisy"], theme.Switch)
         assert isinstance(page.controls["mode"], theme.ComboBox)
+        assert {"wide", "left", "right"} <= set(page.controls), "分区里的控件也要建出来"
     finally:
         stlibs.SharingData.theme = previous
         if page is not None:
@@ -340,7 +353,151 @@ def test_form_rows_use_the_theme_widgets(theme_name, qapp):
         qapp.processEvents()
 
 
+def test_section_lays_children_out_in_a_grid(qapp):
+    """section 要真的排成栅格（不是一路竖着），span 跨列、按钮并排。"""
+    from PySide6.QtWidgets import QGridLayout, QPushButton
+
+    from stlibs.graphics.plugin_page import PluginSettingsPage
+    from stlibs.plugins.pages import PluginPages
+
+    spec = PluginPages().add("alpha", "栅格页", form=[
+        {"type": "section", "title": "连接", "columns": 2, "rows": [
+            {"type": "text", "key": "server", "label": "服务器", "span": 2},
+            {"type": "number", "key": "threads", "label": "线程"},
+            {"type": "number", "key": "timeout", "label": "超时"},
+            {"type": "button", "action": "ping", "text": "测试"},
+            {"type": "button", "action": "reset", "text": "重置"},
+        ]},
+    ])
+    page = PluginSettingsPage(spec)
+    try:
+        grid = page.findChild(QGridLayout)
+        assert grid is not None, "section 应该用一个栅格布局"
+        assert grid.columnCount() == 2
+        assert [grid.columnStretch(column) for column in range(2)] == [1, 1]
+
+        def cell(widget):
+            """控制件外面还套着卡片，所以按"包含关系"找它在栅格里的位置。"""
+            for index in range(grid.count()):
+                holder = grid.itemAt(index).widget()
+                if holder is widget or (holder is not None and holder.isAncestorOf(widget)):
+                    return grid.getItemPosition(index)
+            return None
+
+        # 第一行是 span=2 的输入框，后两行分别是「两个数字」「两个按钮」
+        assert cell(page.controls["server"]) == (0, 0, 1, 2)
+        assert cell(page.controls["threads"])[:2] == (1, 0)
+        assert cell(page.controls["timeout"])[:2] == (1, 1)
+        assert cell(page.controls["ping"])[:2] == (2, 0)
+        assert cell(page.controls["reset"])[:2] == (2, 1)
+        assert [button.text() for button in page.findChildren(QPushButton)] == ["测试", "重置"]
+    finally:
+        page.deleteLater()
+        qapp.processEvents()
+
+
+def test_map_row_renders_key_value_pairs(qapp):
+    """map 把「名称 → 值」铺成两列，空值显示成 —。"""
+    from PySide6.QtWidgets import QGridLayout, QLabel
+
+    from stlibs.graphics.plugin_page import PluginSettingsPage
+    from stlibs.plugins.pages import PluginPages
+
+    spec = PluginPages().add("alpha", "状态页", form=[
+        {"type": "map", "title": "当前状态", "items": {
+            "素材站": "https://adp.cqjszx.cn",
+            "账号": None,
+            "列表": ["#1 日和", "#2 猫猫"],
+            "线程": 4,
+        }},
+    ])
+    page = PluginSettingsPage(spec)
+    try:
+        grid = page.findChild(QGridLayout)
+        assert grid is not None and grid.rowCount() == 4 and grid.columnCount() == 2
+        texts = [label.text() for label in page.findChildren(QLabel)]
+        assert "https://adp.cqjszx.cn" in texts
+        assert "—" in texts, "空值要显示成 —"
+        assert "#1 日和、#2 猫猫" in texts, "列表要拼成一行"
+        assert "4" in texts
+    finally:
+        page.deleteLater()
+        qapp.processEvents()
+
+
 def test_settings_module_is_reloadable(settings_module, theme):
     """Settings 的基类必须还是当前主题的窗口，不能被写死。"""
     assert issubclass(settings_module.Settings, theme.Window)
     assert "stlibs.graphics.settings" in sys.modules
+
+
+@pytest.mark.skipif(not _has_node(), reason="需要 node 才能跑 JavaScript 插件")
+def test_rebuilding_a_page_keeps_the_user_on_it(window, settings_module, manager):
+    """插件页重建后选中项要留在原处（否则会掉到「插件」分类的第一页去）。"""
+    write_plugin(manager.directory, "alpha", PAGE_PLUGIN)
+    write_plugin(manager.directory, "beta", PAGE_PLUGIN.replace("养猫设置", "养狗设置"))
+    manager.load_all()
+
+    alpha = manager.pages.find("alpha", "养猫设置")
+    beta = manager.pages.find("beta", "养狗设置")
+    before = nav_titles(category_of(window, settings_module))
+    window.show_plugin_page(beta.id)
+    assert window.pages.currentWidget() is window.plugin_page(beta.id)
+
+    # beta 自己的页面被重建（插件改完数据会这么干）
+    manager.pages.refresh("beta", beta.key)
+
+    rebuilt = window.plugin_page(beta.id)
+    assert rebuilt is not None
+    assert window.pages.currentWidget() is rebuilt, "重建后应该还停在重建的那一页"
+    assert window.pages.currentWidget() is not window.plugin_page(alpha.id)
+
+    # 重建既不会多出条目，也不会打乱顺序
+    assert nav_titles(category_of(window, settings_module)) == before
+
+
+def test_nav_order_survives_a_rebuild(window, settings_module, manager):
+    write_plugin(manager.directory, "alpha", PAGE_PLUGIN)
+    write_plugin(manager.directory, "beta", PAGE_PLUGIN.replace("养猫设置", "养狗设置"))
+    manager.load_all()
+    before = [title for title in nav_titles(category_of(window, settings_module))]
+
+    manager.pages.refresh("alpha")
+
+    after = [title for title in nav_titles(category_of(window, settings_module))]
+    assert after == before, "插件页重建后导航顺序不该变"
+
+
+def test_real_ugc_hub_page_mounts_in_the_window(window, settings_module, manager, qapp):
+    """真插件端到端：ugc_hub 只占导航栏一条，页内用分区栅格 + 状态映射排布。"""
+    import shutil
+
+    from PySide6.QtWidgets import QGridLayout
+
+    source = UGC_PLUGIN_DIR
+    shutil.copytree(source, Path(manager.directory) / "ugc_hub",
+                    ignore=shutil.ignore_patterns(".data", "*.log"))
+    manager.load_all()
+
+    assert [page.key for page in manager.pages.pages("ugc_hub")] == ["ugc"], "一个插件只占一条导航"
+    spec = manager.pages.find("ugc_hub", "ugc")
+    assert spec is not None and spec.title == "UGC 素材站"
+    widget = window.plugin_page(spec.id)
+    assert widget is not None
+    titles = nav_titles(category_of(window, settings_module))
+    assert any(title == "UGC 素材站" for title in titles), titles
+    assert sum(1 for title in titles if "素材站" in title) == 1, "导航栏里不该出现多条素材站"
+
+    grids = widget.findChildren(QGridLayout)
+    assert any(grid.columnCount() == 2 for grid in grids), "页内要有两列栅格"
+    assert any(grid.columnCount() == 3 for grid in grids), "查找/维护分区是三列"
+    labels = [label.text() for label in widget.findChildren(QtWidgets.QLabel)]
+    assert any("https://adp.cqjszx.cn" in text for text in labels), "状态映射要显示出默认地址"
+    assert {"server_url", "download_dir", "threads", "pick", "upload_path"} <= set(widget.controls)
+    assert {"ping", "search", "download", "upload", "clear_status"} <= set(widget.controls)
+
+    widget.controls["status"].click()
+    qapp.processEvents()
+
+    manager.unload("ugc_hub")
+    assert window.plugin_page(spec.id) is None

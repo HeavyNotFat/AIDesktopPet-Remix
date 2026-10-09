@@ -10,7 +10,6 @@ from ..manifest import PluginManifest
 
 
 class PythonHooks:
-
     def __init__(self, target, module_name: str = "", plugin_api=None, path=None):
         self.target = target
         self.module_name = module_name

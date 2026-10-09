@@ -13,10 +13,12 @@ from .errors import PluginError
 PLUGIN_CATEGORY = "插件"
 
 # 声明式表单支持的控件类型
-FORM_TYPES = ("label", "hint", "text", "password", "number", "switch", "select", "button")
+FORM_TYPES = ("label", "hint", "text", "password", "number", "switch", "select", "button", "section", "map")
 VALUE_TYPES = ("text", "password", "number", "switch", "select")
 MAX_ROWS = 64
 MAX_OPTIONS = 64
+MAX_COLUMNS = 4
+MAX_NESTED_ROWS = 32
 
 _SLUG_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
 
@@ -51,6 +53,13 @@ def _number(value):
     return int(number) if number.is_integer() else number
 
 
+def _clamp_int(value, low: int, high: int, fallback: int) -> int:
+    number = _number(value)
+    if number is None:
+        return fallback
+    return max(low, min(high, int(number)))
+
+
 def _options(raw) -> tuple:
     """下拉项：接受 "文本" / (值, 文本) / {"value", "label"} 三种写法。"""
     if not isinstance(raw, (list, tuple)):
@@ -73,7 +82,11 @@ def _options(raw) -> tuple:
 
 @dataclass(slots=True)
 class FormRow:
-    """声明式表单的一行：插件给 dict，宿主渲染成控件。"""
+    """声明式表单的一行：插件给 dict，宿主渲染成控件。
+
+    `section` 是一块栅格卡片（`columns` 列，子行用 `span` 跨列）；
+    `map` 是一组「名称 → 值」的只读展示，用来显示状态。
+    """
 
     type: str = "text"
     key: str = ""
@@ -87,6 +100,10 @@ class FormRow:
     minimum: object = None
     maximum: object = None
     step: object = None
+    columns: int = 1
+    span: int = 1
+    rows: tuple = ()
+    items: tuple = ()
 
     @property
     def title(self) -> str:
@@ -106,7 +123,36 @@ class FormRow:
             "min": self.minimum,
             "max": self.maximum,
             "step": self.step,
+            "columns": self.columns,
+            "span": self.span,
+            "rows": [row.public() for row in self.rows],
+            "items": [dict(item) for item in self.items],
         }
+
+
+def _map_items(raw) -> tuple:
+    """状态映射：接受 {"键": 值} / [[键, 值]] / [{"key", "value"}] 三种写法。"""
+    items = []
+    if isinstance(raw, dict):
+        pairs = list(raw.items())
+    elif isinstance(raw, (list, tuple)):
+        pairs = []
+        for item in raw:
+            if isinstance(item, dict):
+                pairs.append((item.get("key", item.get("label")), item.get("value")))
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                pairs.append((item[0], item[1]))
+            else:
+                pairs.append((item, ""))
+    else:
+        return ()
+
+    for key, value in pairs[:MAX_OPTIONS]:
+        name = _text(key)
+        if not name:
+            continue
+        items.append({"key": name, "value": jsonable(value)})
+    return tuple(items)
 
 
 def make_row(raw) -> FormRow | None:
@@ -120,10 +166,34 @@ def make_row(raw) -> FormRow | None:
     if kind not in FORM_TYPES:
         return None
 
-    label = _text(raw.get("label"))
+    label = _text(raw.get("label") or raw.get("title"))
     text = _text(raw.get("text")) or label
     key = _text(raw.get("key"))
     action = _text(raw.get("action"))
+    hint = _text(raw.get("hint") or raw.get("description"))
+
+    if kind == "section":
+        children = tuple(
+            row for row in (make_row(item) for item in raw.get("rows") or [])
+            if row is not None and row.type != "section"
+        )[:MAX_NESTED_ROWS]
+        if not children:
+            return None
+        return FormRow(
+            type="section",
+            label=label or text,
+            text=text,
+            hint=hint,
+            columns=_clamp_int(raw.get("columns"), 1, MAX_COLUMNS, 1),
+            rows=children,
+        )
+
+    if kind == "map":
+        items = _map_items(raw.get("items") or raw.get("values") or raw.get("map"))
+        if not items:
+            return None
+        return FormRow(type="map", label=label or text, text=text, hint=hint, items=items)
+
     if kind in VALUE_TYPES and not key:
         return None
     if kind == "button" and not (action or key):
@@ -142,7 +212,7 @@ def make_row(raw) -> FormRow | None:
         key=key,
         label=label or text,
         text=text,
-        hint=_text(raw.get("hint") or raw.get("description")),
+        hint=hint,
         placeholder=_text(raw.get("placeholder")),
         action=action,
         default=default,
@@ -150,6 +220,7 @@ def make_row(raw) -> FormRow | None:
         minimum=_number(raw.get("min")),
         maximum=_number(raw.get("max")),
         step=_number(raw.get("step")),
+        span=_clamp_int(raw.get("span"), 1, MAX_COLUMNS, 1),
     )
 
 
@@ -229,7 +300,6 @@ def weak_callback(target):
 @dataclass
 class PluginPages:
     """插件设置页注册表：不依赖 Qt，只记账；挂载与摘除由设置窗执行。"""
-
     manager: object = None
     _items: dict = field(default_factory=dict)
     _listeners: list = field(default_factory=list)

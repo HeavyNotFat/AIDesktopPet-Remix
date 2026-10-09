@@ -13,7 +13,6 @@ NO_SELECTION = ("warning", "先在表里选中一个插件")
 
 
 class PluginsPanel:
-
     def __init__(self, manager: PluginManager | None = None):
         self._manager = manager
 
