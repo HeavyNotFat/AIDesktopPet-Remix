@@ -1,6 +1,8 @@
-import os
-import sys
 import ctypes
+import os
+import random
+import sys
+import time
 
 from PIL import Image
 
@@ -10,12 +12,12 @@ from PySide6.QtWidgets import QWidget
 
 try:
     from .. import stlibs
-    from ..stlibs.graphics import chat
+    from ..stlibs.animation_utils import action_at
     from ..stlibs.graphics import settings
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import stlibs
-    from stlibs.graphics import chat
+    from stlibs.animation_utils import action_at
     from stlibs.graphics import settings
 
 
@@ -23,8 +25,18 @@ GWL_EX_STYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
 
 
+def _opacity(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    if value <= 1.0:
+        return max(0.0, min(1.0, value))
+    return max(0.0, min(1.0, value / 100.0))
+
+
 class PublicShader(QWidget):
-    IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg")
+    IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 
     def __init__(self, frames: dict | None = None, fps: int = 12, parent=None):
         super().__init__(parent)
@@ -44,7 +56,20 @@ class PublicShader(QWidget):
         self.drag_start_position = None
         self.is_dragging = False
         self.amount = 0
+        self._current_kind = stlibs.character.kind()
+        self._press_moved = False
+        self._last_hover_action = ""
+        self._hovered_at = 0.0
+        self._last_interaction = time.monotonic()
+        self._last_smart = time.monotonic()
+        self._paused = False
 
+        if frames is None:
+            try:
+                models = stlibs.SharingData.static_models
+                frames = models.get(stlibs.Config.static_model) or {}
+            except Exception:  # noqa: BLE001
+                frames = {}
         self.frames_config = frames or {}
         self.animations = {}
         self.current_animation = None
@@ -75,21 +100,36 @@ class PublicShader(QWidget):
         new_size = int(self.current_size * float(stlibs.Config.size) / 100)
         new_size = max(100, min(new_size, 2000))
         self.setFixedSize(new_size, new_size)
-        self.setWindowOpacity(float(stlibs.Config.opacity))
+        self.setWindowOpacity(_opacity(stlibs.Config.opacity))
         self._init_sharing_data()
         self._load_animation_frames()
+        self._play_app_initial()
+
+    def _play_app_initial(self):
+        value = str(getattr(stlibs.Animation, "AppInitial", "") or "").strip()
+        name = value or ("idle" if "idle" in self.animations else next(iter(self.animations), ""))
+        if not name:
+            return
+        try:
+            self.play(name)
+        except (KeyError, ValueError):
+            pass
 
     def _init_sharing_data(self):
         if getattr(stlibs.SharingData, "setting_window", None) is None:
             stlibs.SharingData.setting_window = settings.Settings()
 
-        if getattr(stlibs.SharingData, "chat_window", None) is None:
-            stlibs.SharingData.chat_window = chat.Chat()
+        window = stlibs.SharingData.setting_window
+        if hasattr(window, "general_changed"):
+            window.general_changed.connect(self.realtime_revise_config)
+        if hasattr(window, "static_anim_signal"):
+            window.static_anim_signal.connect(self.play)
+        if hasattr(window, "live2d_mot_signal"):
+            window.live2d_mot_signal.connect(lambda data: self.play(data[0]) if data else None)
+        if stlibs.ai_enabled() and getattr(stlibs.SharingData, "chat_window", None) is None:
+            from stlibs.graphics import chat
 
-        try:
-            stlibs.SharingData.setting_window.general_changed.connect(self.realtime_revise_config)
-        except (AttributeError, TypeError):
-            pass
+            stlibs.SharingData.chat_window = chat.Chat()
 
     def realtime_revise_config(self, config: dict):
         if not isinstance(config, dict):
@@ -102,12 +142,12 @@ class PublicShader(QWidget):
 
         if opacity is not None:
             stlibs.Config.opacity = opacity
-            self.setWindowOpacity(float(opacity))
+            self.setWindowOpacity(_opacity(opacity))
 
         if size is not None:
             stlibs.Config.size = size
             try:
-                new_size = int(self.current_size * float(size) / 100)
+                new_size = int(1000 * float(size) / 100)
                 new_size = max(100, min(new_size, 2000))
                 self.setFixedSize(new_size, new_size)
             except (TypeError, ValueError):
@@ -118,72 +158,97 @@ class PublicShader(QWidget):
             self.update()
 
         if model_live2d is not None:
-            stlibs.Config.model_live2d = model_live2d
+            from stlibs import character
+
+            selected = character.resolve(model_live2d)
+            if selected is not None and selected.kind != self._current_kind:
+                stlibs.notify("形象类型已切换，重启程序后生效", "warning", 3000)
+            elif selected is not None and selected.kind == character.STATIC:
+                self.reload_animations(selected.name)
 
     def _load_animation_frames(self):
         self.animations.clear()
+        model = stlibs.Config.static_model
+        if not model:
+            return
 
         for animation_name, frame_list in self.frames_config.items():
             if not isinstance(frame_list, dict):
-                raise TypeError(f"{animation_name} 的 frames 必须是 dict")
-
-            folder = os.path.join("./resources/character/static", stlibs.Config.static_model, animation_name)
-
+                continue
+            folder = os.path.join("./resources/character/static", model, animation_name)
             if not os.path.isdir(folder):
-                raise FileNotFoundError(f"动画文件夹不存在: {folder}")
-
-            if not frame_list['frames']:
-                self.animations[animation_name] = []
+                continue
+            frames = frame_list.get("frames")
+            if not frames:
+                self.animations[animation_name] = {"frames": [], "op": None, "fps": self.fps, "loop": True}
                 continue
 
-            has_extension = any(os.path.splitext(str(frame))[1].lower() in self.IMAGE_EXTENSIONS for frame in frame_list['frames'])
-
+            has_extension = any(os.path.splitext(str(frame))[1].lower() in self.IMAGE_EXTENSIONS
+                                for frame in frames)
             if has_extension:
                 self.animations[animation_name] = self._parse_file_list(folder, frame_list)
             else:
                 self.animations[animation_name] = self._parse_prefix_list(folder, frame_list)
 
     @staticmethod
-    def _parse_file_list(folder: str, frame_list: list[str]) -> list[str]:
+    def _parse_file_list(folder: str, frame_list: list[str]) -> dict:
         result = []
-
-        for filename in frame_list['frames']:
+        for filename in frame_list.get("frames") or []:
             path = os.path.join(folder, str(filename))
+            if os.path.isfile(path):
+                result.append(path)
+        return {
+            "frames": result,
+            "op": frame_list.get("op"),
+            "fps": max(1, int(frame_list.get("fps") or 12)),
+            "loop": bool(frame_list.get("loop", True)),
+        }
 
-            if not os.path.isfile(path):
-                raise FileNotFoundError(f"找不到动画帧: {path}")
-
-            result.append(path)
-
-        return {"frames": result, "op": frame_list['op']}
-
-    def _parse_prefix_list(self, folder: str, frame_list: list[str]) -> list[str]:
+    def _parse_prefix_list(self, folder: str, frame_list: list[str]) -> dict:
         result = []
-
-        for prefix in frame_list['frames']:
+        for prefix in frame_list.get("frames") or []:
             prefix = str(prefix)
             matched = []
-
-            for filename in os.listdir(folder):
+            try:
+                names = os.listdir(folder)
+            except OSError:
+                continue
+            for filename in names:
                 name, ext = os.path.splitext(filename)
-
-                if ext.lower() not in self.IMAGE_EXTENSIONS:
+                if ext.lower() not in self.IMAGE_EXTENSIONS or not name.startswith(prefix):
                     continue
-
-                if not name.startswith(prefix):
-                    continue
-
-                number_text = name[len(prefix):]
-
+                suffix = name[len(prefix):]
+                number_text = suffix.lstrip("_-")
                 if not number_text.isdigit():
                     continue
-
                 matched.append((int(number_text), filename))
-
             matched.sort(key=lambda item: item[0])
-            result.extend(os.path.join(folder, filename) for _, filename in matched)
+            result.extend(os.path.join(folder, filename) for _index, filename in matched)
+        return {
+            "frames": result,
+            "op": frame_list.get("op"),
+            "fps": max(1, int(frame_list.get("fps") or 12)),
+            "loop": bool(frame_list.get("loop", True)),
+        }
 
-        return {"frames": result, "op": frame_list['op']}
+    def reload_animations(self, model: str | None = None):
+        if model:
+            stlibs.Config.static_model = model
+            self.frames_config = stlibs.SharingData.static_models.get(model) or {}
+        self._load_animation_frames()
+        if not self.animations:
+            self.current_frames = []
+            self.current_pixmap = None
+            self.current_image = None
+            self.update()
+            return
+
+        target = self.current_animation if self.current_animation in self.animations else next(iter(self.animations))
+        self.image_cache.clear()
+        try:
+            self.play(target, restart=True)
+        except (KeyError, ValueError):
+            pass
 
     def set_fps(self, fps: int):
         fps = int(fps)
@@ -208,14 +273,16 @@ class PublicShader(QWidget):
         if not frames:
             raise ValueError(f"动画没有可播放的帧: {animation_name}")
 
-        self.current_op = self.animations[animation_name].get("op")
+        entry = self.animations[animation_name]
+        self.current_op = entry.get("op")
+        self.fps = max(1, int(entry.get("fps") or self.fps))
+        loop = bool(entry.get("loop", loop))
 
         if self.current_animation == animation_name and not restart:
             self.animation_loop = loop
-
-            if not self.animation_timer.isActive():
+            self.animation_timer.setInterval(max(1, round(1000 / self.fps)))
+            if not self.animation_timer.isActive() and not self._paused:
                 self.animation_timer.start(max(1, round(1000 / self.fps)))
-
             return
 
         self.current_animation = animation_name
@@ -223,11 +290,10 @@ class PublicShader(QWidget):
         self.current_frame = 0
         self.animation_loop = loop
         self.animation_playing = True
+        self._paused = False
 
         self._show_current_frame()
-
         self.animation_timer.start(max(1, round(1000 / self.fps)))
-
         self.startTimer(5)
 
     def next_frame(self):
@@ -292,6 +358,7 @@ class PublicShader(QWidget):
         return self.current_animation
 
     def pause(self):
+        self._paused = True
         self.animation_timer.stop()
         self.animation_playing = False
 
@@ -301,6 +368,7 @@ class PublicShader(QWidget):
         if not self.current_frames:
             return
 
+        self._paused = False
         self.animation_playing = True
         self.animation_timer.start(max(1, round(1000 / self.fps)))
 
@@ -378,6 +446,31 @@ class PublicShader(QWidget):
     def is_in_live2d_area(self, click_x: int | None = None, click_y: int | None = None):
         return self.is_in_animation_area(click_x, click_y)
 
+    def _play_action(self, action) -> bool:
+        if not isinstance(action, dict):
+            return False
+        name = str(action.get("anim") or "").strip()
+        if not name:
+            return False
+        try:
+            self.play(name)
+            return True
+        except (KeyError, ValueError):
+            return False
+
+    def _smart_control(self, now):
+        if not getattr(stlibs.Animation, "smart_control", False):
+            return
+        if now - self._last_interaction < 12 or now - self._last_smart < 20:
+            return
+        names = [name for name, item in self.animations.items() if item.get("frames")]
+        if names:
+            self._last_smart = now
+            try:
+                self.play(random.choice(names))
+            except (KeyError, ValueError):
+                pass
+
     def timerEvent(self, event):
         if self.is_dragging:
             self.update()
@@ -385,14 +478,29 @@ class PublicShader(QWidget):
         local_x = QCursor.pos().x() - self.x()
         local_y = QCursor.pos().y() - self.y()
 
-        if self.is_in_animation_area(local_x, local_y):
-            self.click_in_area = True
-            self.set_mouse_transparent(False)
-        else:
-            self.click_in_area = False
-            self.set_mouse_transparent(True)
+        inside = self.is_in_animation_area(local_x, local_y)
+        self.click_in_area = inside
+        self.set_mouse_transparent(not inside)
 
+        now = time.monotonic()
+        if inside:
+            label, action = action_at(stlibs.Animation, local_x, local_y, "Torch")
+            if label and label != self._last_hover_action and now - self._hovered_at > 1.2:
+                self._last_hover_action = label
+                self._hovered_at = now
+                self._play_action(action)
+            elif not label:
+                self._last_hover_action = ""
+        else:
+            self._last_hover_action = ""
+        self._smart_control(now)
         self.update()
+
+    def setCanvasOpacity(self, value):
+        self.setWindowOpacity(_opacity(value))
+
+    def setRotationAngle(self, angle):
+        stlibs.Config.rotate = angle
 
     def show_context_menu(self, position):
         def window_visible(window, ui_class):
@@ -418,11 +526,20 @@ class PublicShader(QWidget):
 
         context_menu.addSeparator()
 
-        chat_action = stlibs.SharingData.theme.Action("聊天", self, stlibs.SharingData.theme.IconList.CHAT)
-        chat_action.triggered.connect(lambda: window_visible(stlibs.SharingData.chat_window, chat.Chat))
-        context_menu.addAction(chat_action)
+        if stlibs.ai_enabled():
+            from stlibs.graphics import chat
 
-        context_menu.addSeparator()
+            chat_action = stlibs.SharingData.theme.Action("聊天", self, stlibs.SharingData.theme.IconList.CHAT)
+            chat_action.triggered.connect(lambda: window_visible(stlibs.SharingData.chat_window, chat.Chat))
+            context_menu.addAction(chat_action)
+
+            import webbrowser
+
+            online_action = stlibs.SharingData.theme.Action("网页聊天", self, stlibs.SharingData.theme.IconList.CHAT)
+            online_action.triggered.connect(lambda: webbrowser.open("http://127.0.0.1:52493"))
+            context_menu.addAction(online_action)
+
+            context_menu.addSeparator()
 
         self.add_plugin_actions(context_menu)
 
@@ -474,19 +591,27 @@ class PublicShader(QWidget):
         self.set_mouse_transparent(False)
 
         if event.button() == Qt.MouseButton.LeftButton:
-            # 只有左键才算拖拽，右键唤菜单时不会留下拖拽状态
             if self.is_in_animation_area(local_x, local_y):
+                if stlibs.SharingData.coordinates[0] == -1 and stlibs.SharingData.coordinates[1] == -1:
+                    stlibs.SharingData.coordinates[0] = int(local_x)
+                    stlibs.SharingData.coordinates[1] = int(local_y)
+                elif stlibs.SharingData.coordinates[2] == -1 and stlibs.SharingData.coordinates[3] == -1:
+                    stlibs.SharingData.coordinates[2] = int(local_x)
+                    stlibs.SharingData.coordinates[3] = int(local_y)
+                stlibs.SharingData.coordinates[4] = "static"
+
                 self.is_dragging = True
                 self.click_in_area = True
                 self.click_x = int(global_x)
                 self.click_y = int(global_y)
+                self._last_interaction = time.monotonic()
             else:
                 self.is_dragging = False
 
+            self._press_moved = False
             self.drag_position = event.globalPosition() - self.frameGeometry().topLeft()
             self.drag_start_position = QPoint(int(global_x), int(global_y))
         else:
-            # 右键/中键：不拖拽，也不记抓取点
             self.is_dragging = False
             self.drag_position = None
             self.drag_start_position = None
@@ -494,10 +619,11 @@ class PublicShader(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event):
-        # 只有左键真的按住才跟着走，否则状态泄漏会让桌宠追着光标漂
         if event.buttons() & Qt.LeftButton and self.drag_position is not None:
             if self.is_dragging:
                 new_pos = event.globalPosition() - self.drag_position
+                if (new_pos - self.frameGeometry().topLeft()).manhattanLength() > 3:
+                    self._press_moved = True
                 self.move(int(new_pos.x()), int(new_pos.y()))
 
             event.accept()
@@ -506,7 +632,12 @@ class PublicShader(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        was_click = event.button() == Qt.MouseButton.LeftButton and not self.is_dragging
+        was_click = (
+            event.button() == Qt.MouseButton.LeftButton
+            and self.is_dragging
+            and not self._press_moved
+        )
+        local_x, local_y = event.position().x(), event.position().y()
         self.set_mouse_transparent(True)
         if event.button() == Qt.LeftButton:
             self.drag_position = None
@@ -516,15 +647,19 @@ class PublicShader(QWidget):
         event.accept()
 
         if was_click:
-            self.notify_clicked(event)
+            label, action = action_at(stlibs.Animation, local_x, local_y, "Click")
+            self._play_action(action)
+            self._last_interaction = time.monotonic()
+            self.notify_clicked(event, label)
 
-    def notify_clicked(self, event):
+    def notify_clicked(self, event, action=""):
         """点一下桌宠：通知插件与 SDK 订阅者。"""
         self.emit_sdk_event("pet_click", {
-            "x": event.globalPosition().x(), "y": event.globalPosition().y(), "source": "static",
+            "x": event.globalPosition().x(), "y": event.globalPosition().y(),
+            "source": "static", "action": action,
         })
         try:
-            stlibs.plugin_manager().emit_event("pet_click", {"source": "static"})
+            stlibs.plugin_manager().emit_event("pet_click", {"source": "static", "action": action})
         except Exception:  # noqa: BLE001 - 插件系统的问题不该影响点击
             pass
 
@@ -533,16 +668,12 @@ class PublicShader(QWidget):
         stlibs.emit_sdk_event(name, data)
 
     def wheelEvent(self, event):
-        if event.modifiers() == Qt.ControlModifier and self.is_in_animation_area():
-            angle_delta = event.angleDelta().y()
-
-            if angle_delta > 0:
-                self.current_size = int(self.current_size * 1.05)
-            else:
-                self.current_size = int(self.current_size * 0.95)
-
-            self.current_size = max(100, min(self.current_size, 2000))
-            self.setFixedSize(self.current_size, self.current_size)
+        if event.modifiers() & Qt.ControlModifier and self.is_in_animation_area():
+            step = 5 if event.angleDelta().y() > 0 else -5
+            value = max(10, min(110, int(stlibs.Config.size) + step))
+            stlibs.Config.size = value
+            self.setFixedSize(int(1000 * value / 100), int(1000 * value / 100))
+            stlibs.ConfigLoader.save_config()
             self.update()
             event.accept()
             return
@@ -580,7 +711,17 @@ class PublicShader(QWidget):
 
     def exit_program(self):
         self.animation_timer.stop()
-        self.close()
+        value = str(getattr(stlibs.Animation, "AppExit", "") or "").strip()
+        if value:
+            try:
+                self.play(value, loop=False)
+            except (KeyError, ValueError):
+                pass
+            QTimer.singleShot(800, self._finish_exit)
+        else:
+            self._finish_exit()
 
+    def _finish_exit(self):
+        self.close()
         os.kill(os.getpid(), __import__("signal").SIGINT)
 

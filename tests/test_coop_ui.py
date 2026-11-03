@@ -20,6 +20,7 @@ def qapp():
 def isolated_config(tmp_path, monkeypatch):
     """模型表清空、落盘挪到临时目录，别动仓库里的 configure.json。"""
     monkeypatch.setattr(stlibs, "CONFIG_PATH", str(tmp_path / "configure.json"))
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setattr(stlibs.Config, "models", {}, raising=False)
     monkeypatch.setattr(stlibs.Config, "coop", {
         "enable": False,

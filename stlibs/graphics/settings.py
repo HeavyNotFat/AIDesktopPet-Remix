@@ -1,5 +1,4 @@
-from .. import SharingData
-from .. import analyze_signature
+from .. import SharingData, ai_enabled, analyze_signature, set_ai_enabled
 from ..plugins.pages import PLUGIN_CATEGORY
 from .plugin_page import build_plugin_page
 from .theme_label import theme_label
@@ -11,6 +10,8 @@ class Settings(SharingData.theme.Window):
     general_changed = Signal(dict)
     live2d_mot_signal = Signal(list)
     live2d_exp_signal = Signal(list)
+    emote_timeline_signal = Signal(list)
+    static_anim_signal = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -19,26 +20,32 @@ class Settings(SharingData.theme.Window):
         self.plugin_pages = {}
         # 上次同步过的 (页面 id, generation) 组合，没变就不重建
         self.plugin_pages_signature = ()
+        self.llm_page = None
+        self.tts_page = None
 
         general_page = SharingData.theme.general.GeneralPage(self)
         general_page.opacity_changed.connect(lambda value: self.general_changed.emit({"opacity": value}))
         general_page.size_changed.connect(lambda value: self.general_changed.emit({"size": value}))
         general_page.rotate_changed.connect(lambda value: self.general_changed.emit({"rotate": value}))
         general_page.model_live2d.connect(lambda value: self.general_changed.emit({"model_live2d": value}))
+        if hasattr(general_page, "ai_changed"):
+            general_page.ai_changed.connect(self.apply_ai_state)
         analyze_signature(self.addNavigation, text=general_page.windowTitle(), widget=general_page,
                           shortcut_keys=(Qt.Key_Control, Qt.Key_1)).run()
+        self.general_page = general_page
 
-        llm_page = SharingData.theme.llm.LLMPage(self)
-        analyze_signature(self.addNavigation, text=llm_page.windowTitle(), widget=llm_page,
-                          shortcut_keys=(Qt.Key_Control, Qt.Key_2)).run()
-
-        tts_page = SharingData.theme.tts.TTSPage(self)
-        analyze_signature(self.addNavigation, text=tts_page.windowTitle(), widget=tts_page,
-                          shortcut_keys=(Qt.Key_Control, Qt.Key_3)).run()
+        self.build_ai_pages()
 
         animation_page = SharingData.theme.animation.AnimationPage(self)
         animation_page.live2d_mot_signal.connect(self.live2d_mot_signal.emit)
         animation_page.live2d_exp_signal.connect(self.live2d_exp_signal.emit)
+        if hasattr(animation_page, "emote_timeline_signal"):
+            animation_page.emote_timeline_signal.connect(self.emote_timeline_signal.emit)
+        if hasattr(animation_page, "static_anim_signal"):
+            animation_page.static_anim_signal.connect(self.static_anim_signal.emit)
+        if hasattr(animation_page, "set_ai_enabled"):
+            animation_page.set_ai_enabled(ai_enabled())
+        self.animation_page = animation_page
         analyze_signature(self.addNavigation, text=animation_page.windowTitle(), widget=animation_page,
                           shortcut_keys=(Qt.Key_Control, Qt.Key_4)).run()
 
@@ -57,6 +64,64 @@ class Settings(SharingData.theme.Window):
         if registry is not None:
             registry.bind(self.refresh_plugin_pages)
         self.refresh_plugin_pages()
+
+    def build_ai_pages(self):
+        """AI 总开关打开时才挂 LLM / 语音页。"""
+        if not ai_enabled() or self.llm_page is not None:
+            return
+        llm_page = SharingData.theme.llm.LLMPage(self)
+        analyze_signature(self.addNavigation, text=llm_page.windowTitle(), widget=llm_page,
+                          shortcut_keys=(Qt.Key_Control, Qt.Key_2)).run()
+        self.llm_page = llm_page
+
+        tts_page = SharingData.theme.tts.TTSPage(self)
+        analyze_signature(self.addNavigation, text=tts_page.windowTitle(), widget=tts_page,
+                          shortcut_keys=(Qt.Key_Control, Qt.Key_3)).run()
+        self.tts_page = tts_page
+
+    def remove_ai_pages(self):
+        """关掉 AI 时只隐藏入口，避免快捷键指向已删除的页面。"""
+        for page in (self.llm_page, self.tts_page):
+            if page is None:
+                continue
+            page.hide()
+            button = self.nav_buttons.get(page)
+            if button is not None:
+                button.hide()
+
+    def _set_ai_pages_visible(self, visible: bool):
+        for page in (self.llm_page, self.tts_page):
+            if page is None:
+                continue
+            if visible:
+                page.show()
+                button = self.nav_buttons.get(page)
+                if button is not None:
+                    button.show()
+            else:
+                page.hide()
+                button = self.nav_buttons.get(page)
+                if button is not None:
+                    button.hide()
+
+    def apply_ai_state(self, enabled: bool):
+        """总开关：同步服务、页面与动画页里的 AI 控件。"""
+        enabled = set_ai_enabled(bool(enabled))
+        if enabled:
+            self.build_ai_pages()
+        self._set_ai_pages_visible(enabled)
+        if not enabled:
+            current = self.pages.currentWidget()
+            if current in (self.llm_page, self.tts_page):
+                self._set_active(self.general_page)
+        if hasattr(self.animation_page, "set_ai_enabled"):
+            self.animation_page.set_ai_enabled(enabled)
+        return enabled
+
+    def _set_active(self, widget):
+        if widget in (self.llm_page, self.tts_page) and not ai_enabled():
+            return
+        super()._set_active(widget)
 
     def refresh_plugin_pages(self, rebuild: bool = False):
         """同步插件注册的页面到「插件」分类：顺序对齐注册表，重建后把选中项放回去。"""

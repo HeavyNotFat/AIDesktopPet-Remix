@@ -104,6 +104,7 @@ def test_local_llm_chat_injects_skill(monkeypatch):
     pytest.importorskip("PySide6.QtCore", reason="local.LLM 是 QObject")
     import stlibs
 
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setattr(stlibs.Config, "mcp", {"enable": False, "mcp": []}, raising=False)
     monkeypatch.setattr(stlibs.Config, "rag", {"enable": False}, raising=False)
     monkeypatch.setattr(stlibs.Config, "memory", {"shortterm": True, "longterm": False}, raising=False)
@@ -135,6 +136,7 @@ def test_local_llm_chat_without_skill_has_no_extra_system_message(monkeypatch):
     pytest.importorskip("PySide6.QtCore", reason="local.LLM 是 QObject")
     import stlibs
 
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setattr(stlibs.Config, "mcp", {"enable": False, "mcp": []}, raising=False)
     monkeypatch.setattr(stlibs.Config, "rag", {"enable": False}, raising=False)
     monkeypatch.setattr(stlibs.Config, "memory", {"shortterm": True, "longterm": False}, raising=False)

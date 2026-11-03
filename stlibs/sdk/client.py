@@ -181,6 +181,18 @@ class SDKClient(base.UDPBase):
     def get_live2d_expression(self) -> list:
         return self._call("get_live2d_expression")
 
+    def play_animation(self, name: str, slot: int = 0):
+        return self._call("play_animation", name, slot)
+
+    def get_animations(self) -> list:
+        return self._call("get_animations")
+
+    def emote_state(self) -> dict:
+        return self._call("emote_state")
+
+    def set_emote_variable(self, name: str, value, duration: int = 0, module: str = ""):
+        return self._call("set_emote_variable", name, value, duration, module)
+
     def get_appearance(self):
         return self._call("get_appearance")
 

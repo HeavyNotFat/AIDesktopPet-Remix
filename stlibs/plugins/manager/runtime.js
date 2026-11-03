@@ -83,6 +83,9 @@ function buildApi() {
 
     playMotion: (name, index) => callApi('play_motion', String(name), index || 0),
     playExpression: name => callApi('play_expression', String(name)),
+    playAnimation: (name, slot) => callApi('play_animation', String(name), slot || 0),
+    setEmoteVariable: (name, value, duration, module) =>
+      callApi('set_emote_variable', String(name), value, duration || 0, module || ''),
     motions: () => callApi('motions'),
     expressions: () => callApi('expressions')
   };

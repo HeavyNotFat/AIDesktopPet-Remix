@@ -184,11 +184,15 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
-# CI / 测试临时目录
+# 测试临时目录
 .ci-tmp/
 .tmp/
 pytest-of-*/
 tmp*/
+
+# 敏感配置（API Key 等），只保留说明文件
+.env/*
+.env.local
 pip-install-*/
 pip-build-tracker-*/
 

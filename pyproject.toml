@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-desktop-pet-remix"
 version = "1.0.0"
-description = "AI 桌宠（Live2D / 静态形象 + 本地或云端 LLM + 网页聊天）"
+description = "AI 桌宠（Live2D / Emote / 静态形象 + 本地或云端 LLM + 网页聊天）"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -17,9 +17,6 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
-
-[project.scripts]
-adpci = "tools.ci.__main__:main"
 
 [tool.setuptools]
 py-modules = ["core", "main"]
@@ -45,7 +42,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tools/ci/**" = ["SIM102"]
 # 主题包的 __init__ 是契约门面：只做重新导出 + 映射别名，本来就"用不到"那些名字
 "stlibs/themes/*/__init__.py" = ["E402", "F401", "I001"]
 "stlibs/__init__.py" = ["F401"]
@@ -62,27 +58,3 @@ markers = [
     "platform: 记录 PySide6 / Qt 的平台行为（拿不到 Qt 时自动跳过）",
     "ui: 需要 Qt（离屏）才能跑的主题/设置页测试",
 ]
-
-[tool.adpci]
-fail-on = "error"
-exclude = [
-  ".git/*",
-  ".venv/*",
-  ".idea/*",
-  "build/*",
-  "dist/*",
-  "__pycache__/*",
-  "*/__pycache__/*",
-  "*/*/__pycache__/*",
-  ".mypy_cache/*",
-  ".ruff_cache/*",
-  ".pytest_cache/*",
-  ".ci-tmp/*",
-  "node_modules/*",
-  "test/*",
-
-  "tests/*",
-]
-ignore = []
-disable = []
-allow = []

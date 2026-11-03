@@ -62,7 +62,6 @@ from . import plugins
 from . import settings
 from . import tts
 from ... import Config, SharingData, derfer
-from ...ai import cloud, local
 from ..base import (
     CombinedMeta,
     IconListABS,

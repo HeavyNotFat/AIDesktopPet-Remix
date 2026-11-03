@@ -54,14 +54,16 @@ class ModelTarget:
 
 
 def cloud_models() -> dict:
+    from ... import secrets
+
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, ValueError):
-        return dict(Config.models or {})
+        return secrets.merge_models(Config.models or {})
 
     models = data.get("models")
-    return models if isinstance(models, dict) else dict(Config.models or {})
+    return secrets.merge_models(models if isinstance(models, dict) else (Config.models or {}))
 
 
 def load_targets() -> "OrderedDict[str, ModelTarget]":

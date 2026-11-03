@@ -462,6 +462,7 @@ def model_chat(qapp, monkeypatch, isolated_config):
 
     # ModelChat 里会走 SharingData.theme.Label / ChatWidget，得先把主题装上
     monkeypatch.setattr(stlibs.SharingData, "theme", hacker)
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setitem(hacker.cache_llm_class, "fake-model", FakeLLM())
     monkeypatch.setattr(stlibs.SharingData, "add_memory_to_ui", {})
     return hacker.ModelChat("测试模型", "fake-model", True, parent=None)

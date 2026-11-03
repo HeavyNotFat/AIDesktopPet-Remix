@@ -2,6 +2,13 @@
 
 下面的内容是各功能的实现说明与操作细节，按需要跳读。
 
+## AI 总开关
+
+`resources/configure.json` 的 `ai_enabled` 默认 `false`。设置窗「常规设置」里有总开关；
+关闭时会隐藏 LLM / 语音页、聊天与网页聊天入口，停掉网页服务，并让
+`build_llm` / SDK 聊天方法 / 插件聊天 hook 直接拒绝。打开后立即恢复入口与服务，无需重启。
+详见 [CHARACTER.md](CHARACTER.md#ai-总开关)。
+
 ## 长期记忆
 
 `stlibs/ai/__init__.py::LTMemory`：把对话按 `window` 轮攒起来压缩成摘要，
@@ -225,7 +232,7 @@ python tools/manual/probe_cultivation.py     # 走真实插件管理器 + 离屏
 
 ## SDK：外部程序控制桌宠
 
-宿主启动时在 `127.0.0.1:9000` 起一个 UDP JSON-RPC 服务，24 个方法覆盖界面、聊天、配置、
+宿主启动时在 `127.0.0.1:9000` 起一个 UDP JSON-RPC 服务，28 个方法覆盖界面、聊天、配置、
 插件与记忆，另有事件推送（桌宠被点、聊天结束）。文档见 [`stlibs/sdk/README.md`](../../stlibs/sdk/README.md)。
 
 ```python

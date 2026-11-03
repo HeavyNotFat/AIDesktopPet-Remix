@@ -17,6 +17,13 @@ from stlibs.mproc.onlinechat.registry import ModelRegistry, UnknownModelError
 ONLINECHAT_DIR = Path(oc_llm.__file__).parent
 
 
+@pytest.fixture(autouse=True)
+def _ai_on(monkeypatch):
+    import stlibs
+
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
+
+
 # 测试替身
 class FakeLocalLLM:
     """模仿 local.LLM.chat(user_input, should_emit=True)。"""
@@ -447,8 +454,11 @@ def test_desktop_sharing_data_is_untouched(patched_registry, monkeypatch):
 @pytest.fixture
 def client(monkeypatch):
     fastapi_testclient = pytest.importorskip("fastapi.testclient")
+    import stlibs
     from stlibs.mproc.onlinechat import app, pool
     from stlibs.mproc.onlinechat import model_registry as bound_registry
+
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
 
     monkeypatch.setattr(oc_llm, "registry", _registry())
     # 路由里绑定的是包级 model_registry，必须打它，否则会真去跑 ollama list

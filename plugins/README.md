@@ -117,9 +117,10 @@ api.storage_all()  # -> {"count": 3, ...}
 
 ### 3. UI Hook
 
-- **接口地址：** `api.add_menu_item` / `api.send_to_chat` / `api.play_motion` / `api.play_expression` / `api.motions` /
-  `api.expressions`
-- **用途：** 往界面上挂东西：桌宠右键菜单项、往聊天窗塞消息、控制 Live2D 动作与表情。
+- **接口地址：** `api.add_menu_item` / `api.send_to_chat` / `api.play_motion` / `api.play_expression` /
+  `api.play_animation` / `api.motions` / `api.expressions` / `api.set_emote_variable`
+- **用途：** 往界面上挂东西：桌宠右键菜单项、往聊天窗塞消息、控制 Live2D / Emote / 静态动画与 Emote 变量。
+  `send_to_chat` 在 AI 总开关关闭时会被拒绝。
 - **请求参数：**
 
 | 参数名              | 必填      | 示例值                 | 说明                       |
@@ -128,6 +129,7 @@ api.storage_all()  # -> {"count": 3, ...}
 | `action`         | 否       | `greet`             | 动作名；点了会带着它走 `on_command` |
 | `text` / `role`  | 是 / 否   | `后台跑完了`、`assistant` | 往聊天窗塞的内容与角色              |
 | `name` / `index` | 是 / 否   | `摸摸头`、`0`           | 动作或表情名（先用 `motions()` 查） |
+| `slot`           | 否       | `0`                 | Emote 时间轴槽位；0 = 主动画，1+ = 差分 |
 
 注册的菜单项会**一层平铺**在右键菜单上（不套子菜单）：
 
@@ -155,6 +157,8 @@ api.add_menu_item("打个招呼", "greet")  # 无返回值
 api.motions()  # -> ["摸摸头", "挥手", ...]（拿不到时是空列表）
 api.expressions()  # -> ["开心", "生气", ...]
 api.play_motion("摸摸头", 0)
+api.play_animation("摸摸头", 0)       # 跨形象通用
+api.set_emote_variable("face_mouth", 30, 500)
 api.send_to_chat("后台跑完了", "assistant")
 ```
 

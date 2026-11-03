@@ -4,26 +4,42 @@ import json
 import ollama
 
 from .. import Config, SharingData
+from . import enabled, ensure_enabled
 from . import mcp as mcp_server
 
 from PySide6.QtCore import Signal, QObject
 
 mcp: mcp_server.MCP | None = None
-if Config.mcp["enable"]:
-    try:
-        mcp = mcp_server.MCP()
-    except Exception as exc:  # noqa: BLE001
-        print(f"[MCP] 管理器初始化失败，本次将不加载任何 MCP 工具：{type(exc).__name__}: {exc}")
-        mcp = None
+_mcp_connected = False
 
-for server in Config.mcp["mcp"]:
-    if not Config.mcp["enable"] or mcp is None:
-        break
-    runnable_args = [arg.replace("$PATH$", os.getcwd()) for arg in server["args"]]
-    try:
-        mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args, )
-    except Exception as exc:  # noqa: BLE001
-        print(f"[MCP] 启动 {server.get('server')!r} 失败，跳过该工具：{type(exc).__name__}: {exc}")
+
+def ensure_mcp():
+    """按总开关与配置惰性初始化 MCP，允许运行期打开 AI。"""
+    global mcp, _mcp_connected
+
+    if not enabled() or not Config.mcp["enable"]:
+        return None
+    if mcp is None:
+        try:
+            mcp = mcp_server.MCP()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[MCP] 管理器初始化失败，本次将不加载任何 MCP 工具：{type(exc).__name__}: {exc}")
+            mcp = None
+            return None
+    if _mcp_connected:
+        return mcp
+
+    _mcp_connected = True
+    for server in Config.mcp["mcp"]:
+        runnable_args = [arg.replace("$PATH$", os.getcwd()) for arg in server["args"]]
+        try:
+            mcp.connect_stdio(server_id=server["server"], command=server["command"], args=runnable_args)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[MCP] 启动 {server.get('server')!r} 失败，跳过该工具：{type(exc).__name__}: {exc}")
+    return mcp
+
+
+ensure_mcp()
 with open("./resources/prompts.json", "r", encoding="utf-8") as f:
     prompts = json.load(f)
 
@@ -34,6 +50,7 @@ class LLM(QObject):
 
     def __init__(self, model: str = "glm4", system_prompt: str = "", coop: bool | None = None):
         super().__init__()
+        ensure_enabled()
         from . import LTMemory, Memory, MultiAgentCoop, fc, rag
 
         self.memory = Memory()
@@ -46,6 +63,7 @@ class LLM(QObject):
         self.coop = None if self.coop_disabled else (MultiAgentCoop() if (coop or Config.coop.get("enable")) else None)
         SharingData.llm_instances[f"local:{model}"] = self
 
+        ensure_mcp()
         if Config.mcp["enable"] and mcp is not None:
             try:
                 mcp.inject_to_funcall(self.function_call)

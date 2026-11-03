@@ -287,6 +287,10 @@ class PluginManager:
             yield plugin_id, table
 
     def chat_text(self, text, role: str = "user"):
+        from ... import ai_enabled
+
+        if not ai_enabled():
+            return text
         hook = api_module.CHAT_REPLY if role == "assistant" else api_module.CHAT_SEND
         current = text
         for plugin_id, _table in self._each(hook):
@@ -355,6 +359,10 @@ class PluginManager:
             pass
 
     def system_prompts(self) -> list:
+        from ... import ai_enabled
+
+        if not ai_enabled():
+            return []
         if self._prompts_cache:
             return list(self._prompts_cache)
 
@@ -468,10 +476,13 @@ class PluginManager:
         except Exception:  # noqa: BLE001
             window = None
 
+        from ... import ai_enabled, notify
+
+        if not ai_enabled():
+            return notify("AI 功能总开关已关闭", "warning")
+
         chat = getattr(window, "chat", None)
         if chat is None:
-            from ... import notify
-
             return notify(text, "info")
 
         def push():
@@ -501,6 +512,29 @@ class PluginManager:
         if window is None:
             return False
         window.live2d_exp_signal.emit([name])
+        return True
+
+    @staticmethod
+    def play_animation(name: str, slot: int = 0):
+        from ... import SharingData
+
+        window = SharingData.setting_window
+        if window is None:
+            return False
+        if hasattr(window, "emote_timeline_signal"):
+            window.emote_timeline_signal.emit([str(name), int(slot)])
+        else:
+            window.live2d_mot_signal.emit([str(name), 0])
+        return True
+
+    @staticmethod
+    def set_emote_variable(name: str, value, duration: int = 0, module: str = ""):
+        from ... import SharingData
+
+        ui = getattr(SharingData, "mainloop_ui", None)
+        if ui is None or not hasattr(ui, "set_emote_variable"):
+            return False
+        ui.set_emote_variable(str(name), value, duration=duration, module=module)
         return True
 
     @staticmethod

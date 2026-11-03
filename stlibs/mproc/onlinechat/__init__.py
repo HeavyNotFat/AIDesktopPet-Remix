@@ -4,7 +4,7 @@ import threading
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -195,6 +195,15 @@ def health():
 
 app = FastAPI(title='AI Desktop Pet - OnlineChat')
 app.include_router(api)
+
+
+@app.middleware('http')
+async def ai_switch_guard(request, call_next):
+    from ... import ai_enabled
+
+    if not ai_enabled():
+        return JSONResponse(status_code=403, content={'detail': 'AI 功能总开关已关闭'})
+    return await call_next(request)
 
 
 @app.get('/', include_in_schema=False)

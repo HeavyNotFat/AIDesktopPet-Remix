@@ -12,6 +12,11 @@ from stlibs.sdk.methods import METHOD_HELP, HostMethods
 from stlibs.sdk.server import ALIASES, EVENTS, SDKServer
 
 
+@pytest.fixture(autouse=True)
+def _ai_on(monkeypatch):
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
+
+
 @pytest.fixture
 def server():
     instance = SDKServer(port=0)
@@ -247,6 +252,24 @@ def test_live2d_lists_are_serialisable(client):
 
     assert isinstance(motions, (list, str))
     assert isinstance(expressions, (list, str))
+
+
+def test_play_animation_and_emote_variable(monkeypatch):
+    calls = []
+
+    class UI:
+        def play_emote_timeline(self, data):
+            calls.append(('timeline', data))
+
+        def set_emote_variable(self, name, value, duration=0, module=""):
+            calls.append(('variable', name, value, duration, module))
+
+    monkeypatch.setattr(stlibs.SharingData, 'mainloop_ui', UI())
+    monkeypatch.setattr(stlibs.SharingData, 'motions', ['idle'], raising=False)
+
+    assert HostMethods.play_animation('idle', 1)['slot'] == 1
+    assert HostMethods.set_emote_variable('face', 2, 100, 'eyetrack')['name'] == 'face'
+    assert calls == [('timeline', ['idle', 1]), ('variable', 'face', 2, 100, 'eyetrack')]
 
 
 def test_play_methods_need_settings_window(client):

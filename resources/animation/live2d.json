@@ -1,12 +1,12 @@
 {
    "smart_control": true,
-   "ai_control": true,
+   "ai_control": false,
    "animation": {
       "ClickEar": {
-         "x": 0,
-         "y": 0,
-         "dx": 0,
-         "dy": 0,
+         "x": 233,
+         "y": 273,
+         "dx": 292,
+         "dy": 313,
          "anim": "",
          "expr": ""
       },

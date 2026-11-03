@@ -24,6 +24,7 @@ needs_node = pytest.mark.skipif(NODE is None, reason="需要 node 才能跑 Java
 def isolated_config(tmp_path, monkeypatch):
     """别把测试插件的开关写进仓库里的 configure.json。"""
     monkeypatch.setattr(stlibs, "CONFIG_PATH", str(tmp_path / "configure.json"))
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setattr(stlibs.Config, "plugins", {
         "enable": True, "directory": str(tmp_path / "plugins"),
         "disabled": [], "settings": {}, "timeout": 3.0,

@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
 )
 
 from ... import Config, ConfigLoader, SharingData, get_model_lists, notify, refresh_coop, refresh_models
-from ...ai.rag.engine import SUPPORTED_ENGINES
 from .primitives import (
     BreezeButton,
     BreezeCard,
@@ -137,7 +136,7 @@ class BasicWidgetScroll(QWidget):
             stacked=True,
         ))
 
-        layout.addWidget(PageHint("配置写在 resources/configure.json：别名进聊天列表，密钥只留在本机。"))
+        layout.addWidget(PageHint("配置写在 resources/configure.json：别名进聊天列表，密钥单独存 .env/secrets.json。"))
         layout.addStretch()
 
         self.reload_existing()
@@ -218,7 +217,7 @@ class BasicWidgetScroll(QWidget):
         ConfigLoader.save_config()
         self.reload_existing()
         refresh_models()
-        notify(f"已删除 API 模型「{name}」，密钥已从配置里移除", "success", 3500)
+        notify(f"已删除 API 模型「{name}」，密钥已从 .env 里移除", "success", 3500)
 
 
 class Basic(QWidget):
@@ -421,6 +420,8 @@ class RAGWidgetScroll(QWidget):
         ))
 
         # RAG 引擎
+        from ...ai.rag.engine import SUPPORTED_ENGINES
+
         rag_engine = BreezeComboBox(parent=self)
         rag_engine.setMinimumWidth(220)
         rag_engine.addItems(SUPPORTED_ENGINES)

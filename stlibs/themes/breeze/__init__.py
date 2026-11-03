@@ -10,7 +10,6 @@ from ..base import (
     ThemePalette,
 )
 from ... import Config, SharingData, derfer
-from ...ai import cloud, local
 from . import animation
 from . import general
 from . import llm
@@ -181,12 +180,10 @@ __all__ = [
     "animation",
     "base_sheet",
     "cache_llm_class",
-    "cloud",
     "derfer",
     "draw_badge",
     "general",
     "llm",
-    "local",
     "menu_icon_pixmap",
     "plugins",
     "prompts",

@@ -137,6 +137,25 @@ class SplashWindow(QSplashScreen):
 
 class Application:
     def __init__(self):
+        from stlibs import character
+
+        if character.kind() == character.EMOTE:
+            import PySide6.QtWebEngineWidgets  # noqa: F401 - WebEngine 必须在 QApplication 前导入
+
+            try:
+                from stlibs.emote.scheme import register_scheme
+
+                register_scheme()
+            except Exception:  # noqa: BLE001 - 私有协议不可用时走本地 HTTP
+                pass
+            flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+            if "--no-sandbox" not in flags and not os.environ.get("ADP_EMOTE_KEEP_SANDBOX"):
+                flags = (flags + " --no-sandbox").strip()
+            os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+                flags + " --autoplay-policy=no-user-gesture-required --ignore-gpu-blocklist "
+                "--enable-gpu-rasterization --enable-webgl"
+            )
+            QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
         self.app = QApplication(sys.argv)
         self.main_window = None
         self.splash = None
@@ -149,7 +168,7 @@ class Application:
 
     def _create_main_window(self):
         try:
-            import core
+            import core  # noqa: F401 - 导入即启动
         except Exception:
             print(traceback.format_exc())
             if self.splash:
@@ -167,7 +186,7 @@ def main():
 
 
 if __name__ == '__main__':
-    if Config.rag['clear_cache']:
+    if Config.ai_enabled and Config.rag['clear_cache']:
         import shutil
         if os.path.exists("./resources/rag/chroma_db"):
             shutil.rmtree("./resources/rag/chroma_db")

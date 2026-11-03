@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+    }
+    #emote-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        opacity: 0;
+        transition: opacity .25s ease;
+    }
+    #emote-canvas.loaded { opacity: 1; }
+    #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        color: #2b6f8f;
+        font: 13px "Microsoft YaHei", sans-serif;
+        pointer-events: none;
+        transition: opacity .25s ease;
+    }
+    #loader.hidden { opacity: 0; visibility: hidden; }
+    .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(43, 111, 143, .18);
+        border-top-color: #2b6f8f;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script>
+/*__EMOTE_BOOTSTRAP__*/
+</script>
+<script>
+var Module = {
+    TOTAL_MEMORY: 536870912,
+    errorhandler: null,
+    onAbort: function (what) {
+        console.error('Emscripten Aborted:', what);
+        if (window.emoteState) window.emoteState.error = 'Emscripten 中止：' + what;
+    }
+};
+window.alert = function (message) {
+    console.error('[emote alert]', message);
+    if (window.emoteState && !window.emoteState.error) {
+        window.emoteState.error = String(message || 'Emote 运行时错误');
+    }
+};
+window.addEventListener('error', function (event) {
+    if (window.emoteState && !window.emoteState.error) {
+        window.emoteState.error = String(event.message || event.error || '页面脚本错误');
+    }
+});
+window.addEventListener('unhandledrejection', function (event) {
+    if (window.emoteState && !window.emoteState.error) {
+        window.emoteState.error = String(event.reason || '未处理的异步错误');
+    }
+});
+</script>
+</head>
+<body>
+<canvas id="emote-canvas"></canvas>
+<div id="loader"><div class="spinner"></div><div id="loader-text">Emote 模型加载中…</div></div>
+<script src="/runtime/fflate.js"></script>
+<script src="/runtime/FreeMoteDriver.js"></script>
+<script src="/runtime/emoteplayer.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    const cfg = window.EMOTE_CONFIG || {};
+    const state = {
+        ready: false,
+        error: '',
+        model: cfg.name || '',
+        mainTimelines: [],
+        diffTimelines: [],
+        variables: [],
+        actions: {},
+        configLoaded: false,
+        charaHeight: 0,
+        bounds: null,
+        scalePercent: cfg.sizePercent || 100,
+        rotation: cfg.rotation || 0,
+        opacity: cfg.opacity == null ? 1 : cfg.opacity,
+        hit: false
+    };
+    window.emoteState = state;
+
+    let player = null;
+    let reactionConfig = null;
+    let touching = false;
+    let baseScale = 1;
+    let audioCache = {};
+    const canvas = document.getElementById('emote-canvas');
+    const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loader-text');
+
+    function modelBaseUrl() {
+        const url = cfg.modelUrl || '';
+        const cut = url.lastIndexOf('/');
+        return cut >= 0 ? url.slice(0, cut + 1) : '';
+    }
+
+    function resolveAudio(path) {
+        if (!path) return '';
+        let clean = String(path).replace(/^\.\//, '');
+        const modelBase = modelBaseUrl();
+        if (modelBase) return modelBase + clean;
+        return clean;
+    }
+
+    function playSound(path) {
+        const cleaned = String(path || '').replace(/^\.\//, '');
+        if (!cleaned) return;
+        const candidates = [];
+        const modelBase = modelBaseUrl();
+        if (modelBase) candidates.push(modelBase + cleaned);
+        if (cleaned.indexOf('sounds/') === 0) {
+            candidates.push('/' + cleaned);
+        } else {
+            candidates.push('/sounds/' + cleaned);
+        }
+        const url = candidates.shift();
+        const audio = audioCache[url] || new Audio(url);
+        audioCache[url] = audio;
+        audio.volume = 1.0;
+        audio.play().catch(function () {
+            if (!candidates.length) return;
+            const fallback = new Audio(candidates.shift());
+            fallback.volume = 1.0;
+            fallback.play().catch(function () {});
+        });
+    }
+
+    function applyVariables(variables) {
+        if (!Array.isArray(variables)) return;
+        variables.forEach(function (item) {
+            if (!item || !item.name) return;
+            const delay = Number(item.delay || 0);
+            const duration = Number(item.duration || 0);
+            const value = Number(item.value || 0);
+            setTimeout(function () {
+                try { player.setVariable(item.name, value, duration); } catch (err) {}
+            }, Math.max(0, delay));
+        });
+    }
+
+    function applyReaction(config) {
+        if (!config || !player) return;
+        if (config.mainTimelineLabel) player.mainTimelineLabel = config.mainTimelineLabel;
+        if (config.diffTimelineSlot1 != null) player.diffTimelineSlot1 = config.diffTimelineSlot1;
+        if (config.diffTimelineSlot2 != null) player.diffTimelineSlot2 = config.diffTimelineSlot2;
+        if (config.diffTimelineSlot3 != null) player.diffTimelineSlot3 = config.diffTimelineSlot3;
+        if (config.diffTimelineSlot4 != null) player.diffTimelineSlot4 = config.diffTimelineSlot4;
+        if (config.diffTimelineSlot5 != null) player.diffTimelineSlot5 = config.diffTimelineSlot5;
+        if (config.diffTimelineSlot6 != null) player.diffTimelineSlot6 = config.diffTimelineSlot6;
+        if (config.audio) playSound(config.audio);
+        applyVariables(config.variables);
+    }
+
+    function playCustomAction(action) {
+        if (!action || !player) return false;
+        if (action.anim) player.mainTimelineLabel = action.anim;
+        if (action.expr) player.diffTimelineSlot1 = action.expr;
+        if (action.sound) playSound(action.sound);
+        applyVariables(action.variables);
+        return true;
+    }
+
+    function matchCustomAction(x, y) {
+        const actions = state.actions || {};
+        for (const name of Object.keys(actions)) {
+            if (!name.startsWith('Click')) continue;
+            const action = actions[name] || {};
+            const left = Math.min(Number(action.x || 0), Number(action.dx || 0));
+            const right = Math.max(Number(action.x || 0), Number(action.dx || 0));
+            const top = Math.min(Number(action.y || 0), Number(action.dy || 0));
+            const bottom = Math.max(Number(action.y || 0), Number(action.dy || 0));
+            if (right - left < 2 || bottom - top < 2) continue;
+            if (x >= left && x <= right && y >= top && y <= bottom) {
+                playCustomAction(action);
+                return name;
+            }
+        }
+        return '';
+    }
+
+    function markerDistance(nameA, nameB, extraY) {
+        const a = player.getMarkerPosition(nameA);
+        const b = nameB ? player.getMarkerPosition(nameB) : null;
+        if (!a || (nameB && !b)) return 99999;
+        const cx = b ? (a.clientX + b.clientX) / 2 : a.clientX;
+        const cy = b ? (a.clientY + b.clientY) / 2 : a.clientY;
+        return { x: cx, y: cy + (extraY || 0) };
+    }
+
+    function tryConfigReaction(x, y) {
+        if (!reactionConfig || !player) return false;
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / Math.max(1, rect.width);
+        const px = x * scale;
+        const py = y * scale;
+        const groups = [
+            ['bust', 100], ['eye', 50], ['face', 80], ['head', 120], ['pant', 180],
+        ];
+        for (const item of groups) {
+            const key = item[0];
+            const threshold = item[1];
+            const reactions = reactionConfig[key];
+            if (!Array.isArray(reactions) || !reactions.length) continue;
+            const point = key === 'bust' ? markerDistance('bust', null, 0)
+                : key === 'eye' ? markerDistance('eye', null, 0)
+                : key === 'face' ? markerDistance('headAX', 'headBX', 40)
+                : key === 'head' ? markerDistance('headAX', 'headBX', 0)
+                : markerDistance('pantAX', 'pantBX', 0);
+            if (!point) continue;
+            const distance = Math.sqrt(Math.pow(point.x - px, 2) + Math.pow(point.y - py, 2));
+            if (distance > threshold * scale) continue;
+            const selected = reactions[Math.floor(Math.random() * reactions.length)];
+            if (!selected) continue;
+            touching = true;
+            applyReaction(selected.reaction);
+            const duration = Number(selected.duration || 1500);
+            setTimeout(function () {
+                applyReaction(selected.recovery);
+                touching = false;
+            }, Math.max(100, duration));
+            return true;
+        }
+        return false;
+    }
+
+    function fitScale() {
+        const height = Number(player.charaHeight || 0);
+        const canvasHeight = canvas.height || 1;
+        const ratio = Number(cfg.renderRatio || 1);
+        if (height > 0) return (canvasHeight / height) * 0.94 * (Number(cfg.scale) || 1);
+        return 0.6 * ratio;
+    }
+
+    function applyScale(percent) {
+        if (!player) return;
+        const value = Math.max(10, Math.min(200, Number(percent) || 100));
+        state.scalePercent = value;
+        player.scale = baseScale * value / 100;
+    }
+
+    function applyRotation(degrees) {
+        if (!player) return;
+        state.rotation = Number(degrees) || 0;
+        player.rot = state.rotation * Math.PI / 180;
+    }
+
+    function applyOpacity(value) {
+        if (!player) return;
+        state.opacity = Math.max(0, Math.min(1, Number(value)));
+        player.globalAlpha = state.opacity;
+    }
+
+    function base64Bytes(text) {
+        const raw = atob(String(text || ''));
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        return bytes;
+    }
+
+    async function unzipPsb(bytes) {
+        const files = await new Promise(function (resolve, reject) {
+            fflate.unzip(bytes, function (err, unzipped) {
+                if (err) reject(err); else resolve(unzipped);
+            });
+        });
+        const psb = Object.keys(files).find(function (name) { return name.toLowerCase().endsWith('.psb'); });
+        if (!psb) throw new Error('压缩包里没有 .psb');
+        return files[psb];
+    }
+
+    async function loadModel() {
+        const modelUrl = cfg.modelUrl || '';
+        let bytes;
+        if (cfg.modelBase64) {
+            bytes = base64Bytes(cfg.modelBase64);
+            if (cfg.modelIsZip) bytes = await unzipPsb(bytes);
+        } else {
+            if (!modelUrl) throw new Error('没有模型文件');
+            const response = await fetch(modelUrl);
+            if (!response.ok) throw new Error('模型下载失败：' + response.status);
+            bytes = new Uint8Array(await response.arrayBuffer());
+            if (modelUrl.toLowerCase().endsWith('.zip')) bytes = await unzipPsb(bytes);
+        }
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+        await player.promiseLoadDataFromURL(blobUrl);
+    }
+
+    function updateState() {
+        state.mainTimelines = player.mainTimelineLabels.slice();
+        state.diffTimelines = player.diffTimelineLabels.slice();
+        try {
+            state.variables = player.variableList.map(function (item) {
+                return { label: item.label, min: item.minValue, max: item.maxValue };
+            });
+        } catch (err) {
+            state.variables = [];
+        }
+        state.charaHeight = Number(player.charaHeight || 0);
+        state.bounds = player.charaBounds || null;
+        state.ready = true;
+        state.error = '';
+    }
+
+    function applyConfigText(text) {
+        try {
+            (0, eval)(text);
+            if (typeof getConfig === 'function') {
+                reactionConfig = getConfig();
+                state.configLoaded = true;
+            }
+        } catch (err) {
+            state.configError = 'config.js 解析失败：' + err;
+        }
+    }
+
+    function loadReactionConfig() {
+        if (cfg.configText) {
+            applyConfigText(cfg.configText);
+            return;
+        }
+        if (!cfg.configUrl) return;
+        fetch(cfg.configUrl)
+            .then(function (response) { return response.text(); })
+            .then(applyConfigText)
+            .catch(function (err) {
+                state.configError = 'config.js 加载失败：' + err;
+            });
+    }
+
+    async function init() {
+        try {
+            const dpr = window.devicePixelRatio || 1;
+            const ratio = Math.max(0.5, Math.min(3, Number(cfg.renderRatio || 1)));
+            canvas.width = Math.max(1, Math.floor(window.innerWidth * dpr * ratio));
+            canvas.height = Math.max(1, Math.floor(window.innerHeight * dpr * ratio));
+            EmotePlayer.createRenderCanvas(canvas.width, canvas.height);
+            player = new EmotePlayer(canvas);
+            await loadModel();
+            baseScale = fitScale();
+            player.coord = [Number((cfg.offset || [0, 0])[0]) * ratio, Number((cfg.offset || [0, 0])[1]) * ratio];
+            applyScale(cfg.sizePercent);
+            applyRotation(cfg.rotation);
+            applyOpacity(state.opacity);
+            updateState();
+            loadReactionConfig();
+            loader.classList.add('hidden');
+            canvas.classList.add('loaded');
+        } catch (err) {
+            state.error = String(err && err.message ? err.message : err);
+            loaderText.textContent = 'Emote 模型加载失败：' + state.error;
+            console.error('[emote]', err);
+        }
+    }
+
+    window.emoteSetScale = applyScale;
+    window.emoteSetRotation = applyRotation;
+    window.emoteSetOpacity = applyOpacity;
+    window.emoteUpdateActions = function (actions) {
+        state.actions = actions || {};
+    };
+    window.emoteSetEyeTracking = function (nx, ny) {
+        if (!player || !state.ready) return;
+        const rawX = Number(nx) * 500;
+        const rawY = Number(ny) * 500;
+        const len = Math.sqrt(rawX * rawX + rawY * rawY);
+        if (!isFinite(len)) return;
+        const angle = Math.atan2(rawY, rawX);
+        const c = Math.cos(angle);
+        const s = Math.sin(angle);
+        try {
+            player.setVariableDiff('eyetrack', 'face_eye_LR', len / 3 * c, 500, -1);
+            player.setVariableDiff('eyetrack', 'face_eye_UD', len / 3 * s, 500, -1);
+            if (len > 60) {
+                player.setVariableDiff('eyetrack', 'head_slant', len / 12 * c, 1000, -1);
+                player.setVariableDiff('eyetrack', 'head_LR', len / 6 * c, 1000, -1);
+                player.setVariableDiff('eyetrack', 'head_UD', len / 6 * s, 1000, -1);
+            }
+            if (len > 120) {
+                player.setVariableDiff('eyetrack', 'body_slant', len / 18 * c, 2000, -1);
+                player.setVariableDiff('eyetrack', 'body_LR', len / 9 * c, 2000, -1);
+                player.setVariableDiff('eyetrack', 'body_UD', len / 9 * s, 2000, -1);
+            }
+        } catch (err) {}
+    };
+    window.emoteHitTest = function (x, y) {
+        if (!player || !state.ready) return false;
+        try {
+            const rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return false;
+            const px = Math.floor((Number(x) - rect.left) * canvas.width / rect.width);
+            const py = Math.floor((Number(y) - rect.top) * canvas.height / rect.height);
+            if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return false;
+            const data = ctx2d.getImageData(px, py, 1, 1).data;
+            state.hit = data[3] > 8;
+            return state.hit;
+        } catch (err) {
+            return false;
+        }
+    };
+    window.emoteHandleClick = function (x, y) {
+        if (!player || !state.ready) return '';
+        const custom = matchCustomAction(Number(x), Number(y));
+        if (custom) return custom;
+        if (touching) return 'touching';
+        if (tryConfigReaction(Number(x), Number(y))) return 'config';
+        const labels = state.mainTimelines;
+        if (labels && labels.length) {
+            const label = labels[Math.floor(Math.random() * labels.length)];
+            player.mainTimelineLabel = label;
+            return label;
+        }
+        return '';
+    };
+    window.emotePlayTimeline = function (label, slot) {
+        if (!player || !state.ready) return false;
+        slot = Number(slot || 0);
+        try {
+            if (slot <= 0) {
+                player.mainTimelineLabel = String(label || '');
+            } else {
+                player['diffTimelineSlot' + slot] = String(label || '');
+            }
+            return true;
+        } catch (err) {
+            return false;
+        }
+    };
+    window.emoteSetVariable = function (name, value, duration) {
+        if (!player || !state.ready) return false;
+        try {
+            player.setVariable(String(name), Number(value || 0), Number(duration || 0));
+            return true;
+        } catch (err) {
+            return false;
+        }
+    };
+    window.emoteSetVariableDiff = function (module, name, value, duration) {
+        if (!player || !state.ready) return false;
+        try {
+            player.setVariableDiff(String(module), String(name), Number(value || 0), Number(duration || 0));
+            return true;
+        } catch (err) {
+            return false;
+        }
+    };
+    window.emoteSetSpeed = function (speed) {
+        if (!player) return;
+        player.speed = Math.max(0, Number(speed) || 0);
+    };
+    window.emoteStateJson = function () {
+        return JSON.stringify(state);
+    };
+
+    window.addEventListener('load', init);
+})();
+</script>
+</body>
+</html>

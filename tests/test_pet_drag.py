@@ -143,6 +143,7 @@ def make_pet(qapp, shader_module):
 
 class FakePhysics:
     dragging = False
+    enabled = False
 
     def __init__(self):
         self.x = 0.0
@@ -233,6 +234,17 @@ def test_move_without_button_held_never_moves_the_pet(make_pet):
         pet.mouseMoveEvent(move(offset(start, (step + 1) * 25, (step + 1) * 15)))
 
     assert (pet.x(), pet.y()) == origin, "没按任何键时桌宠不能漂"
+
+
+def test_disabled_physics_does_not_snap_window_back(make_pet):
+    pet = make_pet()
+    origin = origin_of(pet)
+    pet.move(origin[0] + 40, origin[1] + 30)
+    moved = origin_of(pet)
+
+    pet.update_physics()
+
+    assert origin_of(pet) == moved, "物理关闭时不能把窗口拉回初始位置"
 
 
 def test_reset_drag_clears_every_leaked_field(make_pet):

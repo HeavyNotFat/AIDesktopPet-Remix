@@ -1,5 +1,4 @@
 import sys
-import threading
 import traceback
 
 from stlibs.sdk import server as sdk_server
@@ -13,13 +12,19 @@ server = sdk_server.SDKServer()
 server.start()
 
 import stlibs
+from stlibs import character
 # 主题必须在 stlibs.graphics / shader 之前绑定，它们在导入期就要用
 stlibs.SharingData.theme = stlibs.load_theme(stlibs.Config.theme)
 # 界面/插件推 SDK 事件用
 stlibs.SharingData.sdk_server = server
-from stlibs.mproc import onlinechat
-if stlibs.Config.model_live2d.strip(): from shader import live2d as shader
-else: from shader import static as shader
+
+_kind = character.kind()
+if _kind == character.EMOTE:
+    from shader import emote as shader
+elif _kind == character.LIVE2D:
+    from shader import live2d as shader
+else:
+    from shader import static as shader
 
 from PySide6.QtCore import Qt, QTimer, QPoint
 
@@ -34,8 +39,11 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 class DesktopPetRemix(shader.PublicShader):
     def __init__(self):
-        if stlibs.Config.static_model.strip(): super().__init__(stlibs.SharingData.static_models[stlibs.Config.static_model])
-        else: super().__init__()
+        if _kind == character.STATIC and stlibs.Config.static_model.strip():
+            config = stlibs.SharingData.static_models.get(stlibs.Config.static_model) or {}
+            super().__init__(config)
+        else:
+            super().__init__()
         self.physics = stlibs.Physics()
         self.physics.enabled = False
 
@@ -60,10 +68,8 @@ class DesktopPetRemix(shader.PublicShader):
         self._drag_velocity_x = 0.0
         self._drag_velocity_y = 0.0
 
-        if stlibs.Config.static_model.strip(): self.play("idle")
-
     def update_physics(self):
-        if self._dragging:
+        if self._dragging or not self.physics.enabled:
             return
 
         dt = 1.0 / 60.0
@@ -142,8 +148,8 @@ class DesktopPetRemix(shader.PublicShader):
 
 
 sys.excepthook = handle_exception
-proc_onlinechat = threading.Thread(target=onlinechat.main)
-proc_onlinechat.start()
+if stlibs.ai_enabled():
+    stlibs.start_onlinechat()
 stlibs.SharingData.theme.IconList.init()
 
 desktop = DesktopPetRemix()

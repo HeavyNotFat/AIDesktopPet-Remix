@@ -1,11 +1,5 @@
 {
-   "models": {
-      "DeepseekV4F": {
-         "name": "deepseek-flash",
-         "apikey": "sk-ebedd615381d46b7b2ceacf8df819547",
-         "baseurl": "https://api.deepseek.com"
-      }
-   },
+   "models": {},
    "memory": {
       "shortterm": true,
       "longterm": true
@@ -18,7 +12,7 @@
       "engine": "chroma",
       "collection": "VTuber",
       "embedding": "bge-m3:latest",
-      "model": "huihui_ai/gemma-4-abliterated:e4b",
+      "model": "",
       "top_k": 3,
       "chunks": 210,
       "overlap": 30
@@ -69,29 +63,19 @@
       "settings": {
          "cultivation_system": {
             "click_coin": 5
-         },
-         "ugc_hub": {
-            "download_dir": "",
-            "server_url": "https://adp.cqjszx.cn",
-            "timeout_seconds": null,
-            "upload_path": "",
-            "upload_name": "",
-            "browse_kind": "live2d",
-            "upload_license": "CC-BY-SA",
-            "upload_kind": "live2d",
-            "sort": "hot",
-            "username": "",
-            "password": "",
-            "keyword": ""
          }
       },
       "timeout": 3.0
    },
    "name": "Hiyori桃濑日和",
-   "model_live2d": "Hiyori桃濑日和",
+   "model_live2d": "",
    "static_model": "",
    "opacity": 1,
-   "size": 110,
+   "size": 10,
    "rotate": 0,
-   "theme": "hacker"
+   "theme": "breeze",
+   "model_emote": "chocola-maid",
+   "ai_enabled": false,
+   "emote_render_ratio": 2.0,
+   "emote_tracking_interval": 50
 }

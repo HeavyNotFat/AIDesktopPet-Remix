@@ -38,6 +38,17 @@ def _bigrams(text):
     return {compact[i : i + 2] for i in range(len(compact) - 1)}
 
 
+def enabled() -> bool:
+    from .. import Config
+
+    return bool(getattr(Config, "ai_enabled", False))
+
+
+def ensure_enabled():
+    if not enabled():
+        raise RuntimeError("AI 功能总开关已关闭")
+
+
 def summarize_turns(turns, max_chars=800):
     lines = []
     for turn in turns:
@@ -305,6 +316,8 @@ def _coop_config() -> dict:
 
 def build_llm(model_key, system_prompt="", coop=False):
     from .. import Config
+
+    ensure_enabled()
     from . import cloud, local
 
     parameters = (Config.models or {}).get(model_key)
@@ -412,6 +425,9 @@ class MultiAgentCoop:
 
     def run(self, query, lead_llm, base_messages=None):
         """产出协作过程：先若干 dict 事件，最后把定稿当文本片段吐出来。"""
+        if not enabled():
+            yield {"type": "coop", "stage": "empty", "detail": "AI 功能总开关已关闭"}
+            return
         base_messages = list(base_messages or [])
         agents = self.agents
 

@@ -27,7 +27,6 @@ PAGE_PLUGIN = '''
 
 # 仓库里那个真插件（养成系统），用来跑端到端
 PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "cultivation_system"
-UGC_PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ugc_hub"
 
 
 def _has_node() -> bool:
@@ -466,38 +465,3 @@ def test_nav_order_survives_a_rebuild(window, settings_module, manager):
 
     after = [title for title in nav_titles(category_of(window, settings_module))]
     assert after == before, "插件页重建后导航顺序不该变"
-
-
-def test_real_ugc_hub_page_mounts_in_the_window(window, settings_module, manager, qapp):
-    """真插件端到端：ugc_hub 只占导航栏一条，页内用分区栅格 + 状态映射排布。"""
-    import shutil
-
-    from PySide6.QtWidgets import QGridLayout
-
-    source = UGC_PLUGIN_DIR
-    shutil.copytree(source, Path(manager.directory) / "ugc_hub",
-                    ignore=shutil.ignore_patterns(".data", "*.log"))
-    manager.load_all()
-
-    assert [page.key for page in manager.pages.pages("ugc_hub")] == ["ugc"], "一个插件只占一条导航"
-    spec = manager.pages.find("ugc_hub", "ugc")
-    assert spec is not None and spec.title == "UGC 素材站"
-    widget = window.plugin_page(spec.id)
-    assert widget is not None
-    titles = nav_titles(category_of(window, settings_module))
-    assert any(title == "UGC 素材站" for title in titles), titles
-    assert sum(1 for title in titles if "素材站" in title) == 1, "导航栏里不该出现多条素材站"
-
-    grids = widget.findChildren(QGridLayout)
-    assert any(grid.columnCount() == 2 for grid in grids), "页内要有两列栅格"
-    assert any(grid.columnCount() == 3 for grid in grids), "查找/维护分区是三列"
-    labels = [label.text() for label in widget.findChildren(QtWidgets.QLabel)]
-    assert any("https://adp.cqjszx.cn" in text for text in labels), "状态映射要显示出默认地址"
-    assert {"server_url", "download_dir", "threads", "pick", "upload_path"} <= set(widget.controls)
-    assert {"ping", "search", "download", "upload", "clear_status"} <= set(widget.controls)
-
-    widget.controls["status"].click()
-    qapp.processEvents()
-
-    manager.unload("ugc_hub")
-    assert window.plugin_page(spec.id) is None

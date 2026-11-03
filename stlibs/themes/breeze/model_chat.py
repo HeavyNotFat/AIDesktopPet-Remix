@@ -2,7 +2,6 @@
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ... import SharingData, derfer
-from ...ai import cloud, local
 from ..base import CombinedMeta, ModelChatABS
 from .feedback import BreezeNotify
 
@@ -20,19 +19,20 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         parent=None,
     ):
         super().__init__(parent)
+        from ...ai import ensure_enabled
+
+        ensure_enabled()
         self.is_local = is_local
-        if is_local:
-            if model in cache_llm_class.keys():
-                self.ai_llm = cache_llm_class[model]
-            else:
-                self.ai_llm = local.LLM(model)
-                cache_llm_class[model] = self.ai_llm
+        if model in cache_llm_class.keys():
+            self.ai_llm = cache_llm_class[model]
         else:
-            if model in cache_llm_class.keys():
-                self.ai_llm = cache_llm_class[model]
+            from ...ai import cloud, local
+
+            if is_local:
+                self.ai_llm = local.LLM(model)
             else:
                 self.ai_llm = cloud.LLM(model, api_key, base_url)
-                cache_llm_class[model] = self.ai_llm
+            cache_llm_class[model] = self.ai_llm
 
         # 记忆面板可能还没建过，取不到回调就跳过
         memory_callback = SharingData.add_memory_to_ui.get(model)
@@ -64,7 +64,7 @@ class ModelChat(QWidget, ModelChatABS, metaclass=CombinedMeta):
         self.current_assistant_bubble = None
 
     @staticmethod
-    def return_llm_class(model) -> local.LLM | cloud.LLM:
+    def return_llm_class(model) -> object:
         return cache_llm_class[model]
 
     def chat_finished(self, all_message):

@@ -5,8 +5,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget
 
-from ..ai import local, cloud
-
 _QWidgetMeta = type(QWidget)
 
 
@@ -88,7 +86,7 @@ class ModelChatABS(metaclass=ABCMeta):
     """模型聊天的构建页面"""
     @staticmethod
     @abstractmethod
-    def return_llm_class(model) -> local.LLM | cloud.LLM: pass
+    def return_llm_class(model) -> object: pass
 
 
 class MainWindowABS(metaclass=ABCMeta):

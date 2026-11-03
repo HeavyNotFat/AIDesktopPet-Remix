@@ -1,6 +1,6 @@
 from typing import Protocol, Callable, Literal
 from types import ModuleType
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 import subprocess
 import inspect
 import importlib
@@ -13,6 +13,7 @@ import weakref
 CONFIG_PATH = "./resources/configure.json"
 ANIMATION_LIVE2D_PATH = "./resources/animation/live2d.json"
 ANIMATION_STATIC_PATH = "./resources/animation/static.json"
+ANIMATION_EMOTE_PATH = "./resources/animation/emote.json"
 EMBEDDING = ['bge-m3']
 
 
@@ -198,6 +199,10 @@ class _BaseModelConfig:
     rotate: int
     # 主题包名
     theme: str = "hacker"
+    model_emote: str = ""
+    ai_enabled: bool = False
+    emote_render_ratio: float = 2.0
+    emote_tracking_interval: int = 50
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
@@ -210,17 +215,53 @@ class ConfigLoader:
             data = json.load(f)
             f.close()
 
-        valid_keys = {field.name for field in fields(_BaseModelConfig)}
-        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        from . import config_profiles, secrets
+
+        data['models'] = secrets.merge_models(data.get('models'))
+        kind = config_profiles.kind_from(data)
+        profile = config_profiles.load(kind)
+        if profile:
+            for name in ('opacity', 'size', 'rotate'):
+                if name in profile:
+                    data[name] = profile[name]
+            data['size'] = config_profiles.clamp_size(data.get('size'))
+        else:
+            base = config_profiles.live2d_size(data.get('size', 110))
+            data['size'] = config_profiles.default_size(kind, base)
+        valid = {field.name: field for field in fields(_BaseModelConfig)}
+        filtered = {k: v for k, v in data.items() if k in valid}
+        for name, field in valid.items():
+            if name not in filtered and field.default is not MISSING:
+                filtered[name] = field.default
 
         return _BaseModelConfig(**filtered)
 
     @staticmethod
     def save_config(config: _BaseModelConfig | None = None) -> None:
         if config is None: config = Config
-        config = {field.name: getattr(config, field.name) for field in fields(config)}
+        from . import config_profiles, secrets
+
+        data = {field.name: getattr(config, field.name) for field in fields(config)}
+        kind = config_profiles.kind_from(data)
+        model_field = {'live2d': 'model_live2d', 'static': 'static_model', 'emote': 'model_emote'}[kind]
+        config_profiles.save(
+            kind,
+            data.get(model_field, ''),
+            data.get('opacity', 1),
+            config_profiles.clamp_size(data.get('size', 100)),
+            data.get('rotate', 0),
+        )
+        models = data.get('models') or {}
+        keys = {
+            alias: parameters.get('apikey') or parameters.get('api_key')
+            for alias, parameters in models.items()
+            if isinstance(parameters, dict)
+        }
+        if not secrets.sync_model_keys(keys):
+            print('[secrets] 密钥未能写入 .env，本次不写回 configure.json')
+        data['models'] = secrets.strip_models(models)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=3)
+            json.dump(data, f, ensure_ascii=False, indent=3)
 
 
 class _ThemeTypingProtocol(Protocol):
@@ -265,9 +306,12 @@ class SharingData:
     # 活着的 LLM 实例（弱引用：回收掉的实例不留着）
     llm_instances = weakref.WeakValueDictionary()
 
+    onlinechat_service = None
+    emote_state = {}
+
     static_models: dict
 
-    coordinates: list[int, int, int, int, Literal["live2d", "static", ""]] = [0, 0, 0, 0, ""]  # X, Y, DX, DY
+    coordinates: list[int, int, int, int, Literal["live2d", "static", "emote", ""]] = [0, 0, 0, 0, ""]  # X, Y, DX, DY
 
     model_json_path: str
 
@@ -328,6 +372,8 @@ def notify(text: str, level: str = "info", timeout: int = 2600):
 
 
 def refresh_models(select: str | None = None) -> None:
+    if not ai_enabled():
+        return
     window = SharingData.chat_window
     if window is not None and hasattr(window, "reload_models"):
         window.reload_models(select)
@@ -341,6 +387,8 @@ def refresh_models(select: str | None = None) -> None:
 
 
 def refresh_coop() -> None:
+    if not ai_enabled():
+        return
     from .ai import MultiAgentCoop
 
     for llm in list(SharingData.llm_instances.values()):
@@ -368,6 +416,8 @@ def plugin_manager():
 
 def plugin_prompts() -> list:
     """插件要求追加的系统提示词。"""
+    if not ai_enabled():
+        return []
     try:
         return plugin_manager().system_prompts()
     except Exception:  # 插件系统坏了不能影响聊天
@@ -394,6 +444,8 @@ def run_plugin_command(text: str):
 
 
 def get_model_lists() -> list:
+    if not ai_enabled():
+        return []
     try:
         ollama_path = shutil.which("ollama")
         if ollama_path is None or (not ollama_path.strip()): ollama_path = "ollama"
@@ -435,10 +487,119 @@ def get_translation(msgid):
     return t.gettext(msgid)
 
 
+def ai_enabled() -> bool:
+    return bool(getattr(Config, "ai_enabled", False))
+
+
+def start_onlinechat():
+    if not ai_enabled():
+        return None
+    service = getattr(SharingData, "onlinechat_service", None)
+    if service is None:
+        from .mproc.onlinechat.service import OnlineChatService
+
+        service = OnlineChatService()
+        SharingData.onlinechat_service = service
+    service.start()
+    if getattr(service, "error", ""):
+        notify(f"网页聊天启动失败：{service.error}", "error", 4000)
+    return service
+
+
+def stop_onlinechat():
+    service = getattr(SharingData, "onlinechat_service", None)
+    if service is not None:
+        service.stop()
+    return service
+
+
+def set_ai_enabled(value: bool) -> bool:
+    """总开关：落盘并立即停/起网页聊天与聊天入口。"""
+    Config.ai_enabled = bool(value)
+    ConfigLoader.save_config()
+
+    if Config.ai_enabled:
+        start_onlinechat()
+    else:
+        stop_onlinechat()
+        _close_chat_window()
+        _close_llm_instances()
+        try:
+            if Animation.ai_control:
+                Animation.ai_control = False
+                AnimationLoader.save_animation()
+        except Exception:  # noqa: BLE001 - 动画配置坏了不影响开关
+            pass
+
+    emit_sdk_event("ai_state_changed", {"enabled": Config.ai_enabled})
+    return Config.ai_enabled
+
+
+def _close_chat_window():
+    window = getattr(SharingData, "chat_window", None)
+    SharingData.chat_window = None
+    if window is None:
+        return
+    try:
+        window.hide()
+        window.deleteLater()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _close_llm_instances():
+    for llm in list(SharingData.llm_instances.values()):
+        for name in ("close", "shutdown"):
+            method = getattr(llm, name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception:  # noqa: BLE001
+                    pass
+                break
+    try:
+        SharingData.llm_instances.clear()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def reload_static_models() -> dict:
+    global static_models
+
+    with open("./resources/static.json", "r", encoding="utf-8") as handle:
+        static_models = json.load(handle)
+    SharingData.static_models = static_models
+    return static_models
+
+
+def reload_animation_config(path: str | None = None):
+    global Animation
+
+    Animation = AnimationLoader.load_animation(path or Animation.path)
+    return Animation
+
+
+def play_character_animation(name: str, loop: bool = True) -> bool:
+    ui = getattr(SharingData, "mainloop_ui", None)
+    if ui is None:
+        return False
+    try:
+        if getattr(Config, "model_live2d", "").strip() or getattr(Config, "model_emote", "").strip():
+            ui.play(name, type_="mot")
+        else:
+            ui.play(name, loop=loop)
+        return True
+    except Exception:  # noqa: BLE001 - 没有对应动画时交给调用方提示
+        return False
+
+
 with open("./resources/static.json", "r", encoding="utf-8") as f:
     static_models = json.load(f)
     f.close()
 SharingData.static_models = static_models
 Config = ConfigLoader.load_config()
-if Config.model_live2d.strip(): Animation = AnimationLoader.load_animation(ANIMATION_LIVE2D_PATH)
-else: Animation = AnimationLoader.load_animation(ANIMATION_STATIC_PATH)
+from . import character as _character
+
+Animation = AnimationLoader.load_animation(_character.animation_path(_character.kind()))
+if not Config.ai_enabled:
+    Animation.ai_control = False

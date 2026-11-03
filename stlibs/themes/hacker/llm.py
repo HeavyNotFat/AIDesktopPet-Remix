@@ -1,7 +1,6 @@
 import json
 import os
 
-from ...ai.rag.engine import SUPPORTED_ENGINES
 from ... import Config, ConfigLoader, SharingData
 from ... import get_model_lists, notify, refresh_coop, refresh_models
 
@@ -172,7 +171,7 @@ class BasicWidgetScroll(QWidget):
         ConfigLoader.save_config()
         self.reload_existing()
         refresh_models()
-        notify(f"已删除 API 模型「{name}」，密钥已从配置里移除", "success", 3500)
+        notify(f"已删除 API 模型「{name}」，密钥已从 .env 里移除", "success", 3500)
 
 
 class Basic(QWidget):
@@ -348,6 +347,8 @@ class RAGWidgetScroll(QWidget):
         layout.addWidget(knowledge_base_type_card)
         layout.addStretch()
         # RAG 引擎
+        from ...ai.rag.engine import SUPPORTED_ENGINES
+
         rag_engine = HackerComboBox(parent=self)
         rag_engine.setFixedWidth(200)
         rag_engine.addItems(SUPPORTED_ENGINES)

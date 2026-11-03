@@ -1,0 +1,17 @@
+Emote runtime
+=============
+
+emoteplayer.js, FreeMoteDriver.js and fflate.js are third-party files.
+
+FreeMote SDK (FreeMoteDriver.js, emoteplayer.js)
+  Project AZUSA - https://github.com/Project-AZUSA/FreeMote-SDK
+  Source code: LGPLv3
+  Binaries: CC BY-NC-SA 4.0
+  Copyright (c) Ulysses / Project AZUSA
+
+fflate
+  https://github.com/101arrowz/fflate
+  MIT License
+  Copyright (c) Arjun Barrett
+
+These files are loaded only for Emote (.psb / .psb.zip) models.

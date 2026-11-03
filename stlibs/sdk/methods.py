@@ -4,12 +4,22 @@ import time
 
 from .base import SDKMethodError
 
+
+def _require_ai():
+    from ..ai import ensure_enabled
+
+    try:
+        ensure_enabled()
+    except RuntimeError as exc:
+        raise SDKMethodError(str(exc)) from exc
+
+
 # 方法名 -> 说明（``list_methods`` 用它生成文档）
 METHOD_HELP: dict[str, str] = {
     "ping": "探活：返回 pong 与服务器时间",
     "version": "协议/程序版本",
     "list_methods": "列出所有可调方法与说明",
-    "get_status": "宿主概况：主题、模型、插件数、窗口状态、运行时长",
+    "get_status": "宿主概况：主题、模型、AI 开关、插件数、窗口状态、运行时长",
     "emit_event": "让服务器给订阅者推一条自定义事件（方便调试）",
 
     "notify": "弹一条界面提示：notify(text, level='info', timeout=2600)",
@@ -17,6 +27,10 @@ METHOD_HELP: dict[str, str] = {
     "play_live2d_expression": "切表情：play_live2d_expression(name)",
     "get_live2d_motion": "列出可用动作",
     "get_live2d_expression": "列出可用表情",
+    "play_animation": "播动画：play_animation(name, slot=0)",
+    "get_animations": "列出当前形象的可用动画",
+    "emote_state": "读 Emote 模型状态（时间轴/变量/就绪情况）",
+    "set_emote_variable": "改 Emote 变量：set_emote_variable(name, value, duration=0, module='')",
     "get_appearance": "读当前外观：尺寸/透明度/旋转",
     "set_appearance": "改外观：set_appearance(size=?, opacity=?, rotate=?)",
 
@@ -62,7 +76,7 @@ class HostMethods:
         return [{"name": name, "help": text} for name, text in sorted(METHOD_HELP.items())]
 
     def get_status(self):
-        from .. import Config, SharingData
+        from .. import Config, SharingData, character
 
         plugins = []
         try:
@@ -77,8 +91,11 @@ class HostMethods:
             "uptime": round(time.time() - self.started_at, 3),
             "theme": Config.theme,
             "assistant": Config.name,
+            "ai_enabled": bool(getattr(Config, "ai_enabled", False)),
+            "character": character.kind(),
             "live2d_model": Config.model_live2d,
             "static_model": Config.static_model,
+            "emote_model": getattr(Config, "model_emote", ""),
             "chat_open": _visible(SharingData.chat_window),
             "settings_open": _visible(SharingData.setting_window),
             "plugins": {
@@ -126,6 +143,41 @@ class HostMethods:
         return list(getattr(SharingData, "expressions", None) or []) or "No Expression Data"
 
     @staticmethod
+    def play_animation(name, slot=0):
+        from .. import SharingData
+
+        ui = getattr(SharingData, "mainloop_ui", None)
+        if ui is None:
+            raise SDKMethodError("桌宠还没创建")
+        if hasattr(ui, "play_emote_timeline"):
+            ui.play_emote_timeline([str(name), int(slot or 0)])
+        else:
+            ui.play(str(name))
+        return {"played": str(name), "slot": int(slot or 0)}
+
+    @staticmethod
+    def get_animations():
+        from .. import SharingData
+
+        return list(getattr(SharingData, "motions", None) or []) or "No Animation Data"
+
+    @staticmethod
+    def emote_state():
+        from .. import SharingData
+
+        return dict(getattr(SharingData, "emote_state", None) or {})
+
+    @staticmethod
+    def set_emote_variable(name, value, duration=0, module=""):
+        from .. import SharingData
+
+        ui = getattr(SharingData, "mainloop_ui", None)
+        if ui is None or not hasattr(ui, "set_emote_variable"):
+            raise SDKMethodError("当前形象不是 Emote")
+        ui.set_emote_variable(str(name), value, duration=duration, module=module)
+        return {"name": str(name), "value": value, "module": str(module or "")}
+
+    @staticmethod
     def get_appearance():
         from .. import Config
 
@@ -155,6 +207,7 @@ class HostMethods:
     def send_to_chat(text, role="assistant"):
         from .. import plugin_manager
 
+        _require_ai()
         plugin_manager().send_to_chat(str(text), str(role or "assistant"))
         return {"sent": str(text), "role": str(role or "assistant")}
 
@@ -162,6 +215,7 @@ class HostMethods:
     def get_chat_history():
         from .. import SharingData
 
+        _require_ai()
         chat = getattr(SharingData.chat_window, "chat", None)
         if chat is None:
             return []
@@ -181,6 +235,7 @@ class HostMethods:
     def clear_chat():
         from .. import SharingData
 
+        _require_ai()
         chat = getattr(SharingData.chat_window, "chat", None)
         if chat is None:
             raise SDKMethodError("聊天窗还没打开过")
@@ -198,6 +253,7 @@ class HostMethods:
         from .. import get_model_lists
         from ..ai import build_llm, chat_prompt
 
+        _require_ai()
         question = str(question or "").strip()
         if not question:
             raise SDKMethodError("问题不能为空")
@@ -222,23 +278,29 @@ class HostMethods:
 
     @staticmethod
     def get_config(key=None):
-        from .. import Config
+        from .. import Config, secrets
 
         fields = (
-            "name", "model_live2d", "static_model", "opacity", "size", "rotate", "theme",
+            "name", "model_live2d", "static_model", "model_emote", "ai_enabled",
+            "emote_render_ratio", "emote_tracking_interval", "opacity", "size", "rotate", "theme",
             "models", "memory", "rag", "mcp", "coop", "skills", "plugins",
         )
         if key:
             if key not in fields:
                 raise SDKMethodError(f"没有这个配置项：{key}（可选 {', '.join(fields)}）")
-            return {key: getattr(Config, key, None)}
-        return {name: getattr(Config, name, None) for name in fields}
+            value = secrets.strip_models(Config.models) if key == "models" else getattr(Config, key, None)
+            return {key: value}
+        return {
+            name: (secrets.strip_models(Config.models) if name == "models" else getattr(Config, name, None))
+            for name in fields
+        }
 
     @staticmethod
     def set_config(key, value):
         from .. import Config, ConfigLoader
 
-        allowed = {"name", "model_live2d", "static_model", "opacity", "size", "rotate", "theme",
+        allowed = {"name", "model_live2d", "static_model", "model_emote",
+                   "emote_render_ratio", "emote_tracking_interval", "opacity", "size", "rotate", "theme",
                    "memory", "rag", "mcp", "coop", "skills", "plugins"}
         if key not in allowed:
             raise SDKMethodError(f"这个配置项不允许外部改：{key}（可选 {', '.join(sorted(allowed))}）")
@@ -273,6 +335,7 @@ class HostMethods:
     def memory_stats():
         from .. import SharingData
 
+        _require_ai()
         stats = {"instances": len(SharingData.llm_instances), "long_term": None}
         for llm in list(SharingData.llm_instances.values()):
             memory = getattr(llm, "lt_memory", None)
@@ -285,6 +348,7 @@ class HostMethods:
     def memory_recall(query, top_k=3):
         from .. import SharingData
 
+        _require_ai()
         for llm in list(SharingData.llm_instances.values()):
             memory = getattr(llm, "lt_memory", None)
             if memory is not None:
@@ -295,6 +359,7 @@ class HostMethods:
     def memory_clear(scope=None):
         from .. import SharingData
 
+        _require_ai()
         removed = 0
         for llm in list(SharingData.llm_instances.values()):
             memory = getattr(llm, "lt_memory", None)

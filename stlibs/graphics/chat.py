@@ -1,4 +1,4 @@
-from .. import SharingData, Config
+from .. import Config, SharingData, ai_enabled
 from .. import analyze_signature, get_model_lists, get_translation
 from .theme_label import theme_label
 
@@ -11,6 +11,8 @@ class Chat(SharingData.theme.Window):
         self.init_model()
 
     def init_model(self):
+        if not ai_enabled():
+            return
         if hasattr(self, "create_category"): self.create_category(get_translation("graphics.chat.local"))
         for model in get_model_lists():
             self.add_model(model.split("/")[-1], model, True)

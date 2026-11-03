@@ -13,7 +13,9 @@ class LLM(QObject):
 
     def __init__(self, model: str, api_key: str, base_url: str, system_prompt: str = "", coop: bool | None = None):
         super().__init__()
-        from . import LTMemory, Memory, MultiAgentCoop
+        from . import LTMemory, Memory, MultiAgentCoop, ensure_enabled
+
+        ensure_enabled()
 
         self.model = model
         self.memory = Memory()

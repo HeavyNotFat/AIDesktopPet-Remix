@@ -66,6 +66,11 @@ def chat_module(monkeypatch):
     return module
 
 
+@pytest.fixture(autouse=True)
+def _ai_on(monkeypatch):
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
+
+
 def test_chat_lists_local_and_api_models(chat_module):
     chat = chat_module.Chat()
 

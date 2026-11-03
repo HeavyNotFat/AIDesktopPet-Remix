@@ -19,7 +19,8 @@ with SDKClient("127.0.0.1", 9000) as client:
     print(client.ping())  # {'pong': True, 'time': ...}
     client.notify("来自外部脚本", "success")
     client.play_live2d_motion("摸摸头", 0)
-    print(client.get_status())  # 主题 / 插件数 / 窗口状态 / 运行时长
+    print(client.get_status())  # 主题 / 形象 / AI 开关 / 插件数 / 窗口状态 / 运行时长
+    client.play_animation("摸摸头", 0)         # 跨 Live2D / Emote / 静态的通用播放入口
     print(client.ask("用一句话介绍你自己"))  # 真跑一次模型（慢，客户端超时默认放开到 180s）
 
     # 事件：桌宠被点、聊天结束……
@@ -75,10 +76,14 @@ with SDKClient("127.0.0.1", 9000) as client:
     "theme": "hacker",
     "assistant": "Hiyori桃濑日和",
     "live2d_model": "Hiyori桃濑日和",
-    "chat_open": true,
+    "static_model": "",
+    "emote_model": "",
+    "ai_enabled": false,
+    "character": "live2d",
+    "chat_open": false,
     "settings_open": false,
     "plugins": {"total": 3, "loaded": 3},
-    "methods": 24
+    "methods": 28
 }
 ```
 
@@ -87,7 +92,9 @@ with SDKClient("127.0.0.1", 9000) as client:
 | `uptime` | Float | 服务已运行秒数 |
 | `theme` | String | 当前主题包名 |
 | `assistant` | String | 桌宠名字 |
-| `live2d_model` / `static_model` | String | 当前 Live2D / 静态形象 |
+| `live2d_model` / `static_model` / `emote_model` | String | 当前 Live2D / 静态 / Emote 形象 |
+| `character` | String | `live2d` / `static` / `emote` |
+| `ai_enabled` | Boolean | AI 总开关 |
 | `chat_open` / `settings_open` | Boolean | 聊天窗 / 设置窗是否可见 |
 | `plugins.total` / `plugins.loaded` | Integer | 插件总数 / 已加载数 |
 | `methods` | Integer | 可调方法数量 |
@@ -142,6 +149,9 @@ with SDKClient("127.0.0.1", 9000) as client:
 | `index` | Integer | 实际使用的下标（仅动作） |
 
 > 列表方法 `get_live2d_motion` / `get_live2d_expression` 无参数，返回名字数组；
+> `play_animation(name, slot=0)` / `get_animations()` 是跨形象的通用入口；
+> `emote_state()` 读 Emote 时间轴/变量状态，`set_emote_variable(name, value, duration=0, module='')` 改变量。
+> AI 总开关关闭时，`ask` / `send_to_chat` / 聊天记录 / 记忆方法会直接报 `method_error`。
 > 没有数据时返回字符串 `"No Motion Data"` / `"No Expression Data"`。
 
 ### 5. 外观

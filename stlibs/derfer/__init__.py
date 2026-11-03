@@ -1,9 +1,6 @@
 import base64
 import io
 
-from ..ai import local
-from ..ai import cloud
-
 import soundfile
 import sounddevice
 from PySide6.QtCore import QThread, Signal
@@ -26,7 +23,7 @@ class LLMAICallback(QThread):
     text_chunk = Signal(str)
     finished = Signal(str)
 
-    def __init__(self, llm_property: local.LLM | cloud.LLM, query: str, parent, skill=None, attachments=None):
+    def __init__(self, llm_property, query: str, parent, skill=None, attachments=None):
         super().__init__(parent)
         self.llm = llm_property
         self.query = query

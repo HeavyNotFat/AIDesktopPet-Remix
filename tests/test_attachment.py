@@ -278,6 +278,7 @@ def test_local_llm_receives_attachments(monkeypatch):
     pytest.importorskip("PySide6.QtCore")
     import stlibs
 
+    monkeypatch.setattr(stlibs.Config, "ai_enabled", True, raising=False)
     monkeypatch.setattr(stlibs.Config, "mcp", {"enable": False, "mcp": []}, raising=False)
     monkeypatch.setattr(stlibs.Config, "rag", {"enable": False}, raising=False)
     monkeypatch.setattr(stlibs.Config, "memory", {"shortterm": True, "longterm": False}, raising=False)

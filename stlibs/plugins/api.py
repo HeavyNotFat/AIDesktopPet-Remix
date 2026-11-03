@@ -204,6 +204,14 @@ class PluginAPI:
     def play_expression(self, name):
         return self._manager.play_expression(str(name))
 
+    def play_animation(self, name, slot=0):
+        """UI Hook：播当前形象的动画 / Emote 时间轴。"""
+        return self._manager.play_animation(str(name), int(slot))
+
+    def set_emote_variable(self, name, value, duration=0, module=""):
+        """UI Hook：改 Emote 变量（module 为空时是普通变量）。"""
+        return self._manager.set_emote_variable(str(name), value, int(duration), str(module))
+
     def motions(self) -> list:
         return self._manager.motions()
 
