@@ -168,7 +168,7 @@ def plugin_pixmap(manifest, size: int = DEFAULT_ICON_SIZE):
 
 
 def clear_cache():
-    """测试用：换掉插件目录后清一下，免得拿到上一份插件的图。"""
+    """换掉插件目录后清缓存，免得拿到上一份插件的图。"""
     _cache.clear()
 
 

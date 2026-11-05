@@ -203,7 +203,7 @@ key 不放这里，放到 `.env/secrets.json`（键名与上面的别名一致�
 | 做完整玩法（带界面 + 数值 + 存档）       | [养成系统](plugins/cultivation_system/README.md)：`cultivation_model.py`（纯逻辑）+ `cultivation_window.py`（界面）+ `main.py`（hook 接线） |
 | 写个外部程序遥控桌宠                 | [SDK 接口说明](stlibs/sdk/README.md)：28 个方法 + 事件订阅，一行一个 JSON 的 UDP 报文                                                         |
 | 接自己的聊天前端                   | [HTTP 接口说明](.github/docs/API.md)：8 个接口 + SSE 事件格式                                                                                 |
-| 换一套界面主题                    | [代码结构 §4.5](.github/docs/STRUCTURE.md#45-界面层)：主题包 = 目录 + 契约映射；照 `hacker`（深色）或 `breeze`（浅色）写，`tests/test_breeze_theme.py` 是契约清单 |
+| 换一套界面主题                    | [代码结构 §4.5](.github/docs/STRUCTURE.md#45-界面层)：主题包 = 目录 + 契约映射；照 `hacker`（深色）或 `breeze`（浅色）写，三处契约要一起对齐 |
 | 改 AI 行为（提示词 / RAG / 工具）    | `resources/prompts.json`（提示词）、`stlibs/ai/`（后端与检索）、`mcp_servers/`（工具服务）                                                    |
 
 ---
@@ -226,16 +226,9 @@ key 不放这里，放到 `.env/secrets.json`（键名与上面的别名一致�
 | [plugins/cultivation_system/README.md](plugins/cultivation_system/README.md) | **养成系统**：玩法、hook 接线、与旧版差异、数值公式                     |
 | [stlibs/sdk/README.md](stlibs/sdk/README.md)                                 | **SDK 接口说明**：方法参数与返回值、事件推送、五种报文格式、安全说明        |
 
-## 🧪 测试
+## 🔧 手动联调
 
-```bash
-python -m pytest tests -q     # 单元 + 离屏 Qt + node 跑前端 js
-```
-
-本仓库不再包含 CI/CD 流水线；提交前请按改动范围跑相关用例（例如
-`python -m pytest tests/test_character.py tests/test_emote.py -q`）。
-
-真机联调脚本（需要本机跑着 Ollama，且 AI 总开关打开）：
+本仓库不包含 CI/CD 与测试套件。真机联调脚本需要本机跑着 Ollama，且 AI 总开关打开：
 
 ```bash
 python tools/manual/probe_onlinechat.py glm4:latest   # 网页聊天：实例隔离 + 流式
@@ -264,8 +257,7 @@ ADPRemix/
 ├── mcp_servers/             暴露给模型的 MCP 工具服务
 ├── resources/               配置、提示词、模型、语料、字体图标、网页前端
 ├── resources/emote/         Emote WebGL 运行时（FreeMote SDK 驱动）
-├── tools/manual/            联调与出图脚本
-└── tests/                   按功能拆分的用例
+└── tools/manual/            联调与出图脚本
 ```
 
 逐文件说明、启动链路与调用链见 [docs/STRUCTURE.md](.github/docs/STRUCTURE.md)。
@@ -274,8 +266,7 @@ ADPRemix/
 
 PySide6 下 Qt 子类的 `@abstractmethod` **在运行期不生效**
 （`Shiboken.ObjectType.__new__` 排在 `ABCMeta.__new__` 前面，`__abstractmethods__` 不会生成）。
-因此主题/界面契约靠测试与代码评审保证，
-`tests/test_platform_behaviour.py` 记录了该行为。
+因此主题/界面契约靠代码评审与实机验证保证。
 
 ## 📄 许可
 

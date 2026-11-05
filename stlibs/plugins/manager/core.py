@@ -417,7 +417,7 @@ class PluginManager:
         return list(groups.values())
 
     def menu_items(self) -> list:
-        """扁平的菜单项列表（SDK/探针/测试还在用）。"""
+        """扁平的菜单项列表（SDK/探针还在用）。"""
         return [item for group in self.menu_groups() for item in group.items]
 
     def menu_title(self, plugin_id: str) -> str:

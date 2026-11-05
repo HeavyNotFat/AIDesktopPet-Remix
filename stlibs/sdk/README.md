@@ -434,12 +434,3 @@ with SDKClient("127.0.0.1", 9000) as client:
 * 设了环境变量 `ADP_SDK_TOKEN` 之后，请求必须带同样的 `token`，否则一律 `unauthorized`；
 * `set_config` 有白名单；`ask` 会真的消耗模型资源，别在循环里狂调；
 * 要跨机用，请自己套 SSH 隧道之类的加密通道，别把 9000 端口直接暴露到公网。
-
-## 自测
-
-```bash
-python -m pytest tests/test_sdk.py -q
-```
-
-覆盖：协议校验（未知方法 / 缺参数 / 多参数 / 错参数名 / 非 JSON 报文 / token）、
-每个方法在"没有界面"时的行为、事件订阅与推送、并发多个客户端、超时后不残留请求。

@@ -46,10 +46,6 @@
 
 ## 开发
 
-```bash
-python -m pytest tests/test_cultivation.py -q     # 数值逻辑（不依赖 Qt）
-```
-
 `cultivation_model.py` 是纯逻辑（`PetState`），`cultivation_window.py` 只负责显示与转发点击，
 `main.py` 只做 hook 装配 —— 想改数值就只动第一个文件。
 

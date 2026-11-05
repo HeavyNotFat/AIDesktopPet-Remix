@@ -81,7 +81,7 @@ class SDKServer(base.UDPBase):
             self._send({"id": request_id, "result": result}, addr)
 
     def invoke(self, method, args=None, kwargs=None):
-        """校验并调用一个方法（测试与内部复用都走它）。"""
+        """校验并调用一个方法（内部复用也走它）。"""
         name = ALIASES.get(str(method or ""), str(method or ""))
         handler = self._resolve(name)
         if handler is None:

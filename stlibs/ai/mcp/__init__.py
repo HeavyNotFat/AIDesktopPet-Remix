@@ -229,7 +229,7 @@ class MCP:
 
     @classmethod
     def reset_instance(cls):
-        """彻底关闭并重置单例，用于程序退出或测试。"""
+        """彻底关闭并重置单例，用于程序退出。"""
         with cls._instance_lock:
             instance = cls._instance
 

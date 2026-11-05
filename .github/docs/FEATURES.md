@@ -51,7 +51,7 @@ python tools/manual/probe_coop.py glm4:latest huihui_ai/gemma-4-abliterated:e4b
 业务代码统一走 `stlibs.notify(text, level)`，`level` 取 `info` / `success` / `warning` / `error`。
 
 * 贴哪里：先看有没有传 parent → 当前激活的窗口 → 设置窗/聊天窗/桌宠窗，都没有才退化成屏幕右下角浮层；
-* 没有界面（或主题没提供 `Notify`）时自动退化成打印，所以测试里也能随便调。
+* 没有界面（或主题没提供 `Notify`）时自动退化成打印。
 
 已覆盖的反馈：添加/删除 API 模型、协作开关与模式切换、增删协作模型、保存协作配置、
 协作每个阶段与失败原因。
@@ -95,7 +95,6 @@ python tools/manual/shoot_ui.py            # 输出到 .tmp/ui-shots/
 点了才播（没声卡/解码失败会弹提示）。`derfer.LLMAICallback` 只负责把音频事件抛给界面。
 
 ```bash
-python -m pytest tests/test_skills.py tests/test_chat_ui.py -q   # 技能解析 + 聊天窗交互
 python tools/manual/shoot_ui.py                                  # 离屏看排版（含聊天窗）
 ```
 
@@ -120,7 +119,7 @@ python tools/manual/shoot_ui.py                                  # 离屏看排�
 * 选了**纯文本模型**又发图片时，界面会直接提示"这个模型看不了图片"
   （能力来自 `ollama show` 的 capabilities，云端模型查不到就不提示）。
 
-两个实现上的坑（都踩过并写了回归测试）：
+两个实现上的坑（都踩过）：
 
 * 桌面端 Ctrl+V 得在 `keyPressEvent` 里拦 —— `QTextEdit.paste()` 不会走
   `insertFromMimeData` 这个虚函数，图片会被当成富文本资源塞进文档，界面上什么都看不到；
@@ -223,10 +222,9 @@ python tools/manual/probe_plugin.py glm4:latest
 * 设置页：设置 →「插件」→「养成系统 · 养成设置」里可改金币上限、饥饿提醒开关，
   另有「打开养成面板」「看看当前状态」两个按钮；
 * 数值逻辑在 [`cultivation_model.py`](../../plugins/cultivation_system/cultivation_model.py)，
-  纯 Python 可单测；界面在 `cultivation_window.py`；`main.py` 只做 hook 装配。
+  纯 Python；界面在 `cultivation_window.py`；`main.py` 只做 hook 装配。
 
 ```bash
-python -m pytest tests/test_cultivation.py tests/test_cultivation_hooks.py -q
 python tools/manual/probe_cultivation.py     # 走真实插件管理器 + 离屏 Qt 的面板检查
 ```
 
@@ -250,7 +248,3 @@ with SDKClient("127.0.0.1", 9000) as client:
 要点：方法白名单与参数校验（错的参数会明确告诉你错哪了）、`ADP_SDK_TOKEN` 可开鉴权、
 `set_config` 有白名单（`models` 里的 key 不给读改）、只监听回环地址。
 一行一个 JSON 的报文格式见 SDK 文档，非 Python 语言照着接即可。
-
-```bash
-python -m pytest tests/test_sdk.py -q
-```

@@ -14,18 +14,17 @@ AI 功能由 `ai_enabled` 总开关控制，默认关闭。
 
 | 区域                      | 文件数 |    行数 |    占比 | 说明                                 |
 |:------------------------|----:|------:|------:|:-----------------------------------|
-| `resources/`（配置/模型/知识库） |  93 | 74378 | 71.4% | 绝大部分是 Live2D 模型 JSON 与知识库语料，不是手写代码 |
-| `stlibs/`（核心库）          |  58 | 10742 | 10.3% | AI、主题、插件、SDK、网页聊天服务                |
-| `tests/`（测试）            |  30 |  9000 |  8.2% | 按功能拆分，UI 用例走离屏 Qt                |
-| `tools/`（手工脚本）         |  12 |  1800 |  1.7% | 联调/出图脚本                            |
-| 根目录（入口/配置）             |  17 |  1700 |  1.7% | `main.py`、`core.py`、README、AGENTS.md |
-| `docs/`（项目文档）           |   6 |  1800 |  1.5% | API / 形象 / 结构 / 功能详解 / 人设 / 截图   |
-| `resources/web/`（前端）    |  12 |  1524 |  1.5% | 网页聊天单页（原生 JS）                      |
-| `plugins/`（示例与养成插件）     |  19 |  1162 |  1.1% | 插件作者参考实现                           |
-| `shader/`（渲染）           |   4 |  1600 |  1.5% | OpenGL 画布 + Live2D / Emote / 静态形象 |
-| `.github/`（文档）           |   6 |  1800 |  1.7% | 项目文档与截图                          |
+| `resources/`（配置/模型/知识库） |  93 | 74378 | 77.1% | 绝大部分是 Live2D 模型 JSON 与知识库语料，不是手写代码 |
+| `stlibs/`（核心库）          |  58 | 10742 | 11.1% | AI、主题、插件、SDK、网页聊天服务                |
+| `tools/`（手工脚本）         |  12 |  1800 |  1.9% | 联调/出图脚本                            |
+| 根目录（入口/配置）             |  17 |  1700 |  1.8% | `main.py`、`core.py`、README、AGENTS.md |
+| `docs/`（项目文档）           |   6 |  1800 |  1.9% | API / 形象 / 结构 / 功能详解 / 人设 / 截图   |
+| `resources/web/`（前端）    |  12 |  1524 |  1.6% | 网页聊天单页（原生 JS）                      |
+| `plugins/`（示例与养成插件）     |  19 |  1162 |  1.2% | 插件作者参考实现                           |
+| `shader/`（渲染）           |   4 |  1600 |  1.7% | OpenGL 画布 + Live2D / Emote / 静态形象 |
+| `.github/`（文档）           |   6 |  1800 |  1.9% | 项目文档与截图                          |
 
-手写 Python 约 **1.4 万行**（`stlibs` + `shader` + `plugins` + `tools` + 测试），前端约 1500 行。
+手写 Python 约 **1.5 万行**（`stlibs` + `shader` + `plugins` + `tools`），前端约 1500 行。
 
 ## 2. 目录树与职责
 
@@ -34,7 +33,7 @@ ADPRemix/
 ├── main.py                    进程入口：清 RAG 缓存 → QApplication → 启动闪屏 → 延时 1s 导入 core
 ├── core.py                    总装线（导入即执行）：起 SDK/网页服务、选形象、建窗口、加载插件
 ├── requirements.txt           运行依赖（PySide6 / live2d-py / ollama / fastapi / chromadb …）
-├── pyproject.toml             打包元数据 + ruff + pytest
+├── pyproject.toml             打包元数据 + ruff
 ├── .github/docs/              项目文档、截图
 ├── README.md                  项目主页：功能总览、部署、文档索引（根目录只留它 + AGENTS.md）
 ├── AGENTS.md                  AI 协作者规则（注释规矩、文档位置、插件 UI 分类…）
@@ -135,10 +134,8 @@ ADPRemix/
 │   ├── rag/                   知识库语料 + 向量库缓存（chroma_db/lancedb_db）
 │   └── web/onlinechat/        网页聊天前端（index.html + css + 10 个 js 模块）
 │
-├── tools/manual/              手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、
-│                              make_plugin_icons（画插件图标）、strip_doc_headers
-│
-└── tests/                     按功能拆分的单元 / 离屏 Qt / 前端 js 用例
+└── tools/manual/              手工联调与出图：probe_*（附件/协作/养成/插件/技能/网页）、shoot_ui、
+                               make_plugin_icons（画插件图标）、strip_doc_headers
 ```
 
 ## 3. 启动链路
@@ -284,8 +281,7 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 **主题契约三处必须同步**：`stlibs/__init__.py::_ThemeTypingProtocol`（类型）、
 `stlibs/themes/base.py`（ABC）与各主题 `__init__.py` 尾部的映射别名。
 映射类可以定义在主题包的任意子模块里（`Window = HackerWindow` 或 `from .window import HackerWindow` 都行），
-主题映射修改后跑 `tests/test_breeze_theme.py` 与 `tests/test_platform_behaviour.py`。
-`tests/test_breeze_theme.py` 是"换主题不改调用方式"的可执行版本：映射、成员、子模块与页面类都在里面钉住了。
+改完逐个主题核对映射、成员、子模块与页面类是否齐全。
 
 **为什么菜单不做子菜单**：`HackerMenu` 原先支持"悬浮条目 → 右边展开一层 `Qt.Tool` 子菜单"，
 但桌宠右键菜单里体验不好——鼠标从条目滑向子菜单的途中菜单就收了（得跟"离开条目后延迟收合"的计时器打架），
@@ -355,21 +351,14 @@ SDK UDP 接收线程 + 16 工作线程；Live2D 满帧 `startTimer(0)` / 静态�
 动画映射 `animation/*.json`、形象配置 `config/*.json`、Live2D / Emote / 静态帧、Emote 运行时、字体/图标/翻译、
 长期记忆 `memory/lt_memory.json`、RAG 语料与向量库缓存、网页前端。
 
-### 4.10 工具链与测试
+### 4.10 工具链
 
 * `tools/manual/`：真机联调脚本（附件/协作/养成/插件/技能/网页聊天各一个）、
   `shoot_ui.py` 离屏出图（提示条、各设置页、右键菜单、插件菜单、养成面板、聊天窗）、
   `shoot_theme.py <主题名>` 出某个主题的对照图（主窗口 / LLM 页 / 聊天窗 / 右键菜单 / 提示条），
   `make_plugin_icons.py` 用 Pillow 画插件图标、`strip_doc_headers.py` 安全清理注释（AST 定位，默认 dry-run）。
-* `tests/`：按功能拆分的单元 / 离屏 Qt / 前端 js 用例；`conftest.py` 统一把临时目录收敛到 `.ci-tmp/`。
 
-### 4.11 质量与发布
-
-本仓库不再包含 CI/CD 流水线。提交前按改动范围手动跑测试即可，例如：
-
-```bash
-python -m pytest tests/test_character.py tests/test_emote.py tests/test_static_animation.py -q
-```
+### 4.11 发布
 
 需要发布产物时自行在 Windows 上使用 PyInstaller 打包（`--add-data "resources;resources"`）。
 
@@ -406,12 +395,12 @@ Chat 窗口 → ModelChat._send_message
 
 | 改什么                    | 还要动哪                                                                                                |
 |:-----------------------|:----------------------------------------------------------------------------------------------------|
-| 主题映射名 / 新增主题能力         | `_ThemeTypingProtocol` + `themes/base.py` + 主题包尾别名 + `tests/test_breeze_theme.py`                 |
-| 配置项增删                  | `stlibs/__init__.py::_BaseModelConfig` + `resources/configure.json` + 设置页 UI + `tests/test_ai_toggle.py` |
-| 网页接口 / 前端 id / JS 命名空间 | 后端路由 + `index.html` + 对应 js + `tests/test_onlinechat.py`                                              |
+| 主题映射名 / 新增主题能力         | `_ThemeTypingProtocol` + `themes/base.py` + 主题包尾别名                                                   |
+| 配置项增删                  | `stlibs/__init__.py::_BaseModelConfig` + `resources/configure.json` + 设置页 UI                          |
+| 网页接口 / 前端 id / JS 命名空间 | 后端路由 + `index.html` + 对应 js                                                                          |
 | 新增形象类型 / 动画配置          | `stlibs/character.py` + `shader/*` + `stlibs/graphics/editors.py` + `resources/animation/*.json` + CHARACTER.md |
 | 插件 API 增删              | `stlibs/plugins/api.py` + `runtime.js`（JS 侧）+ `plugins/README.md` + 示例插件                      |
-| 插件设置页 API / 表单行类型增删     | `stlibs/plugins/pages.py` + `api.py` + `runtime.js` + `graphics/plugin_page.py` + `plugins/README.md` + `tests/test_plugin_settings_*.py` |
+| 插件设置页 API / 表单行类型增删     | `stlibs/plugins/pages.py` + `api.py` + `runtime.js` + `graphics/plugin_page.py` + `plugins/README.md` |
 | 插件清单字段增删              | `stlibs/plugins/manifest.py` + `plugins/README.md` 的 plugin.json 段 + 设置页插件表（列宽很紧，加列要一起调）             |
 | 文档增删 / 挪位置             | `docs/`（除各目录 `README.md`）+ `docs/README.md` 的目录表 + 引用它的 `README.md` / `docs/*.md`                 |
 | SDK 方法增删               | `stlibs/sdk/methods.py` + `METHOD_HELP` + 客户端方法 + `stlibs/sdk/README.md`（`mcp_servers/sdk` 若也要用需同步） |
@@ -423,9 +412,8 @@ Chat 窗口 → ModelChat._send_message
 
 | 问题                                                                 | 影响                                                                    | 处理                                                     |
 |:-------------------------------------------------------------------|:----------------------------------------------------------------------|:-------------------------------------------------------|
-| `stlibs/ai/local.py::LLM.complete()` 调用不存在的 `self._call_chat(...)` | 本地模型参与协作时必然 `AttributeError` → review 模式"主模型没有给出初稿"、parallel 全员失败（静默） | 改为走与 `chat()` 同一条 `function_call.run()` 链路，且不碰记忆；补回归测试 |
+| `stlibs/ai/local.py::LLM.complete()` 调用不存在的 `self._call_chat(...)` | 本地模型参与协作时必然 `AttributeError` → review 模式"主模型没有给出初稿"、parallel 全员失败（静默） | 改为走与 `chat()` 同一条 `function_call.run()` 链路，且不碰记忆 |
 | `shader/live2d.py::emit_sdk_event()` 是空实现（只剩 docstring）            | 只有 Live2D 形象时 `pet_click` 到不了 SDK 订阅者                                 | 补齐为 `stlibs.emit_sdk_event(name, data)`                |
-| `tests/test_sdk.py` 里 `set_config("opacity", "80")` 改了全局 `Config` 不还原   | 之后任何建设置窗的用例都会在 `setValue("80")` 上 `TypeError`（换个执行顺序就炸）             | 用例里 monkeypatch 还原原值（AGENTS.md 的"用例各自收干净全局状态"）         |
 
 ### 7.2 已核实、尚未修
 
@@ -450,4 +438,4 @@ Chat 窗口 → ModelChat._send_message
 * 静态形象仍不做整体旋转（`setRotationAngle` 只写配置）。
 * `mcp_servers/sdk/` 与 `stlibs/sdk/` 协议漂移无人把关。
 
-> 说明：7.3 来自静态阅读，未逐一构造用例复现；要修的话建议先各写一个失败用例再动手。
+> 说明：7.3 来自静态阅读，尚未逐一复现；修之前建议先复现问题。

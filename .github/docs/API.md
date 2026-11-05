@@ -256,5 +256,3 @@ data: {"type": "done"}
   它的 `memory_signal` 从不连接，所以也不会碰到桌面端 Qt 界面；
 * 流式生成期间会话锁由一个专用线程持有，客户端断开时自动收手并交还锁；
 * 会话被回收后重发不会报 502，而是 409（`SessionClosedError`）。
-
-细节与回归防线见 `tests/test_onlinechat.py`。
